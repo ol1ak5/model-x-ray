@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deal Sentinel Feasibility</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: a technical feasibility brief. Verdict strip, then research, landscape, engine, models, credits, plan. Single readable column with wide tables/code allowed to scroll. */
+:root {
+  --bg: #f3f5f4;
+  --surface: #ffffff;
+  --ink: #17201c;
+  --muted: #5a6762;
+  --line: #d9dfdc;
+  --accent: #3f7a12;
+  --accent-soft: #e6f0dc;
+  --warn: #9a5b00;
+  --warn-soft: #fbefdc;
+  --code-bg: #eef1ef;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111614; --surface: #19201d; --ink: #e6ece9; --muted: #9aa8a2; --line: #2c3632;
+    --accent: #8fcf4f; --accent-soft: #23331a; --warn: #f0b45a; --warn-soft: #3a2c16; --code-bg: #0d1210; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111614; --surface: #19201d; --ink: #e6ece9; --muted: #9aa8a2; --line: #2c3632;
+  --accent: #8fcf4f; --accent-soft: #23331a; --warn: #f0b45a; --warn-soft: #3a2c16; --code-bg: #0d1210; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 16px/1.55 var(--body); }
+.wrap { max-width: 960px; margin: 0 auto; padding-inline: 20px; padding-block: 40px 64px; display: grid; gap: 52px; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(2rem, 5vw, 3rem); font-weight: 800; font-stretch: 85%; line-height: 1.05; }
+h2 { font-size: 1.6rem; font-weight: 700; font-stretch: 90%; }
+h3 { font-size: 1.12rem; font-weight: 700; font-stretch: 92%; }
+p { margin: 0; max-width: 72ch; }
+a { color: var(--accent); }
+.label { font: 500 0.72rem/1.2 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.lede { color: var(--muted); font-size: 1.08rem; }
+header, section { display: grid; gap: 16px; }
+.sec-head { display: grid; gap: 6px; }
+ul, ol { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 74ch; }
+
+.verdict { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.verdict div { background: var(--surface); padding: 14px 16px; display: grid; gap: 4px; align-content: start; }
+.verdict strong { font-family: var(--display); font-stretch: 90%; font-size: 1.1rem; }
+.verdict span:not(.label) { color: var(--muted); font-size: 0.92rem; }
+.ok { color: var(--accent); }
+.caution { color: var(--warn); }
+
+.callout { border-radius: 6px; padding: 14px 18px; display: grid; gap: 6px; }
+.callout.good { background: var(--accent-soft); }
+.callout.warn { background: var(--warn-soft); }
+.callout b { font-family: var(--display); font-stretch: 92%; }
+
+.tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.93rem; }
+.tbl.wide table { min-width: 720px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 500 0.7rem/1.2 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); background: var(--bg); }
+tr:last-child td { border-bottom: 0; }
+td.num { font-variant-numeric: tabular-nums; font-family: var(--mono); font-size: 0.85rem; white-space: nowrap; }
+tr.group td { background: var(--bg); font: 500 0.72rem/1.2 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+
+.steps { display: grid; gap: 12px; }
+.step { display: grid; grid-template-columns: 2.2rem 1fr; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; }
+.step .n { font: 700 1.4rem/1 var(--display); color: var(--accent); }
+.step > div { display: grid; gap: 4px; min-width: 0; }
+.step p { color: var(--muted); font-size: 0.95rem; }
+
+.diagram { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 16px; }
+.example { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.example div { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; display: grid; gap: 6px; font-size: 0.95rem; }
+mark { background: var(--accent-soft); color: var(--ink); padding: 0 2px; border-radius: 2px; }
+mark.lock { background: var(--warn-soft); }
+
+pre.code { margin: 0; overflow-x: auto; background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; font: 500 0.8rem/1.6 var(--mono); }
+code { font-family: var(--mono); font-size: 0.86em; background: var(--code-bg); padding: 1px 5px; border-radius: 3px; }
+
+.weeks { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+.week { border-top: 3px solid var(--accent); padding-top: 10px; display: grid; gap: 6px; align-content: start; }
+.week ul { font-size: 0.93rem; color: var(--muted); }
+
+footer { font-size: 0.85rem; color: var(--muted); display: grid; gap: 6px; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({ startOnLoad: true });</script>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <span class="label">Deal Sentinel (working name) · feasibility brief · 2 Oct 2026</span>
+    <h1>Can we build per-recipient leak tracing for M&amp;A documents?</h1>
+    <p class="lede">Yes. The core techniques are published and proven, a commercial product already validates the market, and the Nemotron models and free credits cover our needs. The hard parts are keeping legal and financial meaning intact, surviving paraphrase, and never accusing the wrong person.</p>
+    <div class="verdict">
+      <div><span class="label">Feasible in 4 weeks</span><strong class="ok">Yes, with a tight scope</strong><span>Narrative documents only, one benchmark, one polished demo</span></div>
+      <div><span class="label">Research backing</span><strong class="ok">Strong</strong><span>25 years of papers on text watermarking and traitor tracing</span></div>
+      <div><span class="label">Competition</span><strong class="caution">One close rival</strong><span>EchoMark sells per-recipient marking, closed source</span></div>
+      <div><span class="label">Free credits</span><strong class="ok">$50 Token Factory per person</strong><span>Enough for development and the full benchmark</span></div>
+    </div>
+  </header>
+
+  <section>
+    <div class="sec-head"><span class="label">Terminology</span><h2>Watermarking vs fingerprinting</h2></div>
+    <p>Anthropic announced a text watermark for Claude in summer 2026. It is a statistical pattern added while the model writes, and it answers one question: <em>did Claude write this?</em> Google's SynthID Text works the same way. We need something different: every recipient gets a slightly different copy of an existing document, and a leaked fragment points back to one copy. The literature calls this <b>fingerprinting</b> or <b>traitor tracing</b>, and the intelligence world calls it a <b>canary trap</b>.</p>
+    <div class="tbl wide">
+      <table>
+        <thead><tr><th></th><th>AI watermark (Claude, SynthID)</th><th>Our fingerprint</th></tr></thead>
+        <tbody>
+          <tr><td>Question answered</td><td>Was this written by an AI?</td><td>Whose copy leaked?</td></tr>
+          <tr><td>When applied</td><td>While the model generates text</td><td>After the document is written, before it is sent</td></tr>
+          <tr><td>Marks per document</td><td>One pattern for everyone</td><td>A unique combination per recipient</td></tr>
+          <tr><td>Needs a registry</td><td>No</td><td>Yes: who received which combination</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="label">Research</span><h2>Papers that support the project</h2></div>
+    <div class="tbl wide">
+      <table>
+        <thead><tr><th>Paper</th><th>Venue</th><th>What we take from it</th></tr></thead>
+        <tbody>
+          <tr class="group"><td colspan="3">Tracing codes: how to assign marks to people</td></tr>
+          <tr><td><a href="https://crypto.stanford.edu/~dabo/pubs/abstracts/finger.html">Boneh &amp; Shaw, Collusion-Secure Fingerprinting for Digital Data</a></td><td>CRYPTO 1995 / IEEE Trans. IT 1998</td><td>The founding model: mark each copy, register it, trace a pirate copy back. Defines the collusion problem (recipients comparing copies).</td></tr>
+          <tr><td><a href="https://doi.org/10.1145/780542.780561">Tardos, Optimal Probabilistic Fingerprint Codes</a></td><td>STOC 2003</td><td>Shortest possible codes that still catch colluding recipients. Our stretch goal for bidders who compare copies.</td></tr>
+          <tr class="group"><td colspan="3">Marking natural-language text</td></tr>
+          <tr><td>Atallah, Topkara et al., Natural Language Watermarking (Purdue CERIAS series, 2001–2006)</td><td>IH 2001, SPIE 2006</td><td>Synonym substitution as a carrier; prefer ambiguous words to resist attacks. The direct ancestor of our approach.</td></tr>
+          <tr><td><a href="https://arxiv.org/abs/2112.07873">Yang et al., Tracing Text Provenance via Context-Aware Lexical Substitution</a></td><td>AAAI 2022</td><td>A language model picks substitutions that keep meaning; tests which words can safely carry a mark.</td></tr>
+          <tr><td><a href="https://aclanthology.org/2023.acl-long.117">Yoo et al., Robust Multi-bit Natural Language Watermarking through Invariant Features</a></td><td>ACL 2023</td><td>Embeds a multi-bit ID (like our recipient ID) in existing text and makes it survive corruption: +16.8 points robustness over prior work.</td></tr>
+          <tr><td><a href="https://arxiv.org/abs/2009.03015">Abdelnabi &amp; Fritz, Adversarial Watermarking Transformer</a></td><td>IEEE S&amp;P 2021</td><td>A learned model hides bits in text while keeping it readable; useful baseline for quality checks.</td></tr>
+          <tr><td><a href="https://arxiv.org/abs/2512.16904">Fernandez et al. (Meta), How Good is Post-Hoc Watermarking With Language Model Rephrasing?</a></td><td>arXiv, Dec 2025</td><td>Closest to our engine: an LLM rewrites existing text to carry a mark. Finds strong detectability and meaning preservation on prose.</td></tr>
+          <tr><td><a href="https://arxiv.org/abs/2409.09739">Zhang et al., PersonaMark</a></td><td>arXiv 2024</td><td>Per-user marks using sentence structure, for attributing text to a specific user. Supports structural (not just word-level) marks.</td></tr>
+          <tr class="group"><td colspan="3">AI watermarks and the attacks against them</td></tr>
+          <tr><td><a href="https://arxiv.org/abs/2301.10226">Kirchenbauer et al., A Watermark for Large Language Models</a></td><td>ICML 2023</td><td>The standard generation-time watermark and its statistical test. We reuse the hypothesis-testing idea for confidence scores.</td></tr>
+          <tr><td>Dathathri et al., Scalable watermarking for identifying LLM outputs (SynthID Text)</td><td>Nature 634, 2024</td><td>Shows watermarks work at production scale. Context for judges.</td></tr>
+          <tr><td><a href="https://arxiv.org/abs/2303.13408">Krishna et al., Paraphrasing evades detectors of AI-generated text</a></td><td>NeurIPS 2023</td><td>Our main threat: paraphrase destroys word-level marks. Defines the attack we must benchmark against.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="label">Real-world precedents for the video</p>
+    <ul>
+      <li><b>Reality Winner, 2017:</b> the FBI traced a leaked printout through invisible printer tracking dots within days.</li>
+      <li><b>Genius vs Google, 2019:</b> alternating straight and curly apostrophes in lyrics proved Google had copied them.</li>
+      <li><b>Data room vendors:</b> they already stamp visible per-user watermarks on PDFs, which shows the industry accepts per-person marking. Visible marks get cropped; wording does not.</li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="label">Landscape</span><h2>Similar tools</h2></div>
+    <div class="tbl wide">
+      <table>
+        <thead><tr><th>Tool</th><th>What it does</th><th>Gap we fill</th></tr></thead>
+        <tbody>
+          <tr><td><a href="https://www.echomark.com/forensic-watermarking"><b>EchoMark</b></a></td><td>Per-recipient invisible marks on emails, documents and screens: letter spacing, visual changes, and AI rephrasing of emails. Claims survival of screenshots, photos, retyping and paraphrase. Founded 2022 by an ex-Microsoft VP, raised $10M, targets government, legal and financial services.</td><td>Closed source and general purpose. No M&amp;A safeguards for numbers and defined terms, no published accuracy numbers, no evidence report.</td></tr>
+          <tr><td>Steg.AI and PDF fingerprinting tools</td><td>Invisible marks in images or PDF files.</td><td>Marks live in pixels or file data, so they disappear when someone retypes or quotes the text.</td></tr>
+          <tr><td>Data room dynamic watermarks</td><td>Visible name and time stamped on each page.</td><td>Easy to crop or retype; useless for a quoted paragraph.</td></tr>
+          <tr><td>Thinkst Canarytokens</td><td>Alerts when a booby-trapped document is opened.</td><td>Shows that a file was opened, not who leaked its text.</td></tr>
+          <tr><td>Claude watermark, SynthID Text</td><td>Detect AI-written text.</td><td>Different purpose; one mark for everyone.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout warn">
+      <b>EchoMark changes our pitch</b>
+      <p>We cannot claim the idea is new. We claim three things it does not show publicly: (1) M&amp;A-safe marking that never touches figures, dates, names or defined terms, (2) an evidence report a lawyer can read, slot by slot, with a calibrated confidence, and (3) an open benchmark with measured accuracy against paraphrase. A funded company in this space also tells judges the problem is real.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="label">Engine</span><h2>How the marking engine works</h2></div>
+    <div class="example">
+      <div><span class="label">Master sentence</span><p>Revenue grew <mark class="lock">12%</mark> in <mark class="lock">FY2025</mark>, driven by strong demand in <mark class="lock">Germany</mark> and <mark class="lock">France</mark>.</p></div>
+      <div><span class="label">Copy for recipient A</span><p>Revenue <mark>grew</mark> <mark class="lock">12%</mark> in <mark class="lock">FY2025</mark>, <mark>driven by strong demand</mark> in <mark class="lock">Germany</mark> and <mark class="lock">France</mark>.</p></div>
+      <div><span class="label">Copy for recipient B</span><p>Revenue <mark>increased</mark> <mark class="lock">12%</mark> in <mark class="lock">FY2025</mark>, <mark>supported by robust demand</mark> in <mark class="lock">France</mark> and <mark class="lock">Germany</mark>.</p></div>
+    </div>
+    <p class="label">Amber = locked (never changed). Green = swap points. This sentence has 3 swap points: verb, phrase, list order.</p>
+
+    <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+  A[Master document<br/>DOCX or PDF] --> B[1. Parse and lock<br/>numbers, dates, names,<br/>defined terms]
+  B --> C[2. Find swap points<br/>Nemotron Super]
+  C --> D[3. Verify meaning<br/>Nemotron Nano judge<br/>+ rule checks]
+  D --> E[(Codebook<br/>slots + variants)]
+  R[(Recipient registry<br/>bidder, person, ID)] --> F
+  E --> F[4. Assign codeword<br/>HMAC of secret key<br/>+ recipient ID]
+  F --> G[5. Render copy<br/>per-person PDF]
+  L[Leak: text, URL,<br/>screenshot] --> H[6. OCR + align<br/>Nemotron Nano Omni]
+  T[Tavily leak monitor] --> L
+  H --> I[7. Read variants<br/>in leaked text]
+  E --> I
+  I --> J[8. Score every recipient<br/>likelihood + confidence]
+  R --> J
+  J --> K[Evidence report<br/>or abstain]
+</pre>
+    </div>
+
+    <div class="steps">
+      <div class="step"><span class="n">1</span><div><h3>Parse and lock</h3><p>Split the document into sentences with stable IDs. Lock every number, currency amount, percentage, date, company or person name, and quoted defined term ("the Target", "Closing Date"). Rules plus a Nemotron Nano pass. Contracts and financial statements are excluded entirely; only narrative documents (info memo, teaser, management presentation text, board pack commentary) are marked.</p></div></div>
+      <div class="step"><span class="n">2</span><div><h3>Find swap points</h3><p>Nemotron Super returns structured JSON for each sentence: 2–3 swap points, each with 2–3 equivalent variants. Types: synonym, connective ("and" / "as well as"), list order, clause order, active or passive voice, number format ("USD 40m" / "$40 million", value unchanged). Structural swaps survive paraphrase better than single words.</p></div></div>
+      <div class="step"><span class="n">3</span><div><h3>Verify meaning</h3><p>Every variant must pass: locked spans identical character for character; a second model (Nemotron Nano) confirms both directions mean the same thing; a similarity score above a threshold. Anything doubtful is dropped. Optional one-time human review of the codebook in the UI.</p></div></div>
+      <div class="step"><span class="n">4</span><div><h3>Assign codewords</h3><p>Each recipient's choice at each swap point comes from a keyed hash: <code>HMAC(document_key, recipient_id, slot_id) mod k</code>. Codewords look random, cannot be guessed without the key, and can be recomputed at any time. The registry stores who received which document version and when.</p></div></div>
+      <div class="step"><span class="n">5</span><div><h3>Render the copy</h3><p>Apply that recipient's variants and export a PDF or DOCX that looks identical in layout. Optional second layer: zero-width characters carrying the ID with error correction, for instant matches on copy-pasted text. Optional visible footer "Prepared for [name]" as a deterrent.</p></div></div>
+      <div class="step"><span class="n">6</span><div><h3>Ingest the leak</h3><p>Paste text, give a URL, or upload a screenshot or photo (read by Nemotron Nano Omni). Align each leaked sentence to its master sentence by similarity. A Tavily monitor can search news and the web for distinctive phrases from the documents and feed hits in automatically.</p></div></div>
+      <div class="step"><span class="n">7</span><div><h3>Read the variants</h3><p>For each aligned swap point, decide which variant appears: exact match first, then model-assisted matching for paraphrased text. If it is unclear, mark the slot as unreadable rather than guess.</p></div></div>
+      <div class="step"><span class="n">8</span><div><h3>Score and report</h3><p>For every recipient, add up the evidence: how many readable slots match their codeword, versus what chance would give. Report the top suspect with a confidence figure and the slot-by-slot evidence. If confidence is below a strict threshold, the system abstains. A false accusation in a deal is worse than no answer.</p></div></div>
+    </div>
+
+    <h3>How many swap points a leak needs</h3>
+    <p>Chance that an innocent recipient matches every readable slot by luck, with 200 recipients. This assumes clean matches; paraphrase lowers the readable count, which is exactly what the benchmark measures.</p>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Readable slots in leak</th><th>Roughly</th><th>2 variants per slot</th><th>3 variants per slot</th></tr></thead>
+        <tbody>
+          <tr><td class="num">10</td><td>3–5 sentences</td><td class="num">≈ 20% (abstain)</td><td class="num">≈ 0.3%</td></tr>
+          <tr><td class="num">15</td><td>5–7 sentences</td><td class="num">≈ 0.6%</td><td class="num">≈ 0.001%</td></tr>
+          <tr><td class="num">20</td><td>7–10 sentences</td><td class="num">≈ 0.02%</td><td class="num">negligible</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="label">Formula: N × k<sup>−L</sup> (N recipients, k variants, L slots). A 40-page info memo has hundreds of sentences, so capacity is not the bottleneck.</p>
+
+    <h3>Code sketch</h3>
+<pre class="code">import hmac, hashlib, json, os
+from openai import OpenAI
+
+client = OpenAI(base_url="https://api.tokenfactory.us-central1.nebius.com/v1/",
+                api_key=os.environ["NEBIUS_API_KEY"])
+
+def find_swap_points(sentence: str, locked: list[str]) -&gt; dict:
+    prompt = ("Return JSON with 'slots': each has 'span' and 2-3 'variants' that mean exactly the same. "
+              f"Never change these spans: {locked}. Sentence: {sentence}")
+    r = client.chat.completions.create(
+        model="nvidia/nemotron-3-super-120b-a12b",
+        messages=[{"role": "user", "content": prompt}],
+        response_format={"type": "json_object"})
+    return json.loads(r.choices[0].message.content)
+
+def choice(doc_key: bytes, recipient_id: str, slot_id: str, k: int) -&gt; int:
+    digest = hmac.new(doc_key, f"{recipient_id}:{slot_id}".encode(), hashlib.sha256).digest()
+    return int.from_bytes(digest[:4], "big") % k
+
+def score(observed: dict[str, int], recipients: list[str], doc_key: bytes, k: dict[str, int]):
+    # observed: slot_id -&gt; variant seen in the leak (unreadable slots omitted)
+    results = []
+    for rid in recipients:
+        hits = sum(choice(doc_key, rid, s, k[s]) == v for s, v in observed.items())
+        results.append((rid, hits, len(observed)))
+    return sorted(results, key=lambda x: -x[1])</pre>
+    <p class="label">Real scoring will use a likelihood ratio with an error rate per slot type, so one misread slot does not clear the guilty copy.</p>
+
+    <div class="callout warn">
+      <b>Honest limits</b>
+      <ul>
+        <li>Facts passed on verbally ("Company X is for sale") carry no wording. Access logs can only narrow the suspects.</li>
+        <li>Heavy paraphrase erases word-level marks. Structural marks (order, voice, clause order) hold up better; the benchmark will show where it breaks.</li>
+        <li>Bidders who compare copies can spot differences. Collusion-resistant codes (Tardos) need far more slots: workable for whole documents, not for a short quote. Stretch goal.</li>
+        <li>Marking must be disclosed in the NDA. That is normal practice and adds deterrence.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="label">Benchmark</span><h2>What we measure (the "numbers" judges reward)</h2></div>
+    <ol>
+      <li>Generate a fictional 40-page info memo ("Project Falcon") with Nemotron and issue copies to 200 synthetic recipients.</li>
+      <li>Leak fragments of 1, 3, 5 and 10 sentences.</li>
+      <li>Attack each fragment: typos and retyping, screenshot and OCR, Nemotron paraphrase at light, medium and heavy strength, two bidders mixing their copies.</li>
+      <li>Report top-1 accuracy, false-accusation rate (target: near zero, with abstention), and text quality (meaning preserved, judged blind).</li>
+    </ol>
+    <p>The output is one chart: identification accuracy against fragment length, one line per attack. That chart is the centre of the video.</p>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="label">Models</span><h2>Model links and endpoints</h2></div>
+    <p>Token Factory exposes an OpenAI-compatible API, so the standard <code>openai</code> Python client works. Base URL: <code>https://api.tokenfactory.us-central1.nebius.com/v1/</code>, key in <code>NEBIUS_API_KEY</code> (kept in <code>.env</code>).</p>
+    <div class="tbl wide">
+      <table>
+        <thead><tr><th>Model</th><th>Model ID</th><th>Role in the engine</th><th>Link</th></tr></thead>
+        <tbody>
+          <tr><td>Nemotron 3 Super 120B (12B active, 256K context)</td><td><code>nvidia/nemotron-3-super-120b-a12b</code></td><td>Swap-point generation, evidence report writing</td><td><a href="https://github.com/nebius/token-factory-cookbook/blob/main/models/nemotron/nemotron3-super-120B.md">Cookbook</a></td></tr>
+          <tr><td>Nemotron 3 Nano 30B (3B active, 262K context)</td><td><code>nvidia/nvidia-nemotron-3-nano-30b-a3b</code></td><td>Locking spans, meaning checks, variant reading: the cheap, frequent calls</td><td><a href="https://github.com/nebius/token-factory-cookbook/blob/main/models/nemotron/nemotron3-nano-30b.md">Cookbook</a></td></tr>
+          <tr><td>Nemotron 3 Nano Omni</td><td>Check the console</td><td>Reading screenshots and photos of leaked pages</td><td><a href="https://nebius.com/services/token-factory/nemotron">Nebius Nemotron page</a></td></tr>
+          <tr><td>Nemotron 3 Ultra 550B</td><td>Check the console</td><td>Optional: hardest meaning checks, the strongest paraphrase attacker in the benchmark</td><td><a href="https://nebius.com/services/token-factory/nemotron">Nebius Nemotron page</a></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="label">Super pricing per a third-party listing: about $0.30 per 1M input tokens and $0.90 per 1M output tokens. Confirm in the Token Factory console.</p>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="label">Credits</span><h2>Free credits</h2></div>
+    <div class="tbl wide">
+      <table>
+        <thead><tr><th>Source</th><th>What you get</th><th>How</th></tr></thead>
+        <tbody>
+          <tr><td>Hackathon promo code</td><td class="num">$25 Token Factory</td><td>Form at <a href="https://nebius.com/promo-code">nebius.com/promo-code</a> with code <code>NEBIUS-DEVPOST-GLOBAL26</code></td></tr>
+          <tr><td>Nebius Builder Program</td><td class="num">$25 Token Factory</td><td>Free sign-up at <a href="https://dev.nebius.com/builders">dev.nebius.com/builders</a></td></tr>
+          <tr><td>Builder Program partners</td><td>$25 Tavily, $100 LangSmith, $50 Toloka, $50 Tandem</td><td>Same sign-up</td></tr>
+          <tr><td>Builders &amp; Brews in-person events</td><td>Extra Token Factory, AI Cloud and Tavily credits</td><td><a href="https://luma.com/builderandbrews">luma.com/builderandbrews</a></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout good">
+      <b>Is $50 enough? Comfortably.</b>
+      <p>Marking a 40-page memo is roughly 30K input and 100K output tokens: about $0.10 with Super. The full benchmark (thousands of paraphrase attacks and checks) is a few million tokens: a few dollars. Each teammate can likely claim credits on their own account. No GPU credits are listed, which is fine: this engine needs only the model API.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="label">Plan</span><h2>Four weeks to 30 October</h2></div>
+    <div class="weeks">
+      <div class="week"><span class="label">2–8 Oct</span><h3>Prove the core</h3><ul><li>Claim credits, test both models</li><li>Swap-point generation + meaning checks on one memo page</li><li>Measure slots per sentence and rejection rate</li><li>Go / no-go</li></ul></div>
+      <div class="week"><span class="label">9–15 Oct</span><h3>End-to-end engine</h3><ul><li>Registry and codebook (SQLite)</li><li>Per-recipient PDF rendering</li><li>Detection and scoring</li><li>Screenshot input</li></ul></div>
+      <div class="week"><span class="label">16–22 Oct</span><h3>Benchmark</h3><ul><li>Synthetic memo and 200 recipients</li><li>Attack suite: retype, OCR, paraphrase, collusion</li><li>Accuracy chart; Tavily leak monitor</li></ul></div>
+      <div class="week"><span class="label">23–30 Oct</span><h3>Ship</h3><ul><li>Web UI and evidence report</li><li>Deploy on Nebius</li><li>README, 3-minute video, submit by 30 Oct 10:00 PDT</li></ul></div>
+    </div>
+  </section>
+
+  <footer>
+    <span class="label">Sources</span>
+    <span><a href="https://nebiusglobalaihackathon.devpost.com/resources">Hackathon resources</a> · <a href="https://dev.nebius.com/builders">Nebius Builder Program</a> · <a href="https://nebius.com/services/token-factory/nemotron">Nemotron on Token Factory</a> · <a href="https://www.echomark.com/forensic-watermarking">EchoMark</a> · <a href="https://www.geekwire.com/2023/microsoft-vet-lands-10m-for-new-startup-that-watermarks-documents-to-identify-leakers/">GeekWire on EchoMark</a> · <a href="https://www.searchenginejournal.com/why-anthropics-claude-watermarks-may-be-a-new-text-marking-method/585703/">Claude watermark coverage</a> · <a href="https://custom.typingmind.com/tools/estimate-llm-usage-costs/nebius/nemotron-3-super-120b-a12b">Super pricing listing</a></span>
+  </footer>
+</div>
+</body>
+</html>
