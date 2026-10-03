@@ -49,6 +49,7 @@ No code exists yet. Do not assume tooling that is not there:
 - Modern types only: `dict`, `list`, `X | None` — never `Dict`, `List`, `Optional`, `Tuple`.
 - **No inline comments anywhere** (no `#` comments on code lines, no trailing comments). Explain decisions in `docs/*.md` instead.
 - Test-driven development: write the failing test first, then implement. Every behavior change ships with tests.
+- **No unitary tests** — only deep, useful tests. Test real behavior end to end (a whole formula trace, a full audit run, a benchmark scenario against a planted error), not isolated functions with mocked inputs. If a test doesn't prove the system actually works on realistic data, don't write it.
 - Each change = one commit, staged with explicit `git add <paths>` (never `-A`), message format `type(scope): summary`, e.g. `feat(engine): implemented formula trace parser`. Scopes in use: `engine` (LLM API/clients), `agent` (audit workflow, tools, skills), `research`, `benchmark`, `docs`, `scripts`.
 - Follow the original design documented in `docs/`; when code and docs disagree, fix both in the same change.
 - `docs/` holds `.md` files for design and implementation details. New subsystem → new doc before or with the code.
