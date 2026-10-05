@@ -2,10 +2,10 @@
 
 ## Project
 
-Formula Trace ("a Project Blackbox for financial models"): an agent that audits spreadsheet models for errors, follows formulas cell by cell back to source, identifies the defect (hardcoded value instead of formula, broken link, flipped sign, wrong aggregation), proposes a fix, and writes an audit note. The dependency graph lights up the path to the faulty cell in the demo.
+Model X-Ray ("the debugger for financial models"): an evidence-first Nemotron agent that investigates surprising outputs in financial models. It locates the cell behind a question such as "Why did EBITDA jump?", traces the dependency graph, diagnoses the root cause, tests a fix in a sandbox copy, verifies it (looping back if verification fails), explains it with clickable evidence, and returns a corrected copy after human approval. The design is in `docs/agent-architecture.md`; read it before changing the agent. Roadmap: issue #2.
 
 - Target users: M&A / deal teams. Built for the Nebius x NVIDIA Global AI Hackathon (Devpost, deadline 30 Oct 2026 10:00 PDT).
-- Spreadsheet platform: **Google Sheets**, not Excel/`.xlsx`. One good model plus many copies with planted errors is the data strategy — no external data needed.
+- Spreadsheet platform: **Google Sheets first**, behind a `SpreadsheetSource` / `Sandbox` interface so `.xlsx` can follow as a stretch goal (#13). One good model plus many copies with planted errors is the data strategy; no external data needed.
 - Proof of value: plant ~50 known errors in generated models and measure detection accuracy. Numbers are the centerpiece of the demo.
 - Agent must not be "naked": it gets tools (dependency graph traversal, formula trace, checklist validation) and skills built from financial-modeling best-practice literature. Per-model checklist of things to verify; the agent reads source material and writes its own context notes per workflow.
 - Optional leverage: Tavily for real-world lookups (there is a "Best Use of Tavily" prize).
@@ -15,17 +15,16 @@ Formula Trace ("a Project Blackbox for financial models"): an agent that audits 
 - Must run on Nebius Token Factory or Nebius AI Cloud and use at least one NVIDIA open-source model (Nemotron). Judges score Token Factory / Nemotron usage, design completeness, real-problem fit, idea quality.
 - Submission needs: working demo URL, public GitHub repo with an open-source license and a README with setup instructions that highlights Nebius/NVIDIA usage, ≤3-minute YouTube demo video, project description on Devpost.
 - Track: likely "Best Apps and Agents". Read https://nebiusglobalaihackathon.devpost.com/ before finalizing scope.
-- Token Factory is OpenAI-compatible: `base_url=https://api.tokenfactory.us-central1.nebius.com/v1/`, key in `NEBIUS_API_KEY` (`.env`, never committed). Nemotron model IDs and credit details are in the feasibility brief (see below) — confirm current IDs in the Token Factory console before hardcoding them.
+- Token Factory is OpenAI-compatible: `base_url=https://api.tokenfactory.us-central1.nebius.com/v1/`, key in `NEBIUS_API_KEY` (`.env`, never committed). Nemotron model IDs and credit details are in the feasibility brief (see below); confirm current IDs in the Token Factory console before hardcoding them.
 
 ## Verified repo state
 
-Fresh `uv` scaffold, almost nothing exists yet. Do not assume tooling that is not there:
+No code exists yet. Do not assume tooling that is not there:
 
-- `uv` project `data-room-sentinel`, Python 3.13.2, build backend `uv_build`, **zero dependencies declared**.
-- `pyproject.toml` declares console script `data-room-sentinel = "data_room_sentinel:main"`, but the `src/data_room_sentinel/` scaffold is uncommitted and currently absent from the working tree — other agents are mid-rename/cleanup. Verify what exists before assuming the package layout, and never recreate or rename it as a side effect of an unrelated change.
-- `README.md` is empty; `docs/` is empty in the working tree.
-- No test runner, linter, formatter, typechecker, CI, pre-commit, or `opencode.json` exists. When you add one, commit the config and update the Commands section here with the exact invocation.
-- The prior project direction (per-recipient document leak tracing) is only in git history: `git show HEAD:docs/feasibility.html`. It still holds verified Nebius credits, model IDs, and the four-week plan to 30 Oct. Deleted or uncommitted files in the working tree are someone's in-progress work — never `git add -A` or discard them.
+- Committed on `main`: `README.md` (empty), `AGENTS.md`, `.gitignore`, `docs/feasibility.html`, `docs/agent-architecture.md`.
+- No `pyproject.toml`, package, dependencies, test runner, linter, formatter, typechecker, CI, pre-commit, or `opencode.json`. The first Python project is created by the Nemotron tool-calling spike (#4). When you add tooling, commit the config and update the Commands section here with the exact invocation.
+- The repo was renamed from `data-room-sentinel`. A local `src/data_room_sentinel/` scaffold may exist uncommitted on someone's machine; never recreate or rename it as a side effect of an unrelated change.
+- `docs/feasibility.html` is the prior project direction (per-recipient document leak tracing). It still holds verified Nebius credits, model IDs, and the four-week plan to 30 Oct. Deleted or uncommitted files in the working tree are someone's in-progress work: never `git add -A` or discard them.
 
 ## Commands
 
