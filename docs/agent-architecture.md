@@ -183,6 +183,10 @@ Details: #11.
 
 Both run on Nebius Token Factory through LangChain's `ChatOpenAI` with `base_url=https://api.tokenfactory.us-central1.nebius.com/v1/` and `NEBIUS_API_KEY` from `.env`. Confirm IDs in the console before hardcoding (#4).
 
+## Evaluation
+
+Every node is measured against its own metric, and the whole agent runs on generated models: X models per error type, X with blended errors, plus override and clean controls. Accuracy and latency per error type and per step form the project's conclusion. Details: `docs/evaluation.md`.
+
 ## Not in scope for the hackathon
 
 - Peer, WACC and terminal-growth assumption checks
