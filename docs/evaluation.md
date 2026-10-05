@@ -38,7 +38,7 @@ With 25 cases per set, an accuracy figure carries roughly ±10 to 20 points of u
 | `map_model` | Row and column labels vs ground truth (accuracy) | Latency, tokens |
 | `locate` | Target cell exact match; clarification asked only when truly ambiguous (precision, recall) | Latency, tokens |
 | `trace` | Planted cell present among precedents (recall, expected 100%); contributions sum to the observed change | Latency |
-| `diagnose` | Planted cell in top 1 and top 3 hypotheses; error type correct; overrides wrongly flagged (false-alarm rate) | Latency, tokens, tool calls |
+| `diagnose` | Planted cell in top 1 and top 3 hypotheses; error type correct; overrides wrongly flagged (false-alarm rate) | Latency, tokens, tool calls used out of the budget of 8, hypothesis revisions, runs that hit the budget |
 | `test` | Sandbox runs succeed; recalculated values match the clean base for correct patches | Latency (Google API) |
 | `verify` | Verdict accuracy: confirms correct patches, rejects wrong ones (precision, recall on deliberately wrong patches too) | Latency, tokens |
 | `explain` | Every cited cell exists and every quoted number matches the sheet (automatic check) | Latency, tokens |
@@ -59,13 +59,16 @@ The `verify` step is also fed deliberately wrong patches, so its ability to reje
 
 ## Comparisons
 
-The same dataset runs through three set-ups, so the value of each part is visible:
+The same dataset runs through four set-ups. The graph receives its models as parameters, so switching set-ups is configuration, not new code; the only extra code is the rules-only diagnose.
 
-1. Rule scanner alone
-2. Full agent (rules, tools and Nemotron)
-3. Nemotron reading the sheet as plain text, with no tools
+| Set-up | Diagnose step | What it shows |
+|---|---|---|
+| Rules only | `find_formula_outliers` picks the most suspicious precedent; no LLM | The baseline plain code achieves |
+| Nemotron Nano | Investigator on `nvidia-nemotron-3-nano-30b-a3b` | Whether a small model is enough |
+| Nemotron Super | Investigator on `nemotron-3-super-120b-a12b` (main system) | The full agent |
+| Super without tools | Nemotron reads the sheet as plain text | What the tools add |
 
-The gap between 1 and 2 on false alarms and blended cases shows what Nemotron's judgment adds. The gap between 2 and 3 shows what the tools add.
+Results are reported per set, because the expected winner differs by set and the comparison must not be rigged. Rules should do well on single, clean errors such as a typed value replacing a formula. Nemotron is expected to earn its place on the override set (fewer false alarms, by reading notes and context) and the blended set (symptom is not the cause). The headline is stated in those terms, for example "rules handle the easy cases; Nemotron cuts false alarms by X points and solves Y% of the blended cases rules miss", with the measured numbers whatever they turn out to be.
 
 ## How it runs
 
@@ -80,5 +83,5 @@ The gap between 1 and 2 on false alarms and blended cases shows what Nemotron's 
 1. A results table per set (type 1 to 4, blended, overrides, clean): root-cause accuracy, fix accuracy, false alarms, latency p50 and p95, cost
 2. A per-step table with the metrics above
 3. A confusion matrix of predicted vs planted error types
-4. The three-way comparison
+4. The four-way comparison, per set
 5. A short conclusion in plain language, quoted in the README and the demo video
