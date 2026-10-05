@@ -21,10 +21,9 @@ Model X-Ray ("the debugger for financial models"): an evidence-first Nemotron ag
 
 No code exists yet. Do not assume tooling that is not there:
 
-- Committed on `main`: `README.md` (empty), `AGENTS.md`, `.gitignore`, `docs/feasibility.html`, `docs/agent-architecture.md`.
-- No `pyproject.toml`, package, dependencies, test runner, linter, formatter, typechecker, CI, pre-commit, or `opencode.json`. The first Python project is created by the Nemotron tool-calling spike (#4). When you add tooling, commit the config and update the Commands section here with the exact invocation.
-- The repo was renamed from `data-room-sentinel`. A local `src/data_room_sentinel/` scaffold may exist uncommitted on someone's machine; never recreate or rename it as a side effect of an unrelated change.
-- `docs/feasibility.html` is the prior project direction (per-recipient document leak tracing). It still holds verified Nebius credits, model IDs, and the four-week plan to 30 Oct. Deleted or uncommitted files in the working tree are someone's in-progress work: never `git add -A` or discard them.
+- Committed on `main`: `README.md` (empty), `AGENTS.md`, `.gitignore`, `docs/agent-architecture.md`, `docs/evaluation.md`, plus a bare `pyproject.toml` / `.python-version` uv scaffold (Python 3.13.2, zero dependencies).
+- No package, dependencies, test runner, linter, formatter, typechecker, CI, pre-commit, or `opencode.json`. The scaffold's console script `data-room-sentinel = "data_room_sentinel:main"` points at a module that does not exist (`src/` is empty) — the real Python project is created by the Nemotron tool-calling spike (#4), which should rename it (the repo is now `model-x-ray`). When you add tooling, commit the config and update the Commands section here with the exact invocation.
+- `docs/feasibility.html` (the prior leak-tracing direction) was deleted from the working tree; it remains readable via git history (`git show <commit>:docs/feasibility.html`) and still holds verified Nebius credits, model IDs, and the four-week plan to 30 Oct. Deleted or uncommitted files in the working tree are someone's in-progress work: never `git add -A` or discard them.
 
 ## Commands
 
