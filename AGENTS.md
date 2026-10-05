@@ -10,6 +10,12 @@ Model X-Ray ("the debugger for financial models"): an evidence-first Nemotron ag
 - Agent must not be "naked": it gets tools (dependency graph traversal, formula trace, checklist validation) and skills built from financial-modeling best-practice literature. Per-model checklist of things to verify; the agent reads source material and writes its own context notes per workflow.
 - Optional leverage: Tavily for real-world lookups (there is a "Best Use of Tavily" prize).
 
+## Development agent vs product agent (keep them separate)
+
+- Everything addressed by this file, by `.opencode/skills/`, and by the `docs/` design docs is for the **development agents building** Model X-Ray.
+- The **product agent** (the LangGraph/Nemotron investigation graph) must never read any of it. Its prompts, checklists and domain notes live inside the package (`src/model_x_ray/prompts/` once it exists) and ship with the product.
+- Product prompt text never goes into `.opencode/skills/`; development conventions never go into product prompts. If something seems useful to both, keep two copies, one in each home.
+
 ## Hackathon constraints (change the definition of "done")
 
 - Must run on Nebius Token Factory or Nebius AI Cloud and use at least one NVIDIA open-source model (Nemotron). Judges score Token Factory / Nemotron usage, design completeness, real-problem fit, idea quality.
