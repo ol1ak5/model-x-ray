@@ -247,7 +247,7 @@ Details: #11.
 | Model mapper (fallback), small-model comparison | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | 262K | $0.06 / $0.24 |
 | Optional: hardest verification, strongest benchmark attacker | `nvidia/Nemotron-3-Ultra-550b-a55b` | 1M | $1.00 / $3.00 |
 
-IDs, context and prices were confirmed with `GET /v1/models` on 6 Oct 2026; all four list `tools` and `reasoning` in `supported_features`. IDs are case-sensitive. Lightning replaces Nano as the mapper if the tool-calling and structured-output checks in #4 pass.
+IDs, context and prices were confirmed with `GET /v1/models` on 6 Oct 2026; all four list `tools` and `reasoning` in `supported_features`. IDs are case-sensitive. Lightning passed every tool-calling and structured-output check in #4 and was the fastest model, so it is the provisional mapper; the decision is confirmed on the real tool schemas (see `docs/research/nemotron-tool-calling.md`). Structured output uses `with_structured_output(..., method="function_calling")`, because the catalog lists no JSON-schema mode.
 
 All run on Nebius Token Factory through LangChain's `ChatOpenAI` with `base_url=https://api.tokenfactory.nebius.com/v1/` and `NEBIUS_API_KEY` from `.env`. The regional `https://api.tokenfactory.us-central1.nebius.com/v1/` also works but lists fewer models (18 vs 25).
 

@@ -46,6 +46,7 @@ No code exists yet. Do not assume tooling that is not there:
 - Setup after cloning: `uv sync`, then `cp .env.example .env` and fill in your own keys.
 - Tests: `uv run pytest` (offline, no credits), single test `uv run pytest path::test_name -k <pattern>`, live tests `uv run pytest -m live`.
 - Smoke check: `uv run model-x-ray`.
+- Tool-calling measurement (live, about 3 cents): `scripts/measure_tool_calling.sh`.
 - `scripts/*.sh` are zero-flag wrappers that call `uv run x.py` with fixed, curated flags (e.g. `scripts/benchmark.sh` → `uv run tools/benchmark.py --models planted-50 --output docs/benchmark.md`). They must run from the repo root with no arguments.
 
 ## Code rules (these differ from Python defaults, so they matter)
