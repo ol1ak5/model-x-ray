@@ -21,14 +21,16 @@ Model X-Ray ("the debugger for financial models"): an evidence-first Nemotron ag
 - Must run on Nebius Token Factory or Nebius AI Cloud and use at least one NVIDIA open-source model (Nemotron). Judges score Token Factory / Nemotron usage, design completeness, real-problem fit, idea quality.
 - Submission needs: working demo URL, public GitHub repo with an open-source license and a README with setup instructions that highlights Nebius/NVIDIA usage, ≤3-minute YouTube demo video, project description on Devpost.
 - Track: likely "Best Apps and Agents". Read https://nebiusglobalaihackathon.devpost.com/ before finalizing scope.
-- Token Factory is OpenAI-compatible: `base_url=https://api.tokenfactory.us-central1.nebius.com/v1/`, key in `NEBIUS_API_KEY` (`.env`, never committed). Nemotron model IDs and credit details are in the feasibility brief (see below); confirm current IDs in the Token Factory console before hardcoding them.
+- Token Factory is OpenAI-compatible: `base_url=https://api.tokenfactory.nebius.com/v1/` (verified 6 Oct 2026; the regional `us-central1` URL lists fewer models), key in `NEBIUS_API_KEY` (`.env`, never committed). Verified model IDs, context and prices are in `docs/agent-architecture.md` §Models; IDs are case-sensitive, so re-check `GET /v1/models` before hardcoding a new one.
 
 ## Verified repo state
 
 No code exists yet. Do not assume tooling that is not there:
 
-- Committed on `main`: `README.md` (empty), `AGENTS.md`, `.gitignore`, `docs/agent-architecture.md`, `docs/evaluation.md`, plus a bare `pyproject.toml` / `.python-version` uv scaffold (Python 3.13.2, zero dependencies).
-- No package, dependencies, test runner, linter, formatter, typechecker, CI, pre-commit, or `opencode.json`. The scaffold's console script `data-room-sentinel = "data_room_sentinel:main"` points at a module that does not exist (`src/` is empty) — the real Python project is created by the Nemotron tool-calling spike (#4), which should rename it (the repo is now `model-x-ray`). When you add tooling, commit the config and update the Commands section here with the exact invocation.
+- uv project `model-x-ray` (Python 3.13.2, build backend `uv_build`), package in `src/model_x_ray/` with a placeholder `main()` behind the console script `model-x-ray`. `uv.lock` is committed.
+- Dependencies: `langgraph`, `langchain-openai`, `langgraph-checkpoint-sqlite`, `python-dotenv`; dev: `pytest`. `.env.example` lists every variable with empty or default values.
+- pytest is configured in `pyproject.toml`: tests live in `tests/`, and tests marked `live` (they call Token Factory or Google APIs and spend credits) are skipped unless requested with `-m live`.
+- No linter, formatter, typechecker, CI, pre-commit, or `opencode.json` yet. When you add tooling, commit the config and update the Commands section here with the exact invocation.
 - `docs/feasibility.html` (the prior leak-tracing direction) was deleted from the working tree; it remains readable via git history (`git show <commit>:docs/feasibility.html`) and still holds verified Nebius credits, model IDs, and the four-week plan to 30 Oct. Deleted or uncommitted files in the working tree are someone's in-progress work: never `git add -A` or discard them.
 
 ## GitHub access: use `gh`, never touch `~/.ssh`
@@ -41,7 +43,10 @@ No code exists yet. Do not assume tooling that is not there:
 
 - Dependencies: `uv add <pkg>` (dev: `uv add --dev <pkg>`). Never `pip` or `uv pip`.
 - Run: `uv run <script>` / `uv run python -m ...`.
-- Tests (once pytest is added): `uv run pytest`, single test `uv run pytest path::test_name -k <pattern>`.
+- Setup after cloning: `uv sync`, then `cp .env.example .env` and fill in your own keys.
+- Tests: `uv run pytest` (offline, no credits), single test `uv run pytest path::test_name -k <pattern>`, live tests `uv run pytest -m live`.
+- Smoke check: `uv run model-x-ray`.
+- Tool-calling measurement (live, about 3 cents): `scripts/measure_tool_calling.sh`.
 - `scripts/*.sh` are zero-flag wrappers that call `uv run x.py` with fixed, curated flags (e.g. `scripts/benchmark.sh` → `uv run tools/benchmark.py --models planted-50 --output docs/benchmark.md`). They must run from the repo root with no arguments.
 
 ## Code rules (these differ from Python defaults, so they matter)

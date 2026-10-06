@@ -1,17 +1,35 @@
 [project]
-name = "data-room-sentinel"
+name = "model-x-ray"
 version = "0.1.0"
-description = "Add your description here"
+description = "Evidence-first Nemotron agent that debugs financial models"
 readme = "README.md"
 authors = [
-    { name = "Guillermo", email = "guillermo.martincoello@gmail.com" }
+    { name = "Guillermo", email = "guillermo.martincoello@gmail.com" },
+    { name = "Olya", email = "ol2ksenova@gmail.com" }
 ]
 requires-python = ">=3.13.2"
-dependencies = []
+dependencies = [
+    "langchain-openai>=1.6.7",
+    "langgraph>=1.2.14",
+    "langgraph-checkpoint-sqlite>=3.1.1",
+    "python-dotenv>=1.2.4",
+]
 
 [project.scripts]
-data-room-sentinel = "data_room_sentinel:main"
+model-x-ray = "model_x_ray:main"
 
 [build-system]
 requires = ["uv_build>=0.12.10,<0.13.0"]
 build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-m 'not live'"
+markers = [
+    "live: calls Nebius Token Factory or Google APIs; spends credits; run with -m live",
+]
