@@ -49,6 +49,7 @@ No code exists yet. Do not assume tooling that is not there:
 - Modern types only: `dict`, `list`, `X | None` — never `Dict`, `List`, `Optional`, `Tuple`.
 - **No inline comments anywhere** (no `#` comments on code lines, no trailing comments). Explain decisions in `docs/*.md` instead.
 - Test-driven development: write the failing test first, then implement. Every behavior change ships with tests.
+- **No unitary tests** — only deep, useful tests. Test real behavior end to end (a whole formula trace, a full audit run, a benchmark scenario against a planted error), not isolated functions with mocked inputs. If a test doesn't prove the system actually works on realistic data, don't write it.
 - Each change = one commit, staged with explicit `git add <paths>` (never `-A`), message format `type(scope): summary`, e.g. `feat(engine): implemented formula trace parser`. Scopes in use: `engine` (LLM API/clients), `agent` (audit workflow, tools, skills), `research`, `benchmark`, `docs`, `scripts`.
 - Follow the original design documented in `docs/`; when code and docs disagree, fix both in the same change.
 - `docs/` holds `.md` files for design and implementation details. New subsystem → new doc before or with the code.
@@ -58,6 +59,7 @@ No code exists yet. Do not assume tooling that is not there:
 Work is issue-driven and expected to be executed by agents as much as people.
 
 - **Branches and PRs**: never commit to `main` directly. Create `feat/<issue-number>-<slug>`, `fix/...`, `research/...`, `bench/...` branches; open a PR referencing the issue (`Closes #123`); get review before merge. One issue per PR when possible.
+- **Delete branches after merge** — a branch exists only to carry one PR. Once merged: `gh pr merge <n> --merge --delete-branch`, or manually `git branch -d <branch>` and `git push origin --delete <branch>`. Never reuse a merged branch for new work; open a fresh one. Keep the repo at `main` plus at most the branches with open PRs.
 - **Issue labels**: `research`, `agent`, `engine`, `benchmark`, `docs`, plus `bug`, `chore`, `blocked`. Add more as needed, but keep this set stable — agents filter on it.
 - **Standardized issue format** (contract between agents): title `[label] one-line goal`, body with context, concrete acceptance criteria (checkable), links to related issues/contracts, and a final "Follow-ups" section. An issue without acceptance criteria is not ready to be worked.
 - **Lifecycle rules**:
