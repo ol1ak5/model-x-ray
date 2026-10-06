@@ -59,6 +59,7 @@ No code exists yet. Do not assume tooling that is not there:
 Work is issue-driven and expected to be executed by agents as much as people.
 
 - **Branches and PRs**: never commit to `main` directly. Create `feat/<issue-number>-<slug>`, `fix/...`, `research/...`, `bench/...` branches; open a PR referencing the issue (`Closes #123`); get review before merge. One issue per PR when possible.
+- **Delete branches after merge** — a branch exists only to carry one PR. Once merged: `gh pr merge <n> --merge --delete-branch`, or manually `git branch -d <branch>` and `git push origin --delete <branch>`. Never reuse a merged branch for new work; open a fresh one. Keep the repo at `main` plus at most the branches with open PRs.
 - **Issue labels**: `research`, `agent`, `engine`, `benchmark`, `docs`, plus `bug`, `chore`, `blocked`. Add more as needed, but keep this set stable — agents filter on it.
 - **Standardized issue format** (contract between agents): title `[label] one-line goal`, body with context, concrete acceptance criteria (checkable), links to related issues/contracts, and a final "Follow-ups" section. An issue without acceptance criteria is not ready to be worked.
 - **Lifecycle rules**:
