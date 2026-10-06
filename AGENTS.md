@@ -31,6 +31,12 @@ No code exists yet. Do not assume tooling that is not there:
 - No package, dependencies, test runner, linter, formatter, typechecker, CI, pre-commit, or `opencode.json`. The scaffold's console script `data-room-sentinel = "data_room_sentinel:main"` points at a module that does not exist (`src/` is empty) — the real Python project is created by the Nemotron tool-calling spike (#4), which should rename it (the repo is now `model-x-ray`). When you add tooling, commit the config and update the Commands section here with the exact invocation.
 - `docs/feasibility.html` (the prior leak-tracing direction) was deleted from the working tree; it remains readable via git history (`git show <commit>:docs/feasibility.html`) and still holds verified Nebius credits, model IDs, and the four-week plan to 30 Oct. Deleted or uncommitted files in the working tree are someone's in-progress work: never `git add -A` or discard them.
 
+## GitHub access: use `gh`, never touch `~/.ssh`
+
+- For anything GitHub auth related, use `gh` (already authenticated; `gh` also provides the git credential helper over HTTPS). `gh pr ...`, `gh issue ...`, `gh api ...`.
+- **Never list, read, test, or reference files in `~/.ssh/`** — private keys are the user's territory, off limits to agents. No `ls ~/.ssh`, no `ssh -i`, no diagnosing which key works.
+- If a git push/pull fails with an auth error: do not debug keys. Retry via `gh`-backed HTTPS (`git push https://github.com/<owner>/<repo>.git <branch>`) or tell the user to run `gh auth status` / `gh auth login`. The user has instructed: use `gh`, always.
+
 ## Commands
 
 - Dependencies: `uv add <pkg>` (dev: `uv add --dev <pkg>`). Never `pip` or `uv pip`.

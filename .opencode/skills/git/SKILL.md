@@ -37,6 +37,8 @@ bench/<issue>-<slug>    chore/<issue>-<slug>   docs/<issue>-<slug>
 
 Flow: create branch → commit → push with `-u origin <branch>` → open PR referencing the issue → merge. See the `github` skill for PR/issue commands.
 
+**Auth: use `gh`, never touch `~/.ssh`.** If a push fails with an auth error, do not inspect or test SSH keys — that directory is off limits. Push over HTTPS via the `gh` credential helper instead: `git push https://github.com/<owner>/<repo>.git <branch>`, or tell the user to run `gh auth status`.
+
 ## Working-tree facts for this repo
 
 - `.env` and service-account JSON files are gitignored — verify with `git check-ignore -v .env` before worrying, and never commit keys.

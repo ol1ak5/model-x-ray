@@ -7,6 +7,8 @@ description: GitHub workflow with the gh CLI — creating issues in this repo's 
 
 Authenticated and available (`gh` 2.79). The repo is **`ol1ak5/model-x-ray`** (renamed from `data-room-sentinel`; the old remote path redirects).
 
+**`gh` is the only auth path.** Never read, list, or test SSH keys in `~/.ssh` — user territory, off limits. If git transport fails with an auth error, push over HTTPS with the `gh` credential helper (`git push https://github.com/<owner>/<repo>.git <branch>`) or ask the user to run `gh auth status`.
+
 ## Issue contract (AGENTS.md — issues are the agent-to-agent contract)
 
 Every issue body must contain, in order:
