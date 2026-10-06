@@ -9,11 +9,29 @@ MODELS = [
     "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
 ]
 
+QUESTIONS = [
+    ("What is the value of cell H8 on the P&L sheet?", "get_cell"),
+    ("Which cells feed into the formula in P&L!H8?", "trace_precedents"),
+    ("Does the formula in P&L!F27 follow the same pattern as its neighbouring cells?", "compare_formulas"),
+]
+
 
 @tool
 def get_cell(ref: str) -> str:
     """Return the value and formula of one spreadsheet cell, for example ref='P&L!H8'."""
     return "P&L!H8 = 52.0, formula =H6+H7"
+
+
+@tool
+def trace_precedents(ref: str) -> str:
+    """List the cells that a cell's formula depends on (its inputs), for example ref='P&L!H8'."""
+    return "P&L!H8 depends on P&L!H6, P&L!H7"
+
+
+@tool
+def compare_formulas(ref: str) -> str:
+    """Compare a cell's formula with the formulas in the neighbouring cells of the same row and report whether it breaks the pattern, for example ref='P&L!F27'."""
+    return "P&L!F27 =SUM(F20:F24); neighbours use rows 20 to 25; F27 deviates from the pattern"
 
 
 @pytest.mark.live
@@ -27,3 +45,15 @@ def test_model_calls_get_cell_with_the_right_reference(model: str) -> None:
     call = response.tool_calls[0]
     assert call["name"] == "get_cell"
     assert "H8" in call["args"]["ref"]
+
+
+@pytest.mark.live
+@pytest.mark.parametrize("model", MODELS)
+@pytest.mark.parametrize(("question", "expected_tool"), QUESTIONS)
+def test_model_picks_the_right_tool_out_of_three(model: str, question: str, expected_tool: str) -> None:
+    llm = build_chat_model(model).bind_tools([get_cell, trace_precedents, compare_formulas])
+
+    response = llm.invoke(question)
+
+    assert len(response.tool_calls) >= 1
+    assert response.tool_calls[0]["name"] == expected_tool
