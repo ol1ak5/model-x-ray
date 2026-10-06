@@ -50,7 +50,7 @@ flowchart TD
 | Node | Kind | What it does | Writes to state |
 |---|---|---|---|
 | `load_sheet` | Code | Reads values, formulas and labels; builds the dependency graph | (graph cached outside state) |
-| `map_model` | Nemotron Nano | Labels rows (revenue, opex, totals) and columns (actuals vs forecast); skipped when the map for this sheet revision is in long-term memory | `model_map_ref` |
+| `map_model` | Nemotron 3.5 Lightning (Nano fallback) | Labels rows (revenue, opex, totals) and columns (actuals vs forecast); skipped when the map for this sheet revision is in long-term memory | `model_map_ref` |
 | `locate` | Nemotron Super + `find_cells` | Turns the question into a target cell and comparison period; calls `interrupt()` if several cells match | `target`, `messages` |
 | `trace` | Code | Precedents of the target, the contribution of each input to the change, and the causal tree built from them | `contributions`, `causal_tree`, `evidence` |
 | `diagnose` | Investigator agent (subgraph) | Hypothesis-driven loop over read-only tools (see below), returns ranked hypotheses with evidence and a minimal patch | `hypotheses`, `evidence`, `patch` |
@@ -84,7 +84,7 @@ Three steps need judgment, so three agents. Everything else is a plain Python no
 |---|---|---|---|
 | Investigator | Nemotron 3 Super | Read-only only | Hypothesis-driven loop inside a subgraph with its own private messages. Decides what to investigate next, tells real errors from deliberate overrides, ranks hypotheses, proposes a minimal patch |
 | Verifier | Nemotron 3 Super, adversarial prompt | None (receives a fixed evidence package) | Assumes the diagnosis is wrong and looks for evidence that invalidates it. Never sees the Investigator's reasoning |
-| Model mapper | Nemotron 3 Nano | None | One structured-output call per sheet revision to build the semantic map |
+| Model mapper | Nemotron 3.5 Lightning (Nano fallback) | None | One structured-output call per sheet revision to build the semantic map |
 
 Model assignment is provisional until the tool-calling spike (#4) reports results. A separate "hypothesis planner" agent is deliberately not added: planning stays inside the Investigator unless the benchmark shows that splitting it improves accuracy.
 
@@ -240,12 +240,16 @@ Details: #11.
 
 ## Models
 
-| Use | Model ID |
-|---|---|
-| Investigator, Verifier, `locate`, `explain` | `nvidia/nemotron-3-super-120b-a12b` |
-| Model mapper | `nvidia/nvidia-nemotron-3-nano-30b-a3b` |
+| Use | Model ID | Context | Price per 1M tokens (in / out) |
+|---|---|---|---|
+| Investigator, Verifier, `locate`, `explain` | `nvidia/nemotron-3-super-120b-a12b` | 262K | $0.30 / $0.90 |
+| Model mapper (candidate) | `nvidia/Nemotron-3_5-Lightning` | 1M | $0.06 / $0.24 |
+| Model mapper (fallback), small-model comparison | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | 262K | $0.06 / $0.24 |
+| Optional: hardest verification, strongest benchmark attacker | `nvidia/Nemotron-3-Ultra-550b-a55b` | 1M | $1.00 / $3.00 |
 
-Both run on Nebius Token Factory through LangChain's `ChatOpenAI` with `base_url=https://api.tokenfactory.us-central1.nebius.com/v1/` and `NEBIUS_API_KEY` from `.env`. Confirm IDs in the console before hardcoding (#4).
+IDs, context and prices were confirmed with `GET /v1/models` on 6 Oct 2026; all four list `tools` and `reasoning` in `supported_features`. IDs are case-sensitive. Lightning replaces Nano as the mapper if the tool-calling and structured-output checks in #4 pass.
+
+All run on Nebius Token Factory through LangChain's `ChatOpenAI` with `base_url=https://api.tokenfactory.nebius.com/v1/` and `NEBIUS_API_KEY` from `.env`. The regional `https://api.tokenfactory.us-central1.nebius.com/v1/` also works but lists fewer models (18 vs 25).
 
 ## Evaluation
 
@@ -261,4 +265,4 @@ Every node is measured against its own metric, and the whole agent runs on gener
 
 - Hosted demo: do users share sheets with the service account, or sign in with OAuth? (#14)
 - Where long-term memory lives on the hosted demo (#11)
-- Whether Nano is reliable enough for `locate` to cut cost (#4)
+- Whether Lightning or Nano is reliable enough for `locate` to cut cost (#4)

@@ -64,7 +64,7 @@ The same dataset runs through four set-ups. The graph receives its models as par
 | Set-up | Diagnose step | What it shows |
 |---|---|---|
 | Rules only | `find_formula_outliers` picks the most suspicious precedent; no LLM | The baseline plain code achieves |
-| Nemotron Nano | Investigator on `nvidia-nemotron-3-nano-30b-a3b` | Whether a small model is enough |
+| Small Nemotron | Investigator on `NVIDIA-Nemotron-3-Nano-30B-A3B` or `Nemotron-3_5-Lightning` (whichever wins #4) | Whether a small model is enough |
 | Nemotron Super | Investigator on `nemotron-3-super-120b-a12b` (main system) | The full agent |
 | Super without tools | Nemotron reads the sheet as plain text | What the tools add |
 

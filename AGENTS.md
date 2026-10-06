@@ -21,7 +21,7 @@ Model X-Ray ("the debugger for financial models"): an evidence-first Nemotron ag
 - Must run on Nebius Token Factory or Nebius AI Cloud and use at least one NVIDIA open-source model (Nemotron). Judges score Token Factory / Nemotron usage, design completeness, real-problem fit, idea quality.
 - Submission needs: working demo URL, public GitHub repo with an open-source license and a README with setup instructions that highlights Nebius/NVIDIA usage, ≤3-minute YouTube demo video, project description on Devpost.
 - Track: likely "Best Apps and Agents". Read https://nebiusglobalaihackathon.devpost.com/ before finalizing scope.
-- Token Factory is OpenAI-compatible: `base_url=https://api.tokenfactory.us-central1.nebius.com/v1/`, key in `NEBIUS_API_KEY` (`.env`, never committed). Nemotron model IDs and credit details are in the feasibility brief (see below); confirm current IDs in the Token Factory console before hardcoding them.
+- Token Factory is OpenAI-compatible: `base_url=https://api.tokenfactory.nebius.com/v1/` (verified 6 Oct 2026; the regional `us-central1` URL lists fewer models), key in `NEBIUS_API_KEY` (`.env`, never committed). Verified model IDs, context and prices are in `docs/agent-architecture.md` §Models; IDs are case-sensitive, so re-check `GET /v1/models` before hardcoding a new one.
 
 ## Verified repo state
 

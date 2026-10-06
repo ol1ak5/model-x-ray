@@ -9,8 +9,7 @@ OpenAI-compatible inference API used for every LLM call in Model X-Ray (hackatho
 
 ## Endpoint facts
 
-- Base URL in current docs: `https://api.tokenfactory.nebius.com/v1/`
-- Our `AGENTS.md` and `docs/agent-architecture.md` say `https://api.tokenfactory.us-central1.nebius.com/v1/` — **possibly stale; confirm with a live call in issue #4 and fix both docs in the same change.**
+- Base URL: `https://api.tokenfactory.nebius.com/v1/` (verified with a live `GET /v1/models` on 2026-10-06: 25 models). The regional `https://api.tokenfactory.us-central1.nebius.com/v1/` also works but lists only 18.
 - Auth: `Authorization: Bearer $NEBIUS_API_KEY` (key from https://tokenfactory.nebius.com/project/api-keys, stored in `.env`, never committed).
 - Standard OpenAI client: `OpenAI(base_url=..., api_key=...)` or LangChain `ChatOpenAI(base_url=..., api_key=...)` (`base_url` verified as a constructor param, langchain-openai 1.6.7).
 
@@ -33,12 +32,16 @@ curl -s https://api.tokenfactory.nebius.com/v1/models \
 
 `GET /v1/models` returns `RichModel` entries with `context_length`, `pricing` (prompt/completion per unit), `supported_features`, `regions`, `status`. Model cards carry a "JSON mode" tag for structured-output support.
 
-## Model IDs used by the design (confirm before hardcoding — issue #4)
+## Model IDs (verified 2026-10-06 with `GET /v1/models`; IDs are case-sensitive)
 
-| Use | ID |
-|---|---|
-| Investigator, Verifier, `locate`, `explain` | `nvidia/nemotron-3-super-120b-a12b` |
-| Model mapper | `nvidia/nvidia-nemotron-3-nano-30b-a3b` |
+| Use | ID | Price per 1M (in / out) |
+|---|---|---|
+| Investigator, Verifier, `locate`, `explain` | `nvidia/nemotron-3-super-120b-a12b` | $0.30 / $0.90 |
+| Model mapper (candidate) | `nvidia/Nemotron-3_5-Lightning` | $0.06 / $0.24 |
+| Model mapper (fallback) | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | $0.06 / $0.24 |
+| Optional heavy verifier | `nvidia/Nemotron-3-Ultra-550b-a55b` | $1.00 / $3.00 |
+
+The lowercase Nano ID `nvidia/nvidia-nemotron-3-nano-30b-a3b` from the Nebius cookbook does not exist in the live catalog.
 
 ## Function calling — what matters
 
