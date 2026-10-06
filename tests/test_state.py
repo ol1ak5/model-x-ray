@@ -42,4 +42,3 @@ def test_reducers_keep_the_audit_trail_through_a_real_graph_run() -> None:
     assert full_state["hypotheses"][0]["claim"] == "Opex 2027 is a typed number, not a formula"
     assert [e["id"] for e in full_state["evidence"]] == ["e1", "e2"]
     assert full_state["attempts"] == 1
-    
