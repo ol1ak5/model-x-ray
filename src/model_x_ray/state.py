@@ -1,0 +1,108 @@
+import operator
+from typing import Annotated, Literal, TypedDict
+
+from langchain_core.messages import AnyMessage
+from langgraph.graph.message import add_messages
+
+
+class TargetCell(TypedDict):
+    sheet: str
+    cell: str
+    label: str
+    period: str
+    value: float
+    prior_cell: str
+    prior_value: float
+
+
+class Contribution(TypedDict):
+    cell: str
+    label: str
+    delta: float
+
+
+class CausalNode(TypedDict):
+    cell: str
+    label: str
+    value_before: float
+    value_after: float
+    delta: float
+    share_of_change: float
+    suspicious: bool
+    children: list["CausalNode"]
+
+
+class Hypothesis(TypedDict):
+    id: str
+    cell: str
+    error_type: Literal["typed_value", "broken_reference", "inconsistent_range", "sign_or_period"]
+    claim: str
+    evidence_ids: list[str]
+    confidence: float
+    status: Literal["open", "rejected", "confirmed"]
+
+
+class Patch(TypedDict):
+    cell: str
+    old_formula: str
+    new_formula: str
+    source: Literal["agent", "human"]
+
+
+class Verification(TypedDict):
+    hypothesis_id: str
+    before: dict[str, float]
+    after: dict[str, float]
+    checks: dict[str, bool]
+    verdict: Literal["confirmed", "rejected"]
+    reason: str
+
+
+class Evidence(TypedDict):
+    id: str
+    cell: str
+    kind: Literal["anomaly", "expected_pattern", "verification"]
+    text: str
+
+
+class HumanDecision(TypedDict):
+    action: Literal["approve", "edit", "reject"]
+    reason: str
+    patch: Patch | None
+
+
+def merge_by_id(left: list[Hypothesis], right: list[Hypothesis]) -> list[Hypothesis]:
+    merged = {h["id"]: h for h in left}
+    for update in right:
+        merged[update["id"]] = {**merged.get(update["id"], {}), **update}
+    return list(merged.values())
+
+
+class InvestigationState(TypedDict):
+    messages: Annotated[list[AnyMessage], add_messages]
+    spreadsheet_id: str
+    question: str
+    model_map_ref: str | None
+    target: TargetCell | None
+    contributions: list[Contribution]
+    causal_tree: CausalNode | None
+    hypotheses: Annotated[list[Hypothesis], merge_by_id]
+    patch: Patch | None
+    verifications: Annotated[list[Verification], operator.add]
+    evidence: Annotated[list[Evidence], operator.add]
+    attempts: int
+    report: str | None
+    human_decision: HumanDecision | None
+    corrected_copy_id: str | None
+
+
+class InputState(TypedDict):
+    spreadsheet_id: str
+    question: str
+
+
+class OutputState(TypedDict):
+    report: str | None
+    patch: Patch | None
+    evidence: list[Evidence]
+    corrected_copy_id: str | None
