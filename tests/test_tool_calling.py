@@ -1,5 +1,6 @@
 import pytest
 from langchain_core.tools import tool
+from langchain_core.messages import HumanMessage, ToolMessage
 
 from model_x_ray.llm import build_chat_model
 
@@ -57,3 +58,24 @@ def test_model_picks_the_right_tool_out_of_three(model: str, question: str, expe
 
     assert len(response.tool_calls) >= 1
     assert response.tool_calls[0]["name"] == expected_tool
+
+
+@pytest.mark.live
+@pytest.mark.parametrize("model", MODELS)
+def test_model_uses_a_tool_result_to_choose_the_next_call(model: str) -> None:
+    tools = {t.name: t for t in [get_cell, trace_precedents, compare_formulas]}
+    llm = build_chat_model(model).bind_tools(list(tools.values()))
+    messages = [HumanMessage(content="Which cells feed into P&L!H8? Then tell me what is in the first of them.")]
+
+    first = llm.invoke(messages)
+    assert first.tool_calls[0]["name"] == "trace_precedents"
+
+    call = first.tool_calls[0]
+    result = tools[call["name"]].invoke(call["args"])
+    messages += [first, ToolMessage(content=result, tool_call_id=call["id"])]
+
+    second = llm.invoke(messages)
+    assert len(second.tool_calls) >= 1
+    assert second.tool_calls[0]["name"] == "get_cell"
+    assert "H6" in second.tool_calls[0]["args"]["ref"]
+    
