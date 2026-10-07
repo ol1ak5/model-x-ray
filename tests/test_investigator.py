@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -11,6 +12,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from model_x_ray.agents.investigator import build_investigator, make_diagnose_node
 from model_x_ray.graph import build_graph, run_investigation
 from model_x_ray.llm import build_chat_model
+from model_x_ray.spreadsheet.source import XlsxSource
 from model_x_ray.state import InvestigationState
 
 
@@ -194,15 +196,17 @@ def test_investigator_runs_as_the_diagnose_node_of_the_main_graph() -> None:
     assert graph.get_state(config).next == ("human_review",)
 
 
-def test_run_investigation_wires_the_real_investigator_into_the_graph() -> None:
+def test_run_investigation_wires_the_real_investigator_into_the_graph(demo_workbook_path: Path) -> None:
     model = ScriptedDiagnosis(turns=[(["P&L!H5"], "P&L!H5")])
-    graph = run_investigation(model, [get_cell, trace_precedents])
+    graph = run_investigation(model, "demo", XlsxSource({"demo": demo_workbook_path}))
     config = {"configurable": {"thread_id": "entrypoint"}}
 
     graph.invoke({"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump on the P&L sheet?"}, config)
     state = graph.get_state(config).values
 
     assert model.briefs and "Question:" in model.briefs[0]
+    assert state["causal_tree"] is not None and state["causal_tree"]["cell"] == "P&L!H8"
+    assert {c["cell"] for c in state["contributions"]} == {"P&L!H6", "P&L!H7"}
     assert [(h["id"], h["cell"], h["claim"]) for h in state["hypotheses"]] == [
         ("hyp-1", "P&L!H5", "P&L!H5 is a typed number, not a formula"),
     ]

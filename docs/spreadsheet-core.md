@@ -11,7 +11,9 @@ Issues: #5 (reading, dependency graph, tools), #6 (sandbox). Design context: `do
 | `spreadsheet/engine.py` | `Workbook`: contents, notes, metadata, formulas, values, dependency graph, relative formula patterns, labels, patched copies |
 | `spreadsheet/xlsx.py` | `load_xlsx(path)`: reads an `.xlsx` file (for example a model downloaded from Google Sheets with File, Download, Microsoft Excel) into a `Workbook` |
 | `spreadsheet/source.py` | `SpreadsheetSource` protocol (`load`, `list_sheets`, `read_range`, `row_label`, `column_header`) and `XlsxSource`, which serves files by id |
-| `tools.py` | The read-only investigation API the Investigator and the nodes call: `find_cells`, `get_cell`, `trace_precedents`, `trace_dependents`, `compare_formulas`, `find_formula_outliers`, `get_cell_metadata`, plus `make_read_only_tools(book)` which wraps them as LangChain tools |
+| `rules.py` | `find_formula_outliers(range)` — the pattern rules, independent of LangChain so the rules-only baseline (#16) can reuse them |
+| `causal.py` | `explain_change` (one-input-at-a-time contributions) and `build_causal_tree` (the `CausalNode` dict, suspicious branches marked) |
+| `tools.py` | The read-only investigation API the Investigator and the nodes call: `find_cells`, `get_cell`, `trace_precedents`, `trace_dependents`, `explain_change`, `compare_formulas`, `find_formula_outliers`, `get_cell_metadata`, plus `make_read_only_tools(book)` which wraps them as LangChain tools |
 
 The Google Sheets API reader (#5) and sandbox (#6) will produce the same `Workbook`, so the tools and nodes do not depend on where the model came from.
 
@@ -59,6 +61,7 @@ The LLM never interprets raw formulas on its own; it reads these (design: `docs/
 | `get_cell(ref)` | `ref label header = value, formula ...` or `typed value, no formula`, with the note when present |
 | `trace_precedents(ref, depth)` | BFS lines `X depends on A, B` up to `depth`; typed cells report `no precedents: it is a typed value` |
 | `trace_dependents(ref, depth)` | The mirror: `X is read by ...`, `nothing reads X` |
+| `explain_change(ref, from_period, to_period)` | Target's before/after/delta plus each input's contribution, recomputed by patching inputs to the prior-period values one at a time |
 | `compare_formulas(ref, reference_cells)` | Each neighbour's relative pattern and a verdict: `matches the row pattern` or `breaks the pattern` |
 | `find_formula_outliers(range)` | Every cell in the range that is a typed value where its row uses formulas, or whose pattern differs from the row's (needs two agreeing formulas); the rules-only baseline of #16 |
 | `get_cell_metadata(ref)` | `no note` / `note: ...`, font colour, number format |

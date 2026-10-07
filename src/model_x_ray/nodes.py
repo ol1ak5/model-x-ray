@@ -1,5 +1,9 @@
+from collections.abc import Callable
+
 from langgraph.types import interrupt
 
+from model_x_ray import causal
+from model_x_ray.spreadsheet.engine import Workbook
 from model_x_ray.state import InvestigationState, TargetCell
 
 
@@ -42,6 +46,21 @@ def trace(state: InvestigationState) -> dict:
             {"cell": "H7", "label": "Opex", "delta": 4.8},
         ]
     }
+
+
+def make_trace_node(book: Workbook) -> Callable[[InvestigationState], dict]:
+    def trace_node(state: InvestigationState) -> dict:
+        target = state["target"]
+        ref = f"{target['sheet']}!{target['cell']}"
+        prior_ref = target["prior_cell"] if "!" in target["prior_cell"] else f"{target['sheet']}!{target['prior_cell']}"
+        from_period = book.column_header(prior_ref)
+        if not from_period:
+            raise ValueError(f"No period header for prior cell {prior_ref}")
+        explanation = causal.explain_change(book, ref, from_period, target["period"])
+        tree = causal.build_causal_tree(book, ref, from_period, target["period"])
+        return {"contributions": explanation["contributions"], "causal_tree": tree}
+
+    return trace_node
 
 
 def stub_diagnose(state: InvestigationState) -> dict:
