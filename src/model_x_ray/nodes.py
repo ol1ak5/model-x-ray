@@ -44,7 +44,7 @@ def trace(state: InvestigationState) -> dict:
     }
 
 
-def diagnose(state: InvestigationState) -> dict:
+def stub_diagnose(state: InvestigationState) -> dict:
     number = len(state.get("hypotheses", [])) + 1
     return {
         "hypotheses": [{
