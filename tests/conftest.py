@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 from openpyxl import Workbook as OpenpyxlWorkbook
 from openpyxl.comments import Comment
+from openpyxl.styles import Font
 
 ASSUMPTIONS = {
     "B5": "Revenue growth", "C5": 0.08,
@@ -32,6 +33,9 @@ def write_demo_workbook(path: Path, notes: dict[str, str] | None = None) -> Path
         assumptions[ref] = content
     for ref, text in (notes or {}).items():
         pnl[ref].comment = Comment(text, "model owner")
+    pnl["F7"].font = Font(color="0000FF")
+    for ref in ("F7", "G7", "H7"):
+        pnl[ref].number_format = "0.0"
     book.save(path)
     return path
 

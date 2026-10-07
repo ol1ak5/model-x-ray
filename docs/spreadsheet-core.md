@@ -8,8 +8,10 @@ Issues: #5 (reading, dependency graph, tools), #6 (sandbox). Design context: `do
 
 | Module | Responsibility |
 |---|---|
-| `spreadsheet/engine.py` | `Workbook`: contents, notes, formulas, values, dependency graph, relative formula patterns, labels, patched copies |
+| `spreadsheet/engine.py` | `Workbook`: contents, notes, metadata, formulas, values, dependency graph, relative formula patterns, labels, patched copies |
 | `spreadsheet/xlsx.py` | `load_xlsx(path)`: reads an `.xlsx` file (for example a model downloaded from Google Sheets with File, Download, Microsoft Excel) into a `Workbook` |
+| `spreadsheet/source.py` | `SpreadsheetSource` protocol (`load`, `list_sheets`, `read_range`, `row_label`, `column_header`) and `XlsxSource`, which serves files by id |
+| `tools.py` | The read-only investigation API the Investigator and the nodes call: `find_cells`, `get_cell`, `trace_precedents`, `trace_dependents`, `compare_formulas`, `find_formula_outliers`, `get_cell_metadata`, plus `make_read_only_tools(book)` which wraps them as LangChain tools |
 
 The Google Sheets API reader (#5) and sandbox (#6) will produce the same `Workbook`, so the tools and nodes do not depend on where the model came from.
 
@@ -28,6 +30,7 @@ Cells are addressed as `Sheet!A1` (for example `P&L!H8`, `Assumptions!C7`). Cont
 | `formula_pattern(ref)` | The formula with references written relative to the cell (R1C1 style), or `None` for a typed value |
 | `row_label(ref)` / `column_header(ref)` | The first text to the left in the row / the nearest text above in the column |
 | `with_patch(ref, content)` | A new `Workbook` with one cell changed; the original is never modified |
+| `metadata_of(ref)` | `CellMetadata`: cell note, font colour (blue = typed input convention), number format — signals for telling deliberate overrides from errors, never proof alone |
 
 ### Relative formula patterns
 
@@ -45,6 +48,22 @@ Deliberately small, matching standard financial models:
 Anything else raises `UnsupportedFormulaError` naming the function, so an unsupported model fails clearly instead of producing wrong numbers. Circular references raise `CircularReferenceError`. Empty cells count as 0 in arithmetic.
 
 Consequence for building demo models (including the NVIDIA model): use only the functions above. Add a function here, with a test, when a model needs it.
+
+## Read-only tools
+
+The LLM never interprets raw formulas on its own; it reads these (design: `docs/agent-architecture.md` §Tools):
+
+| Tool | Returns |
+|---|---|
+| `find_cells(label, period)` | Cells whose row label and period header match; exact label first, then contains |
+| `get_cell(ref)` | `ref label header = value, formula ...` or `typed value, no formula`, with the note when present |
+| `trace_precedents(ref, depth)` | BFS lines `X depends on A, B` up to `depth`; typed cells report `no precedents: it is a typed value` |
+| `trace_dependents(ref, depth)` | The mirror: `X is read by ...`, `nothing reads X` |
+| `compare_formulas(ref, reference_cells)` | Each neighbour's relative pattern and a verdict: `matches the row pattern` or `breaks the pattern` |
+| `find_formula_outliers(range)` | Every cell in the range that is a typed value where its row uses formulas, or whose pattern differs from the row's (needs two agreeing formulas); the rules-only baseline of #16 |
+| `get_cell_metadata(ref)` | `no note` / `note: ...`, font colour, number format |
+
+Plain functions take the `Workbook` first (nodes and rules call those); `make_read_only_tools(book)` returns the LangChain-wrapped versions with the tool-only signatures for the Investigator.
 
 ## Sandbox
 
