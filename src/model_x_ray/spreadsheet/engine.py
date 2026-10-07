@@ -3,9 +3,16 @@ from collections import deque
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
+from typing import TypedDict
 
 CellContent = float | str | bool
 Value = float | str | bool | None
+
+
+class CellMetadata(TypedDict):
+    note: str | None
+    font_color: str | None
+    number_format: str | None
 
 TOKEN_PATTERN = re.compile(
     r"""
@@ -94,6 +101,23 @@ def normalize_ref(ref: str) -> str:
     return make_ref(sheet, address)
 
 
+def expand_range(text: str) -> list[str]:
+    sheet_text, _, cells = text.rpartition("!")
+    if not sheet_text:
+        raise FormulaError(f"Range must include a sheet: {text}")
+    sheet = sheet_text[1:-1].replace("''", "'") if sheet_text.startswith("'") else sheet_text
+    parts = cells.split(":")
+    if len(parts) > 2:
+        raise FormulaError(f"Invalid range: {text}")
+    _, start = split_ref(f"{sheet}!{parts[0]}")
+    _, end = split_ref(f"{sheet}!{parts[-1]}")
+    return [
+        make_ref(sheet, CellAddress(column, row))
+        for row in range(min(start.row, end.row), max(start.row, end.row) + 1)
+        for column in range(min(start.column, end.column), max(start.column, end.column) + 1)
+    ]
+
+
 def tokenize(formula: str) -> list[Token]:
     tokens: list[Token] = []
     position = 1 if formula.startswith("=") else 0
@@ -162,10 +186,11 @@ def numbers(values: list[Value | list[Value]]) -> list[float]:
 
 
 class Workbook:
-    def __init__(self, cells: dict[str, CellContent], notes: dict[str, str] | None = None, sheets: list[str] | None = None) -> None:
+    def __init__(self, cells: dict[str, CellContent], notes: dict[str, str] | None = None, sheets: list[str] | None = None, metadata: dict[str, CellMetadata] | None = None) -> None:
         self._cells = {normalize_ref(ref): content for ref, content in cells.items()}
         self._notes = {normalize_ref(ref): text for ref, text in (notes or {}).items()}
         self._sheets = sheets or list(dict.fromkeys(ref.rsplit("!", 1)[0] for ref in self._cells))
+        self._metadata = {normalize_ref(ref): meta for ref, meta in (metadata or {}).items()}
         self._cache: dict[str, Value] = {}
         self._evaluating: set[str] = set()
         self._dependents: dict[str, list[str]] | None = None
@@ -187,10 +212,19 @@ class Workbook:
     def note(self, ref: str) -> str | None:
         return self._notes.get(normalize_ref(ref))
 
+    def metadata_of(self, ref: str) -> CellMetadata:
+        normalized = normalize_ref(ref)
+        stored = self._metadata.get(normalized, {})
+        return {
+            "note": self._notes.get(normalized) or stored.get("note"),
+            "font_color": stored.get("font_color"),
+            "number_format": stored.get("number_format"),
+        }
+
     def with_patch(self, ref: str, content: CellContent) -> "Workbook":
         cells = dict(self._cells)
         cells[normalize_ref(ref)] = content
-        return Workbook(cells, self._notes, self._sheets)
+        return Workbook(cells, self._notes, self._sheets, self._metadata)
 
     def value(self, ref: str) -> Value:
         ref = normalize_ref(ref)
