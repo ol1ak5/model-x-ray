@@ -38,7 +38,7 @@ class Hypothesis(TypedDict):
     error_type: Literal["typed_value", "broken_reference", "inconsistent_range", "sign_or_period"]
     claim: str
     evidence_ids: list[str]
-    confidence: float
+    confidence: Literal["high", "medium", "low"]
     status: Literal["open", "rejected", "confirmed"]
 
 

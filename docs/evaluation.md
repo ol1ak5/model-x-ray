@@ -38,7 +38,7 @@ With 25 cases per set, an accuracy figure carries roughly ±10 to 20 points of u
 | `map_model` | Row and column labels vs ground truth (accuracy) | Latency, tokens |
 | `locate` | Target cell exact match; clarification asked only when truly ambiguous (precision, recall) | Latency, tokens |
 | `trace` | Planted cell present among precedents (recall, expected 100%); contributions sum to the observed change | Latency |
-| `diagnose` | Planted cell in top 1 and top 3 hypotheses; error type correct; overrides wrongly flagged (false-alarm rate) | Latency, tokens, tool calls used out of the budget of 8, hypothesis revisions, runs that hit the budget |
+| `diagnose` | Planted cell in top 1 and top 3 hypotheses; error type correct; overrides wrongly flagged (false-alarm rate); confidence calibration (share of `high`, `medium` and `low` hypotheses later confirmed, which should fall from high to low) | Latency, tokens, tool calls used out of the budget of 8, hypothesis revisions, runs that hit the budget |
 | `test` | Sandbox runs succeed; recalculated values match the clean base for correct patches | Latency (Google API) |
 | `verify` | Verdict accuracy: confirms correct patches, rejects wrong ones (precision, recall on deliberately wrong patches too) | Latency, tokens |
 | `explain` | Every cited cell exists and every quoted number matches the sheet (automatic check) | Latency, tokens |
