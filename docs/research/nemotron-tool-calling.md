@@ -69,5 +69,5 @@ The 15 live tests plus the one-run measurement cost well under one US cent. A te
 
 ## Follow-ups
 
-- Benchmark: tool-calling reliability on the real tool schemas, ten runs per scenario, after #5 (`scripts/measure_tool_calling.sh` is ready; swap the fake tools for the real ones).
+- Benchmark: tool-calling reliability on the real tool schemas, ten runs per scenario. The fake tools were swapped for the real investigation API in #33 (a one-run smoke passed on all three models); the ten-run re-measurement itself is #27 (`scripts/measure_tool_calling.sh` ready).
 - Engine: production client factory (model registry from config, retries, timeouts, token and latency logging for the evaluators in #16).

@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.tools import tool
 from langgraph.checkpoint.memory import InMemorySaver
@@ -13,6 +13,7 @@ from model_x_ray.agents.investigator import build_investigator, make_diagnose_no
 from model_x_ray.graph import build_graph, run_investigation
 from model_x_ray.llm import build_chat_model
 from model_x_ray.spreadsheet.source import XlsxSource
+from model_x_ray.spreadsheet.xlsx import load_xlsx
 from model_x_ray.state import InvestigationState
 
 
@@ -205,6 +206,8 @@ def test_run_investigation_wires_the_real_investigator_into_the_graph(demo_workb
     state = graph.get_state(config).values
 
     assert model.briefs and "Question:" in model.briefs[0]
+    assert "Cause tree" in model.briefs[0]
+    assert "P&L!H7 Opex" in model.briefs[0] and "SUSPICIOUS" in model.briefs[0]
     assert state["causal_tree"] is not None and state["causal_tree"]["cell"] == "P&L!H8"
     assert {c["cell"] for c in state["contributions"]} == {"P&L!H6", "P&L!H7"}
     assert [(h["id"], h["cell"], h["claim"]) for h in state["hypotheses"]] == [
@@ -256,3 +259,98 @@ def reject_first_then_confirm(state: InvestigationState) -> dict:
         "hypotheses": [{"id": hypothesis["id"], "status": verdict}],
         "attempts": state.get("attempts", 0) + 1,
     }
+
+
+class OutlierScanner(BaseChatModel):
+    bound: list[str] = []
+
+    @property
+    def _llm_type(self) -> str:
+        return "outlier-scanner"
+
+    def bind_tools(self, tools: Sequence[Any], **kwargs: Any) -> "OutlierScanner":
+        names = [getattr(t, "name", None) or getattr(t, "__name__", "") for t in tools]
+        return self.model_copy(update={"bound": names})
+
+    @staticmethod
+    def _results(messages: list[BaseMessage]) -> dict[str, str]:
+        return {m.name: m.content for m in messages if isinstance(m, ToolMessage) and m.name}
+
+    @staticmethod
+    def _candidate(outliers: str) -> str | None:
+        if outliers == "no outliers found":
+            return None
+        return outliers.splitlines()[0].split(":")[0]
+
+    @staticmethod
+    def _diagnosis(results: dict[str, str]) -> dict:
+        cell = OutlierScanner._candidate(results.get("find_formula_outliers", "no outliers found"))
+        if cell is None or "note: " in results.get("get_cell_metadata", "no note"):
+            return {"hypotheses": [], "patch": None}
+        return {
+            "hypotheses": [{
+                "cell": cell,
+                "error_type": "typed_value",
+                "claim": f"{cell} is a typed value where the row uses formulas",
+                "confidence": "high",
+            }],
+            "patch": {"cell": cell, "new_formula": "=G7*(1+Assumptions!$C$7)"},
+        }
+
+    def _generate(self, messages: list[BaseMessage], stop: list[str] | None = None, **kwargs: Any) -> ChatResult:
+        results = self._results(messages)
+        if "Diagnosis" in self.bound:
+            call = {"name": "Diagnosis", "args": self._diagnosis(results), "id": "conclude"}
+            return ChatResult(generations=[ChatGeneration(message=AIMessage(content="", tool_calls=[call]))])
+        if "find_formula_outliers" not in results:
+            call = {"name": "find_formula_outliers", "args": {"range": "P&L!G4:H9"}, "id": "scan"}
+            return ChatResult(generations=[ChatGeneration(message=AIMessage(content="", tool_calls=[call]))])
+        cell = self._candidate(results["find_formula_outliers"])
+        if cell is not None and "get_cell_metadata" not in results:
+            call = {"name": "get_cell_metadata", "args": {"ref": cell}, "id": "meta"}
+            return ChatResult(generations=[ChatGeneration(message=AIMessage(content="", tool_calls=[call]))])
+        return ChatResult(generations=[ChatGeneration(message=AIMessage(content="Enough evidence."))])
+
+
+def test_investigator_finds_the_planted_typed_value_through_the_real_tools(demo_workbook_path: Path) -> None:
+    graph = run_investigation(OutlierScanner(), "demo", XlsxSource({"demo": demo_workbook_path}))
+    config = {"configurable": {"thread_id": "planted-real-tools"}}
+
+    graph.invoke({"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump on the P&L sheet?"}, config)
+    state = graph.get_state(config).values
+
+    assert state["hypotheses"][0]["cell"] == "P&L!H7"
+    assert state["hypotheses"][0]["error_type"] == "typed_value"
+    assert state["hypotheses"][0]["status"] == "confirmed"
+
+    patch = state["patch"]
+    assert patch["cell"] == "P&L!H7"
+    book = load_xlsx(demo_workbook_path)
+    patched = book.with_patch(patch["cell"], patch["new_formula"])
+    assert patched.formula_pattern("P&L!H7") == book.formula_pattern("P&L!G7")
+    assert patched.value("P&L!H8") == pytest.approx(44.73, abs=0.01)
+
+
+def test_investigator_leaves_a_deliberate_override_alone(demo_workbook_with_override_note: Path) -> None:
+    graph = run_investigation(OutlierScanner(), "demo", XlsxSource({"demo": demo_workbook_with_override_note}))
+    config = {"configurable": {"thread_id": "override-real-tools"}}
+
+    graph.invoke({"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump on the P&L sheet?"}, config)
+    state = graph.get_state(config).values
+
+    assert state["hypotheses"] == []
+    assert state["patch"] is None
+    assert "Inconclusive" in state["report"]
+
+
+@pytest.mark.live
+def test_nemotron_super_finds_the_planted_typed_value_on_the_fixture(demo_workbook_path: Path) -> None:
+    llm = build_chat_model("nvidia/nemotron-3-super-120b-a12b")
+    graph = run_investigation(llm, "demo", XlsxSource({"demo": demo_workbook_path}))
+    config = {"configurable": {"thread_id": "live-planted"}}
+
+    graph.invoke({"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump on the P&L sheet?"}, config)
+    state = graph.get_state(config).values
+
+    cells = [h["cell"] for h in state["hypotheses"]]
+    assert "P&L!H7" in cells

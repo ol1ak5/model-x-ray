@@ -124,3 +124,13 @@ def build_causal_tree(book: Workbook, ref: str, from_period: str, to_period: str
     if tree is None:
         raise ValueError(f"Could not build causal tree for {ref}")
     return tree
+
+
+def render_causal_tree(tree: CausalNode, depth: int = 0) -> list[str]:
+    marker = " SUSPICIOUS" if tree["suspicious"] else ""
+    label = f" {tree['label']}" if tree["label"] else ""
+    line = f"{'  ' * depth}{tree['cell']}{label}: {tree['value_before']} -> {tree['value_after']} ({tree['delta']:+}){marker}"
+    lines = [line]
+    for child in tree["children"]:
+        lines += render_causal_tree(child, depth + 1)
+    return lines

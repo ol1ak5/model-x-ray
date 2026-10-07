@@ -10,6 +10,7 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode
 from pydantic import BaseModel
 
+from model_x_ray.causal import render_causal_tree
 from model_x_ray.prompts import load_prompt
 from model_x_ray.state import InvestigationState
 
@@ -91,6 +92,10 @@ def investigation_brief(state: InvestigationState) -> str:
         f"Target: {target['sheet']}!{target['cell']} ({target['label']} {target['period']}) = {target['value']}, prior period {target['prior_cell']} = {target['prior_value']}",
     ]
     lines += [f"Contribution: {c['cell']} {c['label']} {c['delta']:+}" for c in state.get("contributions", [])]
+    tree = state.get("causal_tree")
+    if tree:
+        lines.append("Cause tree (suspicious cells marked):")
+        lines += [f"  {line}" for line in render_causal_tree(tree)]
     lines += [f"Already rejected, do not propose again: {h['cell']} ({h['error_type']})" for h in state.get("hypotheses", []) if h["status"] == "rejected"]
     return "\n".join(lines)
 

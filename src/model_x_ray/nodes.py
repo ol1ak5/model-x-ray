@@ -80,6 +80,13 @@ def test(state: InvestigationState) -> dict:
 
 
 def verify(state: InvestigationState) -> dict:
+    if not state.get("hypotheses"):
+        return {
+            "verifications": [{
+                "hypothesis_id": "", "before": {}, "after": {}, "checks": {},
+                "verdict": "inconclusive", "reason": "no hypothesis to verify",
+            }],
+        }
     hypothesis = state["hypotheses"][-1]
     return {
         "verifications": [{
