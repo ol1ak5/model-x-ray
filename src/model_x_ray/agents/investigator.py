@@ -14,6 +14,7 @@ from model_x_ray.prompts import load_prompt
 from model_x_ray.state import InvestigationState
 
 MAX_TOOL_CALLS = 8
+MAX_OPEN_HYPOTHESES = 3
 
 
 class ProposedHypothesis(BaseModel):
@@ -50,8 +51,12 @@ def build_investigator(llm: BaseChatModel, tools: list[BaseTool], max_tool_calls
 
     def act(state: InvestigatorState) -> dict:
         calls = state["messages"][-1].tool_calls
-        results = tool_node.invoke({"messages": state["messages"]})
-        return {"messages": results["messages"], "tool_calls_used": state.get("tool_calls_used", 0) + len(calls)}
+        remaining = max_tool_calls - state.get("tool_calls_used", 0)
+        executed, overflow = calls[:remaining], calls[remaining:]
+        answered = state["messages"][-1].model_copy(update={"tool_calls": executed})
+        results = tool_node.invoke({"messages": [*state["messages"][:-1], answered]})
+        budget_messages = [ToolMessage(content="Tool budget exhausted.", tool_call_id=call["id"]) for call in overflow]
+        return {"messages": results["messages"] + budget_messages, "tool_calls_used": state.get("tool_calls_used", 0) + len(executed)}
 
     def next_step(state: InvestigatorState) -> str:
         last = state["messages"][-1]
@@ -94,6 +99,7 @@ def make_diagnose_node(investigator: CompiledStateGraph) -> Callable[[Investigat
     def diagnose(state: InvestigationState) -> dict:
         result = investigator.invoke({"messages": [HumanMessage(content=investigation_brief(state))]})
         diagnosis = result["diagnosis"]
+        proposed = diagnosis.hypotheses[:MAX_OPEN_HYPOTHESES]
         first_number = len(state.get("hypotheses", [])) + 1
         hypotheses = [
             {
@@ -105,7 +111,7 @@ def make_diagnose_node(investigator: CompiledStateGraph) -> Callable[[Investigat
                 "confidence": h.confidence,
                 "status": "open",
             }
-            for i, h in enumerate(diagnosis.hypotheses)
+            for i, h in enumerate(proposed)
         ]
         patch = None
         if diagnosis.patch is not None:
