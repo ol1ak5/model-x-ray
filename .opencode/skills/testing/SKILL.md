@@ -20,9 +20,11 @@ Also: TDD — write the failing test first, then implement. Modern types only. N
 3. **Fake Sandbox, real patch logic** — in-memory `Sandbox` over a fixture sheet that actually recalculates the affected formula (small helper, not a full engine), so before/after values are real numbers.
 
 ```python
-def test_blended_error_symptom_is_not_cause(fixture_sheet: Sheet, scripted_llm: ChatModel) -> None:
-    graph = build_graph(llm=scripted_llm, source=fixture_sheet, sandbox=FakeSandbox(fixture_sheet))
-    result = graph.invoke({"spreadsheet_id": "blend-03", "question": "Why did EBITDA 2027 jump?"})
+def test_blended_error_symptom_is_not_cause(fixture_sheet: Workbook, scripted_llm: ChatModel) -> None:
+    graph = run_investigation(scripted_llm, fake_read_only_tools)
+    config = {"configurable": {"thread_id": "blend-03"}}
+    graph.invoke({"spreadsheet_id": "blend-03", "question": "Why did EBITDA 2027 jump?"}, config)
+    result = graph.get_state(config).values
     planted = load_ground_truth("blend-03")
     assert top_hypothesis(result).cell == planted.cells[0]
     assert top_hypothesis(result).error_type == planted.error_types[0]

@@ -60,6 +60,10 @@ flowchart TD
 | `human_review` | Interrupt | Approve, edit the fix, or reject with a reason | `human_decision` |
 | `apply_fix` | Code | Writes a corrected copy with a `Change log` tab | `corrected_copy_id` |
 
+### Building the graph
+
+`build_graph(checkpointer, diagnose, overrides=None)` takes the `diagnose` node as an explicit argument — there is no default, because a default would risk running a stub that fabricates findings. The production entrypoint is `run_investigation(llm, tools, checkpointer=None)`: it wires the Investigator (`build_investigator` + `make_diagnose_node`) as `diagnose` and returns the compiled graph; the caller invokes it and handles the `human_review` interrupt. Tests that exercise graph mechanics pass the stub by name (`diagnose=nodes.stub_diagnose`). Read-only tools are a parameter, so the same entrypoint takes the real tools when #33 lands.
+
 ### Routing after `verify`
 
 | Condition | Next node |

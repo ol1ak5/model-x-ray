@@ -3,6 +3,7 @@ from pathlib import Path
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
 
+from model_x_ray import nodes
 from model_x_ray.graph import build_graph
 from model_x_ray.memory import sqlite_checkpointer
 from model_x_ray.state import InvestigationState
@@ -23,7 +24,7 @@ def always_reject(state: InvestigationState) -> dict:
 
 
 def test_confirmed_fix_pauses_for_approval_then_writes_a_corrected_copy() -> None:
-    graph = build_graph(InMemorySaver())
+    graph = build_graph(InMemorySaver(), diagnose=nodes.stub_diagnose)
     config = {"configurable": {"thread_id": "happy-path"}}
 
     paused = graph.invoke(QUESTION, config)
@@ -53,7 +54,7 @@ def always_diagnose_two(state: InvestigationState) -> dict:
 
 
 def test_rejected_fixes_retry_three_times_then_report_inconclusive() -> None:
-    graph = build_graph(InMemorySaver(), overrides={"diagnose": always_diagnose_two, "verify": always_reject})
+    graph = build_graph(InMemorySaver(), diagnose=always_diagnose_two, overrides={"verify": always_reject})
     config = {"configurable": {"thread_id": "exhausted"}}
 
     graph.invoke(QUESTION, config)
@@ -67,7 +68,7 @@ def test_rejected_fixes_retry_three_times_then_report_inconclusive() -> None:
 
 
 def test_rejection_with_no_untested_hypothesis_ends_inconclusive_on_first_attempt() -> None:
-    graph = build_graph(InMemorySaver(), overrides={"verify": always_reject})
+    graph = build_graph(InMemorySaver(), diagnose=nodes.stub_diagnose, overrides={"verify": always_reject})
     config = {"configurable": {"thread_id": "nothing-left"}}
 
     graph.invoke(QUESTION, config)
@@ -81,7 +82,7 @@ def test_rejection_with_no_untested_hypothesis_ends_inconclusive_on_first_attemp
 
 
 def test_human_rejection_ends_without_writing_anything() -> None:
-    graph = build_graph(InMemorySaver())
+    graph = build_graph(InMemorySaver(), diagnose=nodes.stub_diagnose)
     config = {"configurable": {"thread_id": "human-rejects"}}
 
     graph.invoke(QUESTION, config)
@@ -92,7 +93,7 @@ def test_human_rejection_ends_without_writing_anything() -> None:
 
 
 def test_ambiguous_question_pauses_until_the_user_picks_a_cell() -> None:
-    graph = build_graph(InMemorySaver())
+    graph = build_graph(InMemorySaver(), diagnose=nodes.stub_diagnose)
     config = {"configurable": {"thread_id": "ambiguous"}}
 
     paused = graph.invoke({"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump?"}, config)
@@ -111,12 +112,12 @@ def test_paused_investigation_survives_a_restart(tmp_path: Path) -> None:
     database = str(tmp_path / "investigations.db")
     config = {"configurable": {"thread_id": "restart"}}
 
-    first_session = build_graph(sqlite_checkpointer(database))
+    first_session = build_graph(sqlite_checkpointer(database), diagnose=nodes.stub_diagnose)
     first_session.invoke(QUESTION, config)
     assert first_session.get_state(config).next == ("human_review",)
     del first_session
 
-    second_session = build_graph(sqlite_checkpointer(database))
+    second_session = build_graph(sqlite_checkpointer(database), diagnose=nodes.stub_diagnose)
     assert second_session.get_state(config).next == ("human_review",)
     result = second_session.invoke(Command(resume={"action": "approve", "reason": "", "patch": None}), config)
 

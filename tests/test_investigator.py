@@ -9,7 +9,7 @@ from langchain_core.tools import tool
 from langgraph.checkpoint.memory import InMemorySaver
 
 from model_x_ray.agents.investigator import build_investigator, make_diagnose_node
-from model_x_ray.graph import build_graph
+from model_x_ray.graph import build_graph, run_investigation
 from model_x_ray.llm import build_chat_model
 from model_x_ray.state import InvestigationState
 
@@ -183,7 +183,7 @@ class ScriptedDiagnosis(BaseChatModel):
 
 def test_investigator_runs_as_the_diagnose_node_of_the_main_graph() -> None:
     investigator = build_investigator(ScriptedDiagnosis(), [get_cell, trace_precedents])
-    graph = build_graph(InMemorySaver(), overrides={"diagnose": make_diagnose_node(investigator)})
+    graph = build_graph(InMemorySaver(), diagnose=make_diagnose_node(investigator))
     config = {"configurable": {"thread_id": "real-diagnose"}}
 
     graph.invoke({"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump on the P&L sheet?"}, config)
@@ -194,10 +194,26 @@ def test_investigator_runs_as_the_diagnose_node_of_the_main_graph() -> None:
     assert graph.get_state(config).next == ("human_review",)
 
 
+def test_run_investigation_wires_the_real_investigator_into_the_graph() -> None:
+    model = ScriptedDiagnosis(turns=[(["P&L!H5"], "P&L!H5")])
+    graph = run_investigation(model, [get_cell, trace_precedents])
+    config = {"configurable": {"thread_id": "entrypoint"}}
+
+    graph.invoke({"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump on the P&L sheet?"}, config)
+    state = graph.get_state(config).values
+
+    assert model.briefs and "Question:" in model.briefs[0]
+    assert [(h["id"], h["cell"], h["claim"]) for h in state["hypotheses"]] == [
+        ("hyp-1", "P&L!H5", "P&L!H5 is a typed number, not a formula"),
+    ]
+    assert state["patch"]["cell"] == "P&L!H5"
+    assert graph.get_state(config).next == ("human_review",)
+
+
 def test_diagnose_keeps_only_the_top_three_hypotheses() -> None:
     model = ScriptedDiagnosis(turns=[(["P&L!H5", "P&L!H6", "P&L!H7", "P&L!H4", "Assumptions!C5"], "P&L!H7")])
     investigator = build_investigator(model, [get_cell, trace_precedents])
-    graph = build_graph(InMemorySaver(), overrides={"diagnose": make_diagnose_node(investigator)})
+    graph = build_graph(InMemorySaver(), diagnose=make_diagnose_node(investigator))
     config = {"configurable": {"thread_id": "five-proposals"}}
 
     graph.invoke({"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump on the P&L sheet?"}, config)
@@ -214,7 +230,7 @@ def test_diagnose_keeps_only_the_top_three_hypotheses() -> None:
 def test_retry_tells_the_investigator_which_hypotheses_were_rejected() -> None:
     model = ScriptedDiagnosis(turns=[(["P&L!H7", "P&L!H5"], "P&L!H5"), ([], "P&L!H5")])
     investigator = build_investigator(model, [get_cell, trace_precedents])
-    graph = build_graph(InMemorySaver(), overrides={"diagnose": make_diagnose_node(investigator), "verify": reject_first_then_confirm})
+    graph = build_graph(InMemorySaver(), diagnose=make_diagnose_node(investigator), overrides={"verify": reject_first_then_confirm})
     config = {"configurable": {"thread_id": "retry-brief"}}
 
     graph.invoke({"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump on the P&L sheet?"}, config)

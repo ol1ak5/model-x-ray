@@ -1,10 +1,14 @@
 from collections.abc import Callable
 
+from langchain_core.language_models import BaseChatModel
+from langchain_core.tools import BaseTool
 from langgraph.checkpoint.base import BaseCheckpointSaver
+from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from model_x_ray import nodes
+from model_x_ray.agents.investigator import build_investigator, make_diagnose_node
 from model_x_ray.routing import route_after_review, route_after_verify
 from model_x_ray.state import InputState, InvestigationState, OutputState
 
@@ -15,7 +19,6 @@ DEFAULT_NODES: dict[str, NodeFunction] = {
     "map_model": nodes.map_model,
     "locate": nodes.locate,
     "trace": nodes.trace,
-    "diagnose": nodes.diagnose,
     "test": nodes.test,
     "verify": nodes.verify,
     "explain": nodes.explain,
@@ -24,8 +27,8 @@ DEFAULT_NODES: dict[str, NodeFunction] = {
 }
 
 
-def build_graph(checkpointer: BaseCheckpointSaver, overrides: dict[str, NodeFunction] | None = None) -> CompiledStateGraph:
-    node_functions = {**DEFAULT_NODES, **(overrides or {})}
+def build_graph(checkpointer: BaseCheckpointSaver, diagnose: NodeFunction, overrides: dict[str, NodeFunction] | None = None) -> CompiledStateGraph:
+    node_functions = {**DEFAULT_NODES, "diagnose": diagnose, **(overrides or {})}
     builder = StateGraph(InvestigationState, input_schema=InputState, output_schema=OutputState)
     for name, function in node_functions.items():
         builder.add_node(name, function)
@@ -43,3 +46,8 @@ def build_graph(checkpointer: BaseCheckpointSaver, overrides: dict[str, NodeFunc
     builder.add_edge("apply_fix", END)
 
     return builder.compile(checkpointer=checkpointer)
+
+
+def run_investigation(llm: BaseChatModel, tools: list[BaseTool], checkpointer: BaseCheckpointSaver | None = None) -> CompiledStateGraph:
+    investigator = build_investigator(llm, tools)
+    return build_graph(checkpointer or InMemorySaver(), diagnose=make_diagnose_node(investigator))
