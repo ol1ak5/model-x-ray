@@ -1,6 +1,6 @@
 import pytest
-from langchain_core.tools import tool
 from langchain_core.messages import HumanMessage, ToolMessage
+from langchain_core.tools import tool
 
 from model_x_ray.llm import build_chat_model
 
@@ -78,4 +78,3 @@ def test_model_uses_a_tool_result_to_choose_the_next_call(model: str) -> None:
     assert len(second.tool_calls) >= 1
     assert second.tool_calls[0]["name"] == "get_cell"
     assert "H6" in second.tool_calls[0]["args"]["ref"]
-    

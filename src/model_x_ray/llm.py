@@ -3,6 +3,7 @@ import os
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 
+
 def build_chat_model(model: str) -> ChatOpenAI:
     load_dotenv()
     return ChatOpenAI(
