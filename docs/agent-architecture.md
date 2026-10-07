@@ -218,7 +218,7 @@ The read-only tools form a small financial-model investigation API, so the LLM n
 
 ## Causal tree
 
-`trace` turns contributions into a tree that explains the change before any diagnosis. It is the centre of the demo and the Investigator's starting observation.
+`trace` turns contributions into a tree that explains the change before any diagnosis. It is the centre of the demo and the Investigator's starting observation: `render_causal_tree` draws it into the briefing (`investigation_brief`) with suspicious cells marked, so the Investigator starts from the flagged branch instead of a blank page.
 
 ```
 EBITDA 2027  +30%

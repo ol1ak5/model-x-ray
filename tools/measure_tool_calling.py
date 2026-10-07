@@ -5,10 +5,11 @@ from collections.abc import Callable
 from typing import Literal
 
 from langchain_core.messages import HumanMessage, ToolMessage
-from langchain_core.tools import tool
 from pydantic import BaseModel
 
 from model_x_ray.llm import build_chat_model
+from model_x_ray.spreadsheet.engine import Workbook
+from model_x_ray.tools import make_read_only_tools
 
 MODELS = [
     "nvidia/nemotron-3-super-120b-a12b",
@@ -16,31 +17,25 @@ MODELS = [
     "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
 ]
 
+BOOK = Workbook(
+    {
+        "P&L!F3": "2025A", "P&L!G3": "2026E", "P&L!H3": "2027E",
+        "P&L!A4": "Revenue", "P&L!A5": "COGS", "P&L!A6": "Gross profit", "P&L!A7": "Opex", "P&L!A8": "EBITDA",
+        "P&L!F4": 185.2, "P&L!G4": "=F4*(1+Assumptions!$C$5)", "P&L!H4": "=G4*(1+Assumptions!$C$5)",
+        "P&L!F5": -101.9, "P&L!G5": "=-G4*Assumptions!$C$6", "P&L!H5": "=-H4*Assumptions!$C$6",
+        "P&L!F6": "=F4+F5", "P&L!G6": "=G4+G5", "P&L!H6": "=H4+H5",
+        "P&L!F7": -47.6, "P&L!G7": "=F7*(1+Assumptions!$C$7)", "P&L!H7": -45.2,
+        "P&L!F8": "=F6+F7", "P&L!G8": "=G6+G7", "P&L!H8": "=H6+H7",
+        "Assumptions!C5": 0.08, "Assumptions!C6": 0.55, "Assumptions!C7": 0.05,
+    }
+)
 
-@tool
-def get_cell(ref: str) -> str:
-    """Return the value and formula of one spreadsheet cell, for example ref='P&L!H8'."""
-    return "P&L!H8 = 52.0, formula =H6+H7"
-
-
-@tool
-def trace_precedents(ref: str) -> str:
-    """List the cells that a cell's formula depends on (its inputs), for example ref='P&L!H8'."""
-    return "P&L!H8 depends on P&L!H6, P&L!H7"
-
-
-@tool
-def compare_formulas(ref: str) -> str:
-    """Compare a cell's formula with the formulas in the neighbouring cells of the same row and report whether it breaks the pattern, for example ref='P&L!F27'."""
-    return "P&L!F27 =SUM(F20:F24); neighbours use rows 20 to 25; F27 deviates from the pattern"
-
-
-TOOLS = {t.name: t for t in [get_cell, trace_precedents, compare_formulas]}
+TOOLS = {t.name: t for t in make_read_only_tools(BOOK)}
 
 CHOICE_QUESTIONS = [
     ("What is the value of cell H8 on the P&L sheet?", "get_cell"),
     ("Which cells feed into the formula in P&L!H8?", "trace_precedents"),
-    ("Does the formula in P&L!F27 follow the same pattern as its neighbouring cells?", "compare_formulas"),
+    ("Compare the formula in P&L!H7 with its neighbour P&L!G7: do they use the same structure?", "compare_formulas"),
 ]
 
 SHEET_EXCERPT = """Row 4: Revenue | 185.2 | 200.0 | 216.0
@@ -63,7 +58,7 @@ class RowLabels(BaseModel):
 
 
 def run_single_tool(model: str) -> bool:
-    llm = build_chat_model(model).bind_tools([get_cell])
+    llm = build_chat_model(model).bind_tools([TOOLS["get_cell"]])
     response = llm.invoke("What is in cell H8 on the P&L sheet?")
     calls = response.tool_calls
     return len(calls) == 1 and calls[0]["name"] == "get_cell" and "H8" in calls[0]["args"].get("ref", "")
@@ -106,7 +101,7 @@ def run_structured_output(model: str) -> bool:
 
 SCENARIOS: dict[str, Callable[[str], bool]] = {
     "single tool": run_single_tool,
-    "choose 1 of 3 tools (3 questions)": run_tool_choice,
+    "choose the right tool among 8 (3 questions)": run_tool_choice,
     "two-step loop": run_two_step_loop,
     "structured output (row labels)": run_structured_output,
 }
