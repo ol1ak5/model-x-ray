@@ -62,7 +62,7 @@ flowchart TD
 
 ### Building the graph
 
-`build_graph(checkpointer, diagnose, overrides=None)` takes the `diagnose` node as an explicit argument — there is no default, because a default would risk running a stub that fabricates findings. The production entrypoint is `run_investigation(llm, tools, checkpointer=None)`: it wires the Investigator (`build_investigator` + `make_diagnose_node`) as `diagnose` and returns the compiled graph; the caller invokes it and handles the `human_review` interrupt. Tests that exercise graph mechanics pass the stub by name (`diagnose=nodes.stub_diagnose`). Read-only tools are a parameter, so the same entrypoint takes the real tools when #33 lands.
+`build_graph(checkpointer, diagnose, overrides=None)` takes the `diagnose` node as an explicit argument — there is no default, because a default would risk running a stub that fabricates findings. The production entrypoint is `run_investigation(llm, spreadsheet_id, source, checkpointer=None)`: it loads the `Workbook` through the `SpreadsheetSource`, builds the real read-only tools from it (`make_read_only_tools(book)`), wires the Investigator as `diagnose` and the real `trace` (`nodes.make_trace_node(book)`) as an override, and returns the compiled graph; the caller invokes it and handles the `human_review` interrupt. Tests that exercise graph mechanics pass the stub by name (`diagnose=nodes.stub_diagnose`, default stub `trace`).
 
 ### Routing after `verify`
 
@@ -230,6 +230,8 @@ EBITDA 2027  +30%
 ```
 
 After a confirmed fix the same tree is shown again with the patched values ("EBITDA +30% becomes +4%, pattern restored"), so the before/after story is visual.
+
+Implementation (`src/model_x_ray/causal.py`): `explain_change(book, ref, from_period, to_period)` recomputes each input's contribution by patching the input cells to their prior-period values one at a time (never the LLM); contributions sum to the observed change for formulas linear in their inputs. `build_causal_tree(book, ...)` builds the `CausalNode` dict directly (JSON-serializable for the UI): each cell's `value_before` is its prior-period column cell, `suspicious` is set when `find_formula_outliers` flags the cell in its row's period range, and recursion follows the dependency graph (inputs outside the period grid — constants, prior-year actuals — are not branches). Before/after trees are just this function called on the original and the patched `Workbook`.
 
 ## Error types in scope
 

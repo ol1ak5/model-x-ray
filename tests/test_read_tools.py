@@ -92,6 +92,7 @@ def test_make_read_only_tools_wraps_the_api_for_the_investigator(demo_workbook_p
         "get_cell",
         "trace_precedents",
         "trace_dependents",
+        "explain_change",
         "compare_formulas",
         "find_formula_outliers",
         "get_cell_metadata",
@@ -99,3 +100,5 @@ def test_make_read_only_tools_wraps_the_api_for_the_investigator(demo_workbook_p
     assert "Opex" in tools[1].invoke({"ref": "P&L!H7"})
     assert "P&L!H7" in tools[0].invoke({"label": "Opex", "period": "2027"})
     assert "P&L!H8 depends on" in tools[2].invoke({"ref": "P&L!H8"})
+    change = tools[4].invoke({"ref": "P&L!H8", "from_period": "2026", "to_period": "2027"})
+    assert "P&L!H6 Gross profit" in change and "P&L!H7 Opex" in change

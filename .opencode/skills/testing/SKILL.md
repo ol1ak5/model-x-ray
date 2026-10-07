@@ -21,7 +21,7 @@ Also: TDD — write the failing test first, then implement. Modern types only. N
 
 ```python
 def test_blended_error_symptom_is_not_cause(fixture_sheet: Workbook, scripted_llm: ChatModel) -> None:
-    graph = run_investigation(scripted_llm, fake_read_only_tools)
+    graph = run_investigation(scripted_llm, "blend-03", fixture_source)
     config = {"configurable": {"thread_id": "blend-03"}}
     graph.invoke({"spreadsheet_id": "blend-03", "question": "Why did EBITDA 2027 jump?"}, config)
     result = graph.get_state(config).values

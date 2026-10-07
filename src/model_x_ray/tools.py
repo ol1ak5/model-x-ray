@@ -2,7 +2,9 @@ from collections import Counter
 
 from langchain_core.tools import BaseTool, tool
 
-from model_x_ray.spreadsheet.engine import CellMetadata, Workbook, expand_range, normalize_ref, split_ref
+from model_x_ray.causal import explain_change
+from model_x_ray.rules import find_formula_outliers
+from model_x_ray.spreadsheet.engine import CellMetadata, Workbook, normalize_ref
 
 
 def find_cells(book: Workbook, label: str, period: str) -> list[str]:
@@ -112,30 +114,6 @@ def compare_formulas(book: Workbook, ref: str, reference_cells: list[str]) -> st
     return "; ".join(parts)
 
 
-def find_formula_outliers(book: Workbook, range_ref: str) -> list[dict[str, str]]:
-    outliers: list[dict[str, str]] = []
-    refs = [normalize_ref(ref) for ref in expand_range(range_ref) if book.raw(ref) is not None]
-    rows: dict[int, list[str]] = {}
-    for ref in refs:
-        _, address = split_ref(ref)
-        rows.setdefault(address.row, []).append(ref)
-    for row_refs in rows.values():
-        patterned = {ref: book.formula_pattern(ref) for ref in row_refs}
-        formulas = {ref: pattern for ref, pattern in patterned.items() if pattern is not None}
-        typed = [ref for ref, pattern in patterned.items() if pattern is None]
-        if not formulas:
-            continue
-        common, count = Counter(formulas.values()).most_common(1)[0]
-        for ref in typed:
-            outliers.append({"cell": ref, "reason": f"typed value where the row uses {common}"})
-        if count >= 2:
-            for ref, pattern in formulas.items():
-                if pattern != common:
-                    outliers.append({"cell": ref, "reason": f"reference pattern differs from the row: the row uses {common}"})
-    outliers.sort(key=lambda o: (split_ref(o["cell"])[1].row, split_ref(o["cell"])[1].column))
-    return outliers
-
-
 def get_cell_metadata(book: Workbook, ref: str) -> CellMetadata:
     return book.metadata_of(ref)
 
@@ -160,6 +138,14 @@ def make_read_only_tools(book: Workbook) -> list[BaseTool]:
     def trace_dependents_for(ref: str, depth: int = 1) -> str:
         """List the cells that read this cell, for example ref='P&L!H7', depth=1 for direct readers only."""
         return trace_dependents(book, ref, depth)
+
+    @tool("explain_change")
+    def explain_change_for(ref: str, from_period: str, to_period: str) -> str:
+        """Explain a period-on-period change of a cell: each input's contribution, recomputed by changing one input at a time, for example ref='P&L!H8', from_period='2026', to_period='2027'."""
+        explanation = explain_change(book, ref, from_period, to_period)
+        lines = [f"{explanation['cell']}: {explanation['value_before']} -> {explanation['value_after']} ({explanation['delta']:+})"]
+        lines += [f"{c['cell']} {c['label']}: {c['delta']:+}" for c in explanation["contributions"]]
+        return "\n".join(lines)
 
     @tool("compare_formulas")
     def compare_formulas_for(ref: str, reference_cells: list[str]) -> str:
@@ -188,6 +174,7 @@ def make_read_only_tools(book: Workbook) -> list[BaseTool]:
         get_cell_for,
         trace_precedents_for,
         trace_dependents_for,
+        explain_change_for,
         compare_formulas_for,
         find_formula_outliers_for,
         get_cell_metadata_for,
