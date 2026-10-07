@@ -13,7 +13,7 @@ Model X-Ray ("the debugger for financial models"): an evidence-first Nemotron ag
 ## Development agent vs product agent (keep them separate)
 
 - Everything addressed by this file, by `.opencode/skills/`, and by the `docs/` design docs is for the **development agents building** Model X-Ray.
-- The **product agent** (the LangGraph/Nemotron investigation graph) must never read any of it. Its prompts, checklists and domain notes live inside the package (`src/model_x_ray/prompts/` once it exists) and ship with the product.
+- The **product agent** (the LangGraph/Nemotron investigation graph) must never read any of it. Its prompts, checklists and domain notes live inside the package (`src/model_x_ray/prompts/`) and ship with the product.
 - Product prompt text never goes into `.opencode/skills/`; development conventions never go into product prompts. If something seems useful to both, keep two copies, one in each home.
 
 ## Hackathon constraints (change the definition of "done")
@@ -25,9 +25,12 @@ Model X-Ray ("the debugger for financial models"): an evidence-first Nemotron ag
 
 ## Verified repo state
 
-No code exists yet. Do not assume tooling that is not there:
+Verified 8 Oct 2026. Do not assume tooling that is not there — re-check the tree when it matters:
 
-- uv project `model-x-ray` (Python 3.13.2, build backend `uv_build`), package in `src/model_x_ray/` with a placeholder `main()` behind the console script `model-x-ray`. `uv.lock` is committed.
+- uv project `model-x-ray` (Python 3.13.2, build backend `uv_build`), package in `src/model_x_ray/`, `uv.lock` committed.
+- Product code: `state.py` (`InvestigationState`, `merge_by_id` reducer), `graph.py` / `nodes.py` / `routing.py` (main graph, stub nodes, bounded retry loop, human-in-the-loop), `llm.py` (`ChatOpenAI` against Token Factory, `NEBIUS_BASE_URL` + `NEBIUS_API_KEY`), `memory.py` (SQLite checkpointer), `agents/investigator.py` (tool-budgeted Investigator subgraph with structured diagnosis), `prompts/` (`load_prompt` reads the product-agent `.md` files).
+- The console script `model-x-ray` still only prints a banner, and the Investigator reaches the main graph only through `build_graph(overrides=...)` — the default `diagnose` node is a fabricating stub until #38 lands.
+- `tools/` holds `measure_tool_calling.py`, wrapped by `scripts/measure_tool_calling.sh`; `scripts/benchmark.sh` is not written yet.
 - Dependencies: `langgraph`, `langchain-openai`, `langgraph-checkpoint-sqlite`, `python-dotenv`; dev: `pytest`. `.env.example` lists every variable with empty or default values.
 - pytest is configured in `pyproject.toml`: tests live in `tests/`, and tests marked `live` (they call Token Factory or Google APIs and spend credits) are skipped unless requested with `-m live`.
 - No linter, formatter, typechecker, CI, pre-commit, or `opencode.json` yet. When you add tooling, commit the config and update the Commands section here with the exact invocation.
@@ -47,7 +50,7 @@ No code exists yet. Do not assume tooling that is not there:
 - Tests: `uv run pytest` (offline, no credits), single test `uv run pytest path::test_name -k <pattern>`, live tests `uv run pytest -m live`.
 - Smoke check: `uv run model-x-ray`.
 - Tool-calling measurement (live, about 3 cents): `scripts/measure_tool_calling.sh`.
-- `scripts/*.sh` are zero-flag wrappers that call `uv run x.py` with fixed, curated flags (e.g. `scripts/benchmark.sh` → `uv run tools/benchmark.py --models planted-50 --output docs/benchmark.md`). They must run from the repo root with no arguments.
+- `scripts/*.sh` are zero-flag wrappers that call `uv run x.py` with fixed, curated flags; they must run from the repo root with no arguments. The one that exists today is `scripts/measure_tool_calling.sh`; when the benchmark lands, `scripts/benchmark.sh` will wrap `uv run tools/benchmark.py --models planted-50 --output docs/benchmark.md`.
 
 ## Code rules (these differ from Python defaults, so they matter)
 
