@@ -72,6 +72,47 @@ def test_investigator_stops_at_the_tool_budget() -> None:
     assert result["diagnosis"].hypotheses == []
 
 
+class BatchesFiveToolCalls(BaseChatModel):
+    bound: list[str] = []
+    turns: int = 0
+
+    @property
+    def _llm_type(self) -> str:
+        return "batches-five-tool-calls"
+
+    def bind_tools(self, tools: Sequence[Any], **kwargs: Any) -> "BatchesFiveToolCalls":
+        names = [getattr(t, "name", None) or getattr(t, "__name__", "") for t in tools]
+        return self.model_copy(update={"bound": names})
+
+    def _generate(self, messages: list[BaseMessage], stop: list[str] | None = None, **kwargs: Any) -> ChatResult:
+        self.turns += 1
+        if "Diagnosis" in self.bound:
+            call = {"name": "Diagnosis", "args": {"hypotheses": [], "patch": None}, "id": "conclude"}
+            return ChatResult(generations=[ChatGeneration(message=AIMessage(content="", tool_calls=[call]))])
+        calls = [{"name": "count_cell", "args": {"ref": "P&L!H8"}, "id": f"batch-{self.turns}-{i}"} for i in range(5)]
+        return ChatResult(generations=[ChatGeneration(message=AIMessage(content="", tool_calls=calls))])
+
+
+def test_parallel_tool_calls_never_exceed_the_budget() -> None:
+    executions: list[str] = []
+
+    @tool
+    def count_cell(ref: str) -> str:
+        """Return the value of one cell, for example ref='P&L!H8'."""
+        executions.append(ref)
+        return f"{ref} = 52.0"
+
+    investigator = build_investigator(BatchesFiveToolCalls(), [count_cell], max_tool_calls=3)
+
+    result = investigator.invoke({"messages": [HumanMessage(content="Why did EBITDA 2027 jump?")]})
+
+    assert result["tool_calls_used"] == 3
+    assert executions == ["P&L!H8"] * 3
+    tool_messages = [m for m in result["messages"] if m.type == "tool"]
+    assert len(tool_messages) == 5
+    assert sum(1 for m in tool_messages if m.content == "Tool budget exhausted.") == 2
+
+
 @pytest.mark.live
 def test_investigator_chains_tools_and_answers_with_nemotron() -> None:
     llm = build_chat_model("nvidia/nemotron-3-super-120b-a12b")
@@ -150,6 +191,23 @@ def test_investigator_runs_as_the_diagnose_node_of_the_main_graph() -> None:
 
     assert [(h["id"], h["cell"], h["confidence"], h["status"]) for h in state["hypotheses"]] == [("hyp-1", "P&L!H7", "high", "confirmed")]
     assert state["patch"]["new_formula"] == "=G7*(1+Assumptions!C7)"
+    assert graph.get_state(config).next == ("human_review",)
+
+
+def test_diagnose_keeps_only_the_top_three_hypotheses() -> None:
+    model = ScriptedDiagnosis(turns=[(["P&L!H5", "P&L!H6", "P&L!H7", "P&L!H4", "Assumptions!C5"], "P&L!H7")])
+    investigator = build_investigator(model, [get_cell, trace_precedents])
+    graph = build_graph(InMemorySaver(), overrides={"diagnose": make_diagnose_node(investigator)})
+    config = {"configurable": {"thread_id": "five-proposals"}}
+
+    graph.invoke({"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump on the P&L sheet?"}, config)
+    state = graph.get_state(config).values
+
+    assert [(h["id"], h["cell"]) for h in state["hypotheses"]] == [
+        ("hyp-1", "P&L!H5"),
+        ("hyp-2", "P&L!H6"),
+        ("hyp-3", "P&L!H7"),
+    ]
     assert graph.get_state(config).next == ("human_review",)
 
 

@@ -110,6 +110,8 @@ PROPOSE        top hypothesis + minimal patch
 | Open hypotheses | 3 | Forces ranking instead of listing everything |
 | Diagnose-verify attempts | 3 | Bounded retry loop |
 
+Budgets are enforced in code, not trusted from the model: a batch of parallel tool calls is truncated at the remaining budget and the overflow calls get a `Tool budget exhausted.` tool message instead of executing, so `tool_calls_used` never exceeds the limit; each diagnosis is cut to its top 3 proposals in model order before entering state.
+
 ### Confidence levels
 
 The Investigator ranks hypotheses with a categorical confidence instead of a number, because an LLM cannot meaningfully tell 0.83 from 0.85. Each level is tied to evidence the tools can show:
