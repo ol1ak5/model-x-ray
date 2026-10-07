@@ -110,6 +110,18 @@ PROPOSE        top hypothesis + minimal patch
 | Open hypotheses | 3 | Forces ranking instead of listing everything |
 | Diagnose-verify attempts | 3 | Bounded retry loop |
 
+### Confidence levels
+
+The Investigator ranks hypotheses with a categorical confidence instead of a number, because an LLM cannot meaningfully tell 0.83 from 0.85. Each level is tied to evidence the tools can show:
+
+| Level | Evidence required |
+|---|---|
+| `high` | The cell breaks the pattern of its neighbours (`compare_formulas`), it explains a meaningful part of the change (`explain_change`), and nothing shows a deliberate override (`get_cell_metadata`) |
+| `medium` | The cell breaks the pattern, but either its impact on the change is not established or a deliberate override cannot be ruled out |
+| `low` | There is an inconsistency, but no pattern break has been established |
+
+Confidence only ranks suspects before testing; the sandbox and the Verifier decide. A patch is proposed only for the top hypothesis, and only when the neighbouring formulas support a corrected formula. The rules live in the product prompt `src/model_x_ray/prompts/investigator_conclude.md`.
+
 Every UPDATE writes to `hypotheses` in the state, so the interface can show a live hypothesis board: candidates appearing, gaining or losing confidence, and being rejected, each linked to the evidence that moved it. When the budget runs out, the Investigator must propose its best hypothesis or declare the case inconclusive.
 
 ### Verifier: adversarial second opinion
@@ -168,7 +180,7 @@ Schemas at the boundary: the graph accepts `spreadsheet_id` and `question` (inpu
 | `TargetCell` | `sheet`, `cell`, `label`, `period`, `value`, `prior_cell`, `prior_value` |
 | `Contribution` | `cell`, `label`, `delta` |
 | `CausalNode` | `cell`, `label`, `value_before`, `value_after`, `delta`, `share_of_change`, `suspicious`, `children` |
-| `Hypothesis` | `id`, `cell`, `error_type`, `claim`, `evidence_ids`, `confidence`, `status` (`open`, `rejected`, `confirmed`) |
+| `Hypothesis` | `id`, `cell`, `error_type`, `claim`, `evidence_ids`, `confidence` (`high`, `medium`, `low`), `status` (`open`, `rejected`, `confirmed`) |
 | `Patch` | `cell`, `old_formula`, `new_formula`, `source` (`agent`, `human`) |
 | `Verification` | `hypothesis_id`, `before`, `after`, `checks`, `verdict`, `reason` |
 | `Evidence` | `id`, `cell`, `kind` (`anomaly`, `expected_pattern`, `verification`), `text` |

@@ -50,7 +50,7 @@ def diagnose(state: InvestigationState) -> dict:
         "hypotheses": [{
             "id": f"hyp-{number}", "cell": "P&L!H7", "error_type": "typed_value",
             "claim": "Opex 2027 is a typed number, not a formula",
-            "evidence_ids": [], "confidence": 0.8, "status": "open",
+            "evidence_ids": [], "confidence": "high", "status": "open",
         }],
         "patch": {"cell": "P&L!H7", "old_formula": "-45.2", "new_formula": "=G7*(1+Assumptions!C7)", "source": "agent"},
     }
