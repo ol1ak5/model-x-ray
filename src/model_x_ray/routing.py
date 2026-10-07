@@ -8,7 +8,8 @@ MAX_ATTEMPTS = 3
 def route_after_verify(state: InvestigationState) -> str:
     if state["verifications"][-1]["verdict"] == "confirmed":
         return "confirmed"
-    if state["attempts"] < MAX_ATTEMPTS:
+    untested_hypotheses = [h for h in state["hypotheses"] if h["status"] == "open"]
+    if untested_hypotheses and state["attempts"] < MAX_ATTEMPTS:
         return "retry"
     return "inconclusive"
 

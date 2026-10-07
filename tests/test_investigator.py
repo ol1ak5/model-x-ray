@@ -114,7 +114,7 @@ def test_investigator_diagnoses_a_typed_value_with_nemotron() -> None:
 class ScriptedDiagnosis(BaseChatModel):
     bound: list[str] = []
     briefs: list[str] = []
-    cells: list[str] = ["P&L!H7", "P&L!H5"]
+    turns: list[tuple[list[str], str]] = [(["P&L!H7"], "P&L!H7")]
 
     @property
     def _llm_type(self) -> str:
@@ -128,10 +128,13 @@ class ScriptedDiagnosis(BaseChatModel):
         if "Diagnosis" not in self.bound:
             self.briefs.append(messages[1].content)
             return ChatResult(generations=[ChatGeneration(message=AIMessage(content="Enough evidence."))])
-        cell = self.cells[min(len(self.briefs), len(self.cells)) - 1]
+        cells, patch_cell = self.turns[min(len(self.briefs), len(self.turns)) - 1]
         args = {
-            "hypotheses": [{"cell": cell, "error_type": "typed_value", "claim": f"{cell} is a typed number, not a formula", "confidence": "high"}],
-            "patch": {"cell": cell, "new_formula": "=G7*(1+Assumptions!C7)"},
+            "hypotheses": [
+                {"cell": cell, "error_type": "typed_value", "claim": f"{cell} is a typed number, not a formula", "confidence": "high"}
+                for cell in cells
+            ],
+            "patch": {"cell": patch_cell, "new_formula": "=G7*(1+Assumptions!C7)"},
         }
         call = {"name": "Diagnosis", "args": args, "id": "conclude"}
         return ChatResult(generations=[ChatGeneration(message=AIMessage(content="", tool_calls=[call]))])
@@ -151,7 +154,7 @@ def test_investigator_runs_as_the_diagnose_node_of_the_main_graph() -> None:
 
 
 def test_retry_tells_the_investigator_which_hypotheses_were_rejected() -> None:
-    model = ScriptedDiagnosis()
+    model = ScriptedDiagnosis(turns=[(["P&L!H7", "P&L!H5"], "P&L!H5"), ([], "P&L!H5")])
     investigator = build_investigator(model, [get_cell, trace_precedents])
     graph = build_graph(InMemorySaver(), overrides={"diagnose": make_diagnose_node(investigator), "verify": reject_first_then_confirm})
     config = {"configurable": {"thread_id": "retry-brief"}}
@@ -164,8 +167,12 @@ def test_retry_tells_the_investigator_which_hypotheses_were_rejected() -> None:
 
 
 def reject_first_then_confirm(state: InvestigationState) -> dict:
-    hypothesis = state["hypotheses"][-1]
-    verdict = "rejected" if state.get("attempts", 0) == 0 else "confirmed"
+    if state.get("attempts", 0) == 0:
+        hypothesis = state["hypotheses"][0]
+        verdict = "rejected"
+    else:
+        hypothesis = next(h for h in state["hypotheses"] if h["status"] == "open")
+        verdict = "confirmed"
     return {
         "verifications": [{"hypothesis_id": hypothesis["id"], "before": {}, "after": {}, "checks": {}, "verdict": verdict, "reason": "scripted"}],
         "hypotheses": [{"id": hypothesis["id"], "status": verdict}],

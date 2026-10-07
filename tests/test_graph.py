@@ -38,8 +38,22 @@ def test_confirmed_fix_pauses_for_approval_then_writes_a_corrected_copy() -> Non
     assert graph.get_state(config).next == ()
 
 
+def always_diagnose_two(state: InvestigationState) -> dict:
+    number = len(state.get("hypotheses", []))
+    return {
+        "hypotheses": [
+            {"id": f"hyp-{number + offset}", "cell": cell, "error_type": error_type, "claim": claim,
+             "evidence_ids": [], "confidence": "medium", "status": "open"}
+            for offset, cell, error_type, claim in [
+                (1, "P&L!H7", "typed_value", "Opex is typed"),
+                (2, "P&L!H6", "inconsistent_range", "Gross profit range breaks the pattern"),
+            ]
+        ],
+    }
+
+
 def test_rejected_fixes_retry_three_times_then_report_inconclusive() -> None:
-    graph = build_graph(InMemorySaver(), overrides={"verify": always_reject})
+    graph = build_graph(InMemorySaver(), overrides={"diagnose": always_diagnose_two, "verify": always_reject})
     config = {"configurable": {"thread_id": "exhausted"}}
 
     graph.invoke(QUESTION, config)
@@ -47,7 +61,21 @@ def test_rejected_fixes_retry_three_times_then_report_inconclusive() -> None:
 
     assert state["attempts"] == 3
     assert [v["verdict"] for v in state["verifications"]] == ["rejected", "rejected", "rejected"]
-    assert [h["status"] for h in state["hypotheses"]] == ["rejected", "rejected", "rejected"]
+    assert [h["status"] for h in state["hypotheses"]] == ["open", "rejected"] * 3
+    assert state["report"].startswith("Inconclusive")
+    assert graph.get_state(config).next == ("human_review",)
+
+
+def test_rejection_with_no_untested_hypothesis_ends_inconclusive_on_first_attempt() -> None:
+    graph = build_graph(InMemorySaver(), overrides={"verify": always_reject})
+    config = {"configurable": {"thread_id": "nothing-left"}}
+
+    graph.invoke(QUESTION, config)
+    state = graph.get_state(config).values
+
+    assert state["attempts"] == 1
+    assert [v["verdict"] for v in state["verifications"]] == ["rejected"]
+    assert [h["status"] for h in state["hypotheses"]] == ["rejected"]
     assert state["report"].startswith("Inconclusive")
     assert graph.get_state(config).next == ("human_review",)
 
