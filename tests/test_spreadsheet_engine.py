@@ -1,0 +1,96 @@
+from pathlib import Path
+
+import pytest
+
+from model_x_ray.spreadsheet.engine import CircularReferenceError, UnsupportedFormulaError, Workbook
+from model_x_ray.spreadsheet.xlsx import load_xlsx
+
+
+def test_loads_an_xlsx_model_and_recalculates_the_planted_error(demo_workbook_path: Path) -> None:
+    book = load_xlsx(demo_workbook_path)
+
+    assert book.sheets == ["P&L", "Assumptions"]
+    assert book.formula("P&L!H8") == "=H6+H7"
+    assert book.formula("P&L!H7") is None
+    assert book.value("P&L!H7") == -45.2
+    assert book.value("P&L!G8") == pytest.approx(40.03, abs=0.01)
+    assert book.value("P&L!H8") == pytest.approx(52.01, abs=0.01)
+    assert book.value("P&L!H9") == pytest.approx(0.299, abs=0.001)
+
+
+def test_patching_a_copy_restores_the_pattern_without_touching_the_original(demo_workbook_path: Path) -> None:
+    original = load_xlsx(demo_workbook_path)
+
+    patched = original.with_patch("P&L!H7", "=G7*(1+Assumptions!$C$7)")
+
+    assert patched.value("P&L!H7") == pytest.approx(-52.48, abs=0.01)
+    assert patched.value("P&L!H8") == pytest.approx(44.73, abs=0.01)
+    assert patched.value("P&L!H9") == pytest.approx(0.117, abs=0.001)
+    assert original.value("P&L!H8") == pytest.approx(52.01, abs=0.01)
+    assert original.formula("P&L!H7") is None
+
+
+def test_dependency_graph_traces_ebitda_to_its_inputs_and_shows_the_broken_link(demo_workbook_path: Path) -> None:
+    book = load_xlsx(demo_workbook_path)
+
+    assert book.precedents("P&L!H8") == ["P&L!H6", "P&L!H7"]
+    assert book.precedents("P&L!H7") == []
+    assert "Assumptions!C5" in book.all_precedents("P&L!H8")
+    assert "Assumptions!C7" not in book.all_precedents("P&L!H8")
+    assert "Assumptions!C7" in book.all_precedents("P&L!G8")
+    assert book.dependents("P&L!H7") == ["P&L!H8"]
+    assert book.all_dependents("P&L!H7") == ["P&L!H8", "P&L!H9"]
+
+
+def test_relative_formula_patterns_reveal_the_cell_that_breaks_its_row(demo_workbook_path: Path) -> None:
+    book = load_xlsx(demo_workbook_path)
+
+    assert book.formula_pattern("P&L!G4") == book.formula_pattern("P&L!H4")
+    assert book.formula_pattern("P&L!G7") == "=RC[-1]*(1+Assumptions!R7C3)"
+    assert book.formula_pattern("P&L!H7") is None
+    assert book.formula_pattern("P&L!G6") == book.formula_pattern("P&L!H6") == "=R[-2]C+R[-1]C"
+
+
+def test_labels_and_cell_notes_are_available_for_override_judgment(demo_workbook_with_override_note: Path) -> None:
+    book = load_xlsx(demo_workbook_with_override_note)
+
+    assert book.row_label("P&L!H7") == "Opex"
+    assert book.column_header("P&L!H7") == "2027E"
+    assert book.note("P&L!H7") == "Per budget meeting, opex frozen at 45.2"
+    assert book.note("P&L!G7") is None
+
+
+def test_supported_functions_ranges_and_errors_are_explicit() -> None:
+    book = Workbook({
+        "S!A1": 10.0, "S!A2": 20.0, "S!A3": 30.0,
+        "S!B1": "=SUM(A1:A3)", "S!B2": "=AVERAGE(A1:A3)", "S!B3": "=MAX(A1:A3)-MIN(A1:A3)",
+        "S!B4": "=IF(A1>5,ROUND(A2/3,2),0)", "S!B5": "=ABS(-A3)+2^2", "S!B6": "=50%*A2",
+        "S!C1": "=C2+1", "S!C2": "=C1+1",
+        "S!D1": "=VLOOKUP(A1,A1:A3,1,FALSE)",
+    })
+
+    assert book.value("S!B1") == 60.0
+    assert book.value("S!B2") == 20.0
+    assert book.value("S!B3") == 20.0
+    assert book.value("S!B4") == 6.67
+    assert book.value("S!B5") == 34.0
+    assert book.value("S!B6") == 10.0
+    assert book.precedents("S!B1") == ["S!A1", "S!A2", "S!A3"]
+    with pytest.raises(CircularReferenceError):
+        book.value("S!C1")
+    with pytest.raises(UnsupportedFormulaError, match="VLOOKUP"):
+        book.value("S!D1")
+
+
+def test_quoted_sheet_names_link_sheets_like_excel_and_google_sheets_write_them() -> None:
+    book = Workbook({
+        "P&L!H8": 52.0,
+        "Summary!D10": "='P&L'!H8",
+        "Summary!D11": "=IF('P&L'!H8>50,\"above plan\",\"on plan\")",
+    })
+
+    assert book.precedents("Summary!D10") == ["P&L!H8"]
+    assert book.value("Summary!D10") == 52.0
+    assert book.value("Summary!D11") == "above plan"
+    assert book.dependents("P&L!H8") == ["Summary!D10", "Summary!D11"]
+    assert book.formula_pattern("Summary!D10") == "='P&L'!R[-2]C[4]"
