@@ -1,10 +1,13 @@
+from pathlib import Path
+
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
 
 from model_x_ray.graph import build_graph
+from model_x_ray.memory import sqlite_checkpointer
 from model_x_ray.state import InvestigationState
 
-QUESTION = {"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump?"}
+QUESTION = {"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump on the P&L sheet?"}
 
 
 def always_reject(state: InvestigationState) -> dict:
@@ -58,3 +61,36 @@ def test_human_rejection_ends_without_writing_anything() -> None:
 
     assert result.get("corrected_copy_id") is None
     assert graph.get_state(config).next == ()
+
+
+def test_ambiguous_question_pauses_until_the_user_picks_a_cell() -> None:
+    graph = build_graph(InMemorySaver())
+    config = {"configurable": {"thread_id": "ambiguous"}}
+
+    paused = graph.invoke({"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump?"}, config)
+
+    assert graph.get_state(config).next == ("locate",)
+    assert paused["__interrupt__"][0].value["candidates"] == ["P&L!H8", "Summary!D10"]
+
+    graph.invoke(Command(resume={"ref": "Summary!D10"}), config)
+    state = graph.get_state(config).values
+
+    assert state["target"]["sheet"] == "Summary"
+    assert graph.get_state(config).next == ("human_review",)
+
+
+def test_paused_investigation_survives_a_restart(tmp_path: Path) -> None:
+    database = str(tmp_path / "investigations.db")
+    config = {"configurable": {"thread_id": "restart"}}
+
+    first_session = build_graph(sqlite_checkpointer(database))
+    first_session.invoke(QUESTION, config)
+    assert first_session.get_state(config).next == ("human_review",)
+    del first_session
+
+    second_session = build_graph(sqlite_checkpointer(database))
+    assert second_session.get_state(config).next == ("human_review",)
+    result = second_session.invoke(Command(resume={"action": "approve", "reason": "", "patch": None}), config)
+
+    assert result["corrected_copy_id"] == "corrected:demo"
+    assert second_session.get_state(config).next == ()

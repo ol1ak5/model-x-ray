@@ -1,6 +1,5 @@
 from langgraph.types import interrupt
-
-from model_x_ray.state import InvestigationState
+from model_x_ray.state import InvestigationState, TargetCell
 
 
 def load_sheet(state: InvestigationState) -> dict:
@@ -11,13 +10,28 @@ def map_model(state: InvestigationState) -> dict:
     return {"model_map_ref": f"map:{state['spreadsheet_id']}"}
 
 
+STUB_CELLS: list[TargetCell] = [
+    {"sheet": "P&L", "cell": "H8", "label": "EBITDA", "period": "2027", "value": 52.0, "prior_cell": "G8", "prior_value": 40.0},
+    {"sheet": "Summary", "cell": "D10", "label": "EBITDA", "period": "2027", "value": 52.0, "prior_cell": "C10", "prior_value": 40.0},
+]
+
+
+def find_candidates(question: str) -> list[TargetCell]:
+    matches = [c for c in STUB_CELLS if c["label"] in question and c["period"] in question]
+    named_sheet = [c for c in matches if c["sheet"] in question]
+    return named_sheet or matches
+
+
 def locate(state: InvestigationState) -> dict:
-    return {
-        "target": {
-            "sheet": "P&L", "cell": "H8", "label": "EBITDA", "period": "2027",
-            "value": 52.0, "prior_cell": "G8", "prior_value": 40.0,
-        }
-    }
+    candidates = find_candidates(state["question"])
+    if len(candidates) == 1:
+        return {"target": candidates[0]}
+    choice = interrupt({
+        "question": "Which cell do you mean?",
+        "candidates": [f"{c['sheet']}!{c['cell']}" for c in candidates],
+    })
+    chosen = next(c for c in candidates if f"{c['sheet']}!{c['cell']}" == choice["ref"])
+    return {"target": chosen}
 
 
 def trace(state: InvestigationState) -> dict:
