@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from typing import Annotated, Literal, TypedDict
 
 from langchain_core.language_models import BaseChatModel
@@ -10,6 +11,7 @@ from langgraph.prebuilt import ToolNode
 from pydantic import BaseModel
 
 from model_x_ray.prompts import load_prompt
+from model_x_ray.state import InvestigationState
 
 MAX_TOOL_CALLS = 8
 
@@ -75,3 +77,39 @@ def build_investigator(llm: BaseChatModel, tools: list[BaseTool], max_tool_calls
     builder.add_edge("act", "think")
     builder.add_edge("conclude", END)
     return builder.compile()
+
+
+def investigation_brief(state: InvestigationState) -> str:
+    target = state["target"]
+    lines = [
+        f"Question: {state['question']}",
+        f"Target: {target['sheet']}!{target['cell']} ({target['label']} {target['period']}) = {target['value']}, prior period {target['prior_cell']} = {target['prior_value']}",
+    ]
+    lines += [f"Contribution: {c['cell']} {c['label']} {c['delta']:+}" for c in state.get("contributions", [])]
+    lines += [f"Already rejected, do not propose again: {h['cell']} ({h['error_type']})" for h in state.get("hypotheses", []) if h["status"] == "rejected"]
+    return "\n".join(lines)
+
+
+def make_diagnose_node(investigator: CompiledStateGraph) -> Callable[[InvestigationState], dict]:
+    def diagnose(state: InvestigationState) -> dict:
+        result = investigator.invoke({"messages": [HumanMessage(content=investigation_brief(state))]})
+        diagnosis = result["diagnosis"]
+        first_number = len(state.get("hypotheses", [])) + 1
+        hypotheses = [
+            {
+                "id": f"hyp-{first_number + i}",
+                "cell": h.cell,
+                "error_type": h.error_type,
+                "claim": h.claim,
+                "evidence_ids": [],
+                "confidence": h.confidence,
+                "status": "open",
+            }
+            for i, h in enumerate(diagnosis.hypotheses)
+        ]
+        patch = None
+        if diagnosis.patch is not None:
+            patch = {"cell": diagnosis.patch.cell, "old_formula": "", "new_formula": diagnosis.patch.new_formula, "source": "agent"}
+        return {"hypotheses": hypotheses, "patch": patch}
+
+    return diagnose

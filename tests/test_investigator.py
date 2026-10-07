@@ -6,9 +6,12 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.tools import tool
+from langgraph.checkpoint.memory import InMemorySaver
 
-from model_x_ray.agents.investigator import build_investigator
+from model_x_ray.agents.investigator import build_investigator, make_diagnose_node
+from model_x_ray.graph import build_graph
 from model_x_ray.llm import build_chat_model
+from model_x_ray.state import InvestigationState
 
 
 CELLS = {
@@ -106,3 +109,65 @@ def test_investigator_diagnoses_a_typed_value_with_nemotron() -> None:
     assert diagnosis.hypotheses[0].cell.endswith("H7")
     assert diagnosis.hypotheses[0].error_type == "typed_value"
     assert diagnosis.patch is not None and diagnosis.patch.cell.endswith("H7")
+
+
+class ScriptedDiagnosis(BaseChatModel):
+    bound: list[str] = []
+    briefs: list[str] = []
+    cells: list[str] = ["P&L!H7", "P&L!H5"]
+
+    @property
+    def _llm_type(self) -> str:
+        return "scripted-diagnosis"
+
+    def bind_tools(self, tools: Sequence[Any], **kwargs: Any) -> "ScriptedDiagnosis":
+        names = [getattr(t, "name", None) or getattr(t, "__name__", "") for t in tools]
+        return self.model_copy(update={"bound": names, "briefs": self.briefs})
+
+    def _generate(self, messages: list[BaseMessage], stop: list[str] | None = None, **kwargs: Any) -> ChatResult:
+        if "Diagnosis" not in self.bound:
+            self.briefs.append(messages[1].content)
+            return ChatResult(generations=[ChatGeneration(message=AIMessage(content="Enough evidence."))])
+        cell = self.cells[min(len(self.briefs), len(self.cells)) - 1]
+        args = {
+            "hypotheses": [{"cell": cell, "error_type": "typed_value", "claim": f"{cell} is a typed number, not a formula", "confidence": "high"}],
+            "patch": {"cell": cell, "new_formula": "=G7*(1+Assumptions!C7)"},
+        }
+        call = {"name": "Diagnosis", "args": args, "id": "conclude"}
+        return ChatResult(generations=[ChatGeneration(message=AIMessage(content="", tool_calls=[call]))])
+
+
+def test_investigator_runs_as_the_diagnose_node_of_the_main_graph() -> None:
+    investigator = build_investigator(ScriptedDiagnosis(), [get_cell, trace_precedents])
+    graph = build_graph(InMemorySaver(), overrides={"diagnose": make_diagnose_node(investigator)})
+    config = {"configurable": {"thread_id": "real-diagnose"}}
+
+    graph.invoke({"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump on the P&L sheet?"}, config)
+    state = graph.get_state(config).values
+
+    assert [(h["id"], h["cell"], h["confidence"], h["status"]) for h in state["hypotheses"]] == [("hyp-1", "P&L!H7", "high", "confirmed")]
+    assert state["patch"]["new_formula"] == "=G7*(1+Assumptions!C7)"
+    assert graph.get_state(config).next == ("human_review",)
+
+
+def test_retry_tells_the_investigator_which_hypotheses_were_rejected() -> None:
+    model = ScriptedDiagnosis()
+    investigator = build_investigator(model, [get_cell, trace_precedents])
+    graph = build_graph(InMemorySaver(), overrides={"diagnose": make_diagnose_node(investigator), "verify": reject_first_then_confirm})
+    config = {"configurable": {"thread_id": "retry-brief"}}
+
+    graph.invoke({"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump on the P&L sheet?"}, config)
+    state = graph.get_state(config).values
+
+    assert "Already rejected, do not propose again: P&L!H7" in model.briefs[1]
+    assert [(h["id"], h["cell"], h["status"]) for h in state["hypotheses"]] == [("hyp-1", "P&L!H7", "rejected"), ("hyp-2", "P&L!H5", "confirmed")]
+
+
+def reject_first_then_confirm(state: InvestigationState) -> dict:
+    hypothesis = state["hypotheses"][-1]
+    verdict = "rejected" if state.get("attempts", 0) == 0 else "confirmed"
+    return {
+        "verifications": [{"hypothesis_id": hypothesis["id"], "before": {}, "after": {}, "checks": {}, "verdict": verdict, "reason": "scripted"}],
+        "hypotheses": [{"id": hypothesis["id"], "status": verdict}],
+        "attempts": state.get("attempts", 0) + 1,
+    }
