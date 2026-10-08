@@ -35,3 +35,56 @@ Between 7 October 22:00 and 8 October 03:10 UTC, Guillermo merged 17 pull reques
 - Long-term memory (#11), narrative report (#58), clickable evidence (#51, #59), `.xlsx` sandbox (#13).
 - README and LICENSE (#62); no issues yet for the demo app, deployment (public demo URL) or the video.
 - Error-type names between the agent and the dataset are aligned in #67.
+
+## Pending tasks
+
+Deadline: 30 October 2026, 10:00 PDT. Priority 1 blocks the demo or the submission; priority 2 makes the result convincing; priority 3 is nice to have. "No issue" means a GitHub issue still has to be created.
+
+### Review and merge now
+
+- [ ] Merge PR #67: aligned error-type names between the agent and the dataset
+- [ ] Merge PR #68: this progress summary
+
+### Agent
+
+| Priority | Task | Issue |
+|---|---|---|
+| 1 | Real `locate` node: Nemotron with `find_cells` turns the question into a target cell and comparison period; pauses when ambiguous | No issue |
+| 1 | Real `load_sheet` and `map_model`: load the workbook from the source; Nemotron 3.5 Lightning labels rows and columns | No issue |
+| 2 | `verify` writes a verification evidence record for the sandbox proof | #59 |
+| 2 | Narrative report: an LLM-written `explain` with citation validation | #58 |
+| 2 | Long-term memory: model map, past findings, accepted overrides | #11 |
+| 3 | `.xlsx` sandbox for users without Google Sheets | #13 |
+
+### Google Sheets and data
+
+| Priority | Task | Issue |
+|---|---|---|
+| 1 | Google Cloud service account for the Sheets and Drive APIs (needs a human with a Google account) | #14 |
+| 1 | NVIDIA demo model built from public estimates (company guidance, consensus, UBS headline figures), using only the supported formulas | No issue |
+| 2 | Upload the benchmark base model and planted variants to Google Sheets | #64 |
+
+### Benchmark
+
+| Priority | Task | Issue |
+|---|---|---|
+| 1 | Per-step evaluators, latency and token records, and the runner for the four set-ups | #16 |
+| 1 | Results report and plain-language conclusion for the README and video | #17 |
+| 2 | Tool-calling reliability on the real tool schemas (10 runs per scenario) | #27 |
+
+### Product and submission
+
+| Priority | Task | Issue |
+|---|---|---|
+| 1 | Demo app: ask a question, see the causal tree, the hypothesis board and the evidence, approve the fix | No issue |
+| 1 | Deployment: a public demo URL that runs on Nebius Token Factory | No issue |
+| 1 | README and LICENSE (setup, Nebius and NVIDIA usage, graph picture, results) | #62 |
+| 1 | Demo video under 3 minutes and the Devpost project text | No issue |
+| 2 | Evidence links rendered as clickable cells in the demo app | #51 |
+
+### Housekeeping
+
+| Priority | Task | Issue |
+|---|---|---|
+| 1 | Create the missing issues above (locate, load_sheet and map_model, NVIDIA demo model, demo app, deployment, video and Devpost text) and link them from the roadmap (#2) | No issue |
+| 3 | Each developer's local `.env` with their own keys | #18 |
