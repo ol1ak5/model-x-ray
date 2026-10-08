@@ -184,9 +184,9 @@ class ScriptedDiagnosis(BaseChatModel):
         return ChatResult(generations=[ChatGeneration(message=AIMessage(content="", tool_calls=[call]))])
 
 
-def test_investigator_runs_as_the_diagnose_node_of_the_main_graph() -> None:
+def test_investigator_runs_as_the_diagnose_node_of_the_main_graph(demo_workbook_path: Path) -> None:
     investigator = build_investigator(ScriptedDiagnosis(), [get_cell, trace_precedents])
-    graph = build_graph(InMemorySaver(), diagnose=make_diagnose_node(investigator))
+    graph = build_graph(InMemorySaver(), diagnose=make_diagnose_node(investigator, load_xlsx(demo_workbook_path)))
     config = {"configurable": {"thread_id": "real-diagnose"}}
 
     graph.invoke({"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump on the P&L sheet?"}, config)
@@ -217,10 +217,10 @@ def test_run_investigation_wires_the_real_investigator_into_the_graph(demo_workb
     assert graph.get_state(config).next == ("human_review",)
 
 
-def test_diagnose_keeps_only_the_top_three_hypotheses() -> None:
+def test_diagnose_keeps_only_the_top_three_hypotheses(demo_workbook_path: Path) -> None:
     model = ScriptedDiagnosis(turns=[(["P&L!H5", "P&L!H6", "P&L!H7", "P&L!H4", "Assumptions!C5"], "P&L!H7")])
     investigator = build_investigator(model, [get_cell, trace_precedents])
-    graph = build_graph(InMemorySaver(), diagnose=make_diagnose_node(investigator))
+    graph = build_graph(InMemorySaver(), diagnose=make_diagnose_node(investigator, load_xlsx(demo_workbook_path)))
     config = {"configurable": {"thread_id": "five-proposals"}}
 
     graph.invoke({"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump on the P&L sheet?"}, config)
@@ -234,10 +234,10 @@ def test_diagnose_keeps_only_the_top_three_hypotheses() -> None:
     assert graph.get_state(config).next == ("human_review",)
 
 
-def test_retry_tells_the_investigator_which_hypotheses_were_rejected() -> None:
+def test_retry_tells_the_investigator_which_hypotheses_were_rejected(demo_workbook_path: Path) -> None:
     model = ScriptedDiagnosis(turns=[(["P&L!H7", "P&L!H5"], "P&L!H5"), ([], "P&L!H5")])
     investigator = build_investigator(model, [get_cell, trace_precedents])
-    graph = build_graph(InMemorySaver(), diagnose=make_diagnose_node(investigator), overrides={"verify": reject_first_then_confirm})
+    graph = build_graph(InMemorySaver(), diagnose=make_diagnose_node(investigator, load_xlsx(demo_workbook_path)), overrides={"verify": reject_first_then_confirm})
     config = {"configurable": {"thread_id": "retry-brief"}}
 
     graph.invoke({"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump on the P&L sheet?"}, config)
@@ -325,6 +325,16 @@ def test_investigator_finds_the_planted_typed_value_through_the_real_tools(demo_
 
     patch = state["patch"]
     assert patch["cell"] == "P&L!H7"
+    assert patch["old_formula"] == "-45.2"
+
+    evidence_by_id = {e["id"]: e for e in state["evidence"]}
+    assert [e["id"] for e in state["evidence"]] == ["ev-1", "ev-2"]
+    assert all(e["cell"] == "P&L!H7" for e in state["evidence"])
+    assert any(e["kind"] == "anomaly" for e in state["evidence"])
+    for evidence_id in state["hypotheses"][0]["evidence_ids"]:
+        assert evidence_id in evidence_by_id
+        assert evidence_by_id[evidence_id]["cell"] == "P&L!H7"
+
     book = load_xlsx(demo_workbook_path)
     patched = book.with_patch(patch["cell"], patch["new_formula"])
     assert patched.formula_pattern("P&L!H7") == book.formula_pattern("P&L!G7")
@@ -341,6 +351,8 @@ def test_investigator_leaves_a_deliberate_override_alone(demo_workbook_with_over
     assert state["hypotheses"] == []
     assert state["patch"] is None
     assert "Inconclusive" in state["report"]
+    assert any("Per budget meeting" in e["text"] for e in state["evidence"])
+    assert all(evidence_id.startswith("ev-") for evidence_id in [e["id"] for e in state["evidence"]])
 
 
 @pytest.mark.live

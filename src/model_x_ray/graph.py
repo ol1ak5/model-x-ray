@@ -54,6 +54,6 @@ def run_investigation(llm: BaseChatModel, spreadsheet_id: str, source: Spreadshe
     investigator = build_investigator(llm, make_read_only_tools(book))
     return build_graph(
         checkpointer or InMemorySaver(),
-        diagnose=make_diagnose_node(investigator),
+        diagnose=make_diagnose_node(investigator, book),
         overrides={"trace": nodes.make_trace_node(book)},
     )

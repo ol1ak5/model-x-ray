@@ -192,6 +192,8 @@ Schemas at the boundary: the graph accepts `spreadsheet_id` and `question` (inpu
 | `Evidence` | `id`, `cell`, `kind` (`anomaly`, `expected_pattern`, `verification`), `text` |
 | `HumanDecision` | `action` (`approve`, `edit`, `reject`), `reason`, `patch` |
 
+Evidence is created by `diagnose` from the run's actual tool results, not from the model's prose: each tool result becomes one record per cell that tool returned (the `ref` argument for single-cell tools, the flagged lines for `find_formula_outliers`, the matches for `find_cells`), with `kind: anomaly` when the output carries a pattern-breaking verdict and `expected_pattern` otherwise. Ids are `ev-<n>` numbered in state order, deduplicated against what is already there, so they stay stable across retries. Every hypothesis links the records whose cell is its own, and `Patch.old_formula` is read from the sheet at diagnosis time, before `test` runs.
+
 ## Tools
 
 | Tool | Access | Used by |

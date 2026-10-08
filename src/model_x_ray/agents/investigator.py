@@ -2,7 +2,7 @@ from collections.abc import Callable
 from typing import Annotated, Literal, TypedDict
 
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, AnyMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import BaseTool
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
@@ -12,7 +12,8 @@ from pydantic import BaseModel
 
 from model_x_ray.causal import render_causal_tree
 from model_x_ray.prompts import load_prompt
-from model_x_ray.state import InvestigationState
+from model_x_ray.spreadsheet.engine import Workbook, normalize_ref
+from model_x_ray.state import Evidence, InvestigationState
 
 MAX_TOOL_CALLS = 8
 MAX_OPEN_HYPOTHESES = 3
@@ -100,27 +101,82 @@ def investigation_brief(state: InvestigationState) -> str:
     return "\n".join(lines)
 
 
-def make_diagnose_node(investigator: CompiledStateGraph) -> Callable[[InvestigationState], dict]:
+ANOMALY_MARKERS = ("breaks the pattern", "typed value where the row uses", "reference pattern differs from the row")
+
+
+def full_ref(ref: str, sheet: str) -> str:
+    return normalize_ref(ref) if "!" in ref else normalize_ref(f"{sheet}!{ref}")
+
+
+def old_formula(book: Workbook, cell: str) -> str:
+    raw = book.raw(cell)
+    if raw is None:
+        return ""
+    if isinstance(raw, str) and raw.startswith("="):
+        return raw
+    return str(raw)
+
+
+def evidence_cells(name: str, args: dict, content: str, sheet: str) -> list[str]:
+    if name == "find_formula_outliers":
+        cells = []
+        for line in content.splitlines():
+            cell = line.split(":", 1)[0].strip()
+            if "!" in cell:
+                cells.append(normalize_ref(cell))
+        return cells
+    if name == "find_cells":
+        return [full_ref(cell.strip(), sheet) for cell in content.split(",") if cell.strip()]
+    ref = args.get("ref")
+    return [full_ref(ref, sheet)] if isinstance(ref, str) else []
+
+
+def collect_evidence(messages: list[BaseMessage], sheet: str, existing: list[Evidence], start: int) -> list[Evidence]:
+    calls = {call["id"]: call for message in messages if isinstance(message, AIMessage) for call in message.tool_calls}
+    records: list[Evidence] = []
+    seen = {(e["cell"], e["text"]) for e in existing}
+    for message in messages:
+        if not isinstance(message, ToolMessage):
+            continue
+        call = calls.get(message.tool_call_id)
+        if call is None:
+            continue
+        text = message.content if isinstance(message.content, str) else str(message.content)
+        kind = "anomaly" if any(marker in text for marker in ANOMALY_MARKERS) else "expected_pattern"
+        for cell in evidence_cells(call["name"], call.get("args", {}), text, sheet):
+            if (cell, text) in seen:
+                continue
+            seen.add((cell, text))
+            records.append({"id": f"ev-{start + len(records) + 1}", "cell": cell, "kind": kind, "text": text})
+    return records
+
+
+def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook) -> Callable[[InvestigationState], dict]:
     def diagnose(state: InvestigationState) -> dict:
         result = investigator.invoke({"messages": [HumanMessage(content=investigation_brief(state))]})
         diagnosis = result["diagnosis"]
+        sheet = state["target"]["sheet"]
+        existing = state.get("evidence", [])
+        new_evidence = collect_evidence(result["messages"], sheet, existing, len(existing))
+        all_evidence = [*existing, *new_evidence]
         proposed = diagnosis.hypotheses[:MAX_OPEN_HYPOTHESES]
         first_number = len(state.get("hypotheses", [])) + 1
-        hypotheses = [
-            {
+        hypotheses = []
+        for i, h in enumerate(proposed):
+            cell = full_ref(h.cell, sheet)
+            hypotheses.append({
                 "id": f"hyp-{first_number + i}",
-                "cell": h.cell,
+                "cell": cell,
                 "error_type": h.error_type,
                 "claim": h.claim,
-                "evidence_ids": [],
+                "evidence_ids": [e["id"] for e in all_evidence if e["cell"] == cell],
                 "confidence": h.confidence,
                 "status": "open",
-            }
-            for i, h in enumerate(proposed)
-        ]
+            })
         patch = None
         if diagnosis.patch is not None:
-            patch = {"cell": diagnosis.patch.cell, "old_formula": "", "new_formula": diagnosis.patch.new_formula, "source": "agent"}
-        return {"hypotheses": hypotheses, "patch": patch}
+            patch_cell = full_ref(diagnosis.patch.cell, sheet)
+            patch = {"cell": patch_cell, "old_formula": old_formula(book, patch_cell), "new_formula": diagnosis.patch.new_formula, "source": "agent"}
+        return {"hypotheses": hypotheses, "evidence": new_evidence, "patch": patch}
 
     return diagnose
