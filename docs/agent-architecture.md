@@ -114,7 +114,7 @@ PROPOSE        top hypothesis + minimal patch
 | Open hypotheses | 3 | Forces ranking instead of listing everything |
 | Diagnose-verify attempts | 3 | Bounded retry loop |
 
-Budgets are enforced in code, not trusted from the model: a batch of parallel tool calls is truncated at the remaining budget and the overflow calls get a `Tool budget exhausted.` tool message instead of executing, so `tool_calls_used` never exceeds the limit; each diagnosis is cut to its top 3 proposals in model order before entering state.
+Budgets are enforced in code, not trusted from the model: a batch of parallel tool calls is truncated at the remaining budget and the overflow calls get a `Tool budget exhausted.` tool message instead of executing, so `tool_calls_used` never exceeds the limit; each diagnosis is cut to the remaining open-hypothesis budget — at most 3 open at a time, counting the ones a retry still carries — in model order before entering state, and the brief states the live `Open hypotheses: n/3` count so the model can rank against it.
 
 ### Confidence levels
 

@@ -366,3 +366,39 @@ def test_nemotron_super_finds_the_planted_typed_value_on_the_fixture(demo_workbo
 
     cells = [h["cell"] for h in state["hypotheses"]]
     assert "P&L!H7" in cells
+
+
+def test_open_hypothesis_budget_holds_across_a_retry(demo_workbook_path: Path) -> None:
+    model = ScriptedDiagnosis(turns=[(["P&L!H7"], "P&L!H7"), (["P&L!H4", "P&L!H5", "P&L!H6"], "P&L!H5")])
+    investigator = build_investigator(model, [get_cell, trace_precedents])
+    graph = build_graph(
+        InMemorySaver(),
+        diagnose=make_diagnose_node(investigator, load_xlsx(demo_workbook_path)),
+        overrides={"verify": verify_keep_open_then_confirm},
+    )
+    config = {"configurable": {"thread_id": "open-budget"}}
+
+    graph.invoke({"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump on the P&L sheet?"}, config)
+    state = graph.get_state(config).values
+
+    assert "Open hypotheses: 0/3" in model.briefs[0]
+    assert "Open hypotheses: 1/3" in model.briefs[1]
+    assert [h["id"] for h in state["hypotheses"]] == ["hyp-1", "hyp-2", "hyp-3"]
+    assert sum(1 for h in state["hypotheses"] if h["status"] == "open") <= 3
+
+
+def verify_keep_open_then_confirm(state: InvestigationState) -> dict:
+    if state.get("attempts", 0) == 0:
+        return {
+            "verifications": [{
+                "hypothesis_id": "hyp-1", "before": {}, "after": {}, "checks": {},
+                "verdict": "inconclusive", "reason": "needs another diagnosis",
+            }],
+            "attempts": 1,
+        }
+    hypothesis = state["hypotheses"][-1]
+    return {
+        "verifications": [{"hypothesis_id": hypothesis["id"], "before": {}, "after": {}, "checks": {}, "verdict": "confirmed", "reason": "scripted"}],
+        "hypotheses": [{"id": hypothesis["id"], "status": "confirmed"}],
+        "attempts": 2,
+    }
