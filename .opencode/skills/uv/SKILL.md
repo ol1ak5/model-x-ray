@@ -1,6 +1,6 @@
 ---
 name: uv
-description: Python project and dependency management with uv — adding packages, running scripts, locking, and workarounds for this repo's broken scaffold
+description: Python project and dependency management with uv — adding packages, running scripts, and locking
 ---
 
 # uv
@@ -11,38 +11,24 @@ description: Python project and dependency management with uv — adding package
 
 ```sh
 uv add <pkg>                    # add runtime dependency (writes pyproject + uv.lock)
-uv add --dev <pkg>              # add dev dependency (pytest, ruff, mypy...)
+uv add --dev <pkg>              # add dev dependency (pytest is the current one)
 uv remove <pkg>
 uv run python -m <pkg>          # run a module
 uv run <script>.py              # run a file
-uv run pytest                   # run a tool installed as a dev dependency
+uv run pytest                   # run the dev dependencies (tests)
 uv sync                         # install exactly what uv.lock pins
 uv lock                         # re-resolve the lockfile after manual edits
 uvx <tool>                      # run a tool ephemerally without adding it
 ```
 
-## This repo's current breakage (important)
-
-`pyproject.toml` declares `[project.scripts] data-room-sentinel = "data_room_sentinel:main"` but `src/data_room_sentinel/` no longer exists, so **any `uv run` in this repo fails** with:
-
-```
-× Failed to build `data-room-sentinel`
-  ╰─▶ Expected a Python module at: src/data_room_sentinel/__init__.py
-```
-
-Until issue #4 replaces the scaffold, run one-off code isolated from the project:
-
-```sh
-uv run --no-project --with langgraph --with langchain-openai python -c "..."
-uvx ruff check
-```
-
-Do not "fix" this as a side effect of an unrelated change — renaming the package and console script belongs to #4.
-
-## Facts verified locally (2026-10-06)
+## Facts verified locally (2026-10-08)
 
 - uv 0.12.10, Python pinned to 3.13.2 via `.python-version`
+- The console script works: `uv run model-x-ray` prints the banner (its `main()` is still a placeholder — that is a product gap, not a tooling one)
+- `uv run pytest` collects and runs the suite; `-m live` opts into network tests
 - `uv run --with <pkg>` resolves extra packages without touching `pyproject.toml`
+
+There is no known broken scaffold: the package is `model-x-ray` in `src/model_x_ray/`, and every `uv run` path above works from the repo root. If a `uv run` fails, debug it — do not reach for `--no-project` isolation.
 
 ## Lockfile
 
