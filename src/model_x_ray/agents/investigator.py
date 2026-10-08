@@ -97,6 +97,8 @@ def investigation_brief(state: InvestigationState) -> str:
     if tree:
         lines.append("Cause tree (suspicious cells marked):")
         lines += [f"  {line}" for line in render_causal_tree(tree)]
+    open_count = sum(1 for h in state.get("hypotheses", []) if h["status"] == "open")
+    lines.append(f"Open hypotheses: {open_count}/{MAX_OPEN_HYPOTHESES}")
     lines += [f"Already rejected, do not propose again: {h['cell']} ({h['error_type']})" for h in state.get("hypotheses", []) if h["status"] == "rejected"]
     return "\n".join(lines)
 
@@ -159,7 +161,9 @@ def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook) -> Call
         existing = state.get("evidence", [])
         new_evidence = collect_evidence(result["messages"], sheet, existing, len(existing))
         all_evidence = [*existing, *new_evidence]
-        proposed = diagnosis.hypotheses[:MAX_OPEN_HYPOTHESES]
+        currently_open = sum(1 for h in state.get("hypotheses", []) if h["status"] == "open")
+        budget = max(0, MAX_OPEN_HYPOTHESES - currently_open)
+        proposed = diagnosis.hypotheses[:budget]
         first_number = len(state.get("hypotheses", [])) + 1
         hypotheses = []
         for i, h in enumerate(proposed):
