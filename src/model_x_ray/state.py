@@ -54,7 +54,7 @@ class Verification(TypedDict):
     before: dict[str, float]
     after: dict[str, float]
     checks: dict[str, bool]
-    verdict: Literal["confirmed", "rejected"]
+    verdict: Literal["confirmed", "rejected", "inconclusive"]
     reason: str
 
 
