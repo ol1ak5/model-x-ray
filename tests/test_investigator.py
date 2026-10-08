@@ -159,7 +159,7 @@ def test_investigator_diagnoses_a_typed_value_with_nemotron() -> None:
 class ScriptedDiagnosis(BaseChatModel):
     bound: list[str] = []
     briefs: list[str] = []
-    turns: list[tuple[list[str], str]] = [(["P&L!H7"], "P&L!H7")]
+    turns: list[tuple[list[str], str] | tuple[list[str], str, str]] = [(["P&L!H7"], "P&L!H7")]
 
     @property
     def _llm_type(self) -> str:
@@ -173,13 +173,15 @@ class ScriptedDiagnosis(BaseChatModel):
         if "Diagnosis" not in self.bound:
             self.briefs.append(messages[1].content)
             return ChatResult(generations=[ChatGeneration(message=AIMessage(content="Enough evidence."))])
-        cells, patch_cell = self.turns[min(len(self.briefs), len(self.turns)) - 1]
+        turn = self.turns[min(len(self.briefs), len(self.turns)) - 1]
+        cells, patch_cell = turn[0], turn[1]
+        new_formula = turn[2] if len(turn) > 2 else "=G7*(1+Assumptions!$C$7)"
         args = {
             "hypotheses": [
                 {"cell": cell, "error_type": "typed_value", "claim": f"{cell} is a typed number, not a formula", "confidence": "high"}
                 for cell in cells
             ],
-            "patch": {"cell": patch_cell, "new_formula": "=G7*(1+Assumptions!C7)"},
+            "patch": {"cell": patch_cell, "new_formula": new_formula},
         }
         call = {"name": "Diagnosis", "args": args, "id": "conclude"}
         return ChatResult(generations=[ChatGeneration(message=AIMessage(content="", tool_calls=[call]))])
@@ -194,7 +196,7 @@ def test_investigator_runs_as_the_diagnose_node_of_the_main_graph(demo_workbook_
     state = graph.get_state(config).values
 
     assert [(h["id"], h["cell"], h["confidence"], h["status"]) for h in state["hypotheses"]] == [("hyp-1", "P&L!H7", "high", "confirmed")]
-    assert state["patch"]["new_formula"] == "=G7*(1+Assumptions!C7)"
+    assert state["patch"]["new_formula"] == "=G7*(1+Assumptions!$C$7)"
     assert graph.get_state(config).next == ("human_review",)
 
 
@@ -313,8 +315,8 @@ class OutlierScanner(BaseChatModel):
         return ChatResult(generations=[ChatGeneration(message=AIMessage(content="Enough evidence."))])
 
 
-def test_investigator_finds_the_planted_typed_value_through_the_real_tools(demo_workbook_path: Path, engine_sandbox) -> None:
-    graph = run_investigation(OutlierScanner(), "demo", XlsxSource({"demo": demo_workbook_path}), engine_sandbox)
+def test_investigator_finds_the_planted_typed_value_through_the_real_tools(demo_workbook_path: Path, engine_sandbox, scripted_verdict) -> None:
+    graph = run_investigation(OutlierScanner(), "demo", XlsxSource({"demo": demo_workbook_path}), engine_sandbox, verifier=scripted_verdict)
     config = {"configurable": {"thread_id": "planted-real-tools"}}
 
     graph.invoke({"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump on the P&L sheet?"}, config)
@@ -405,9 +407,9 @@ def verify_keep_open_then_confirm(state: InvestigationState) -> dict:
     }
 
 
-def test_approve_writes_a_corrected_copy_with_a_change_log(demo_workbook_path: Path, engine_sandbox) -> None:
+def test_approve_writes_a_corrected_copy_with_a_change_log(demo_workbook_path: Path, engine_sandbox, scripted_verdict) -> None:
     model = ScriptedDiagnosis(turns=[(["P&L!H7"], "P&L!H7")])
-    graph = run_investigation(model, "demo", XlsxSource({"demo": demo_workbook_path}), engine_sandbox)
+    graph = run_investigation(model, "demo", XlsxSource({"demo": demo_workbook_path}), engine_sandbox, verifier=scripted_verdict)
     config = {"configurable": {"thread_id": "approve-corrected"}}
 
     graph.invoke({"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump on the P&L sheet?"}, config)
@@ -421,5 +423,5 @@ def test_approve_writes_a_corrected_copy_with_a_change_log(demo_workbook_path: P
     log_rows = engine_sandbox.writes[0]["log_rows"]
     assert log_rows[0] == ["Timestamp", "Cell", "Old formula", "New formula", "Reason"]
     assert log_rows[1][1:] == [
-        "P&L!H7", "-45.2", "=G7*(1+Assumptions!C7)", "P&L!H7 is a typed number, not a formula",
+        "P&L!H7", "-45.2", "=G7*(1+Assumptions!$C$7)", "P&L!H7 is a typed number, not a formula",
     ]

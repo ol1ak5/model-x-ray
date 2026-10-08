@@ -1,6 +1,11 @@
+from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 import pytest
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import AIMessage, BaseMessage
+from langchain_core.outputs import ChatGeneration, ChatResult
 from openpyxl import Workbook as OpenpyxlWorkbook
 from openpyxl.comments import Comment
 from openpyxl.styles import Font
@@ -86,3 +91,30 @@ class EngineSandbox:
 @pytest.fixture
 def engine_sandbox(demo_workbook_path: Path) -> EngineSandbox:
     return EngineSandbox(XlsxSource({"demo": demo_workbook_path}))
+
+
+class ScriptedVerdict(BaseChatModel):
+    bound: list[str] = []
+    verdicts: list[tuple[str, str]] = [("confirmed", "the sandbox numbers hold")]
+    human: list[str] = []
+    system: list[str] = []
+
+    @property
+    def _llm_type(self) -> str:
+        return "scripted-verdict"
+
+    def bind_tools(self, tools: Sequence[Any], **kwargs: Any) -> "ScriptedVerdict":
+        names = [getattr(t, "name", None) or getattr(t, "__name__", "") for t in tools]
+        return self.model_copy(update={"bound": names, "human": self.human, "system": self.system})
+
+    def _generate(self, messages: list[BaseMessage], stop: list[str] | None = None, **kwargs: Any) -> ChatResult:
+        self.system.append(messages[0].content)
+        self.human.append(messages[-1].content)
+        verdict, reason = self.verdicts[min(len(self.human), len(self.verdicts)) - 1]
+        call = {"name": "Verdict", "args": {"verdict": verdict, "reason": reason}, "id": "verify"}
+        return ChatResult(generations=[ChatGeneration(message=AIMessage(content="", tool_calls=[call]))])
+
+
+@pytest.fixture
+def scripted_verdict() -> ScriptedVerdict:
+    return ScriptedVerdict()

@@ -62,7 +62,7 @@ flowchart TD
 
 ### Building the graph
 
-`build_graph(checkpointer, diagnose, overrides=None)` takes the `diagnose` node as an explicit argument — there is no default, because a default would risk running a stub that fabricates findings. The production entrypoint is `run_investigation(llm, spreadsheet_id, source, sandbox, checkpointer=None)`: it loads the `Workbook` through the `SpreadsheetSource`, builds the real read-only tools from it (`make_read_only_tools(book)`), wires the Investigator as `diagnose`, the real `trace` (`nodes.make_trace_node(book)`) and the real `apply_fix` (`nodes.make_apply_fix_node(sandbox)`, which writes the corrected copy with its `Change log` tab only on the approve route) as overrides, and returns the compiled graph; the caller invokes it and handles the `human_review` interrupt. Tests that exercise graph mechanics pass the stub by name (`diagnose=nodes.stub_diagnose`, default stub `trace`/`apply_fix`). The `test` node is still a stub; `run_sandbox_test` is the function it will call when #10 wires the Verifier's before/after evidence package.
+`build_graph(checkpointer, diagnose, overrides=None)` takes the `diagnose` node as an explicit argument — there is no default, because a default would risk running a stub that fabricates findings. The production entrypoint is `run_investigation(llm, spreadsheet_id, source, sandbox, checkpointer=None, verifier=None)`: it loads the `Workbook` through the `SpreadsheetSource`, builds the real read-only tools from it (`make_read_only_tools(book)`), wires the Investigator as `diagnose`, and as overrides the real `trace` (`nodes.make_trace_node(book)`), the real `test` (`nodes.make_test_node(source, sandbox)`, which runs `run_sandbox_test` and writes the before/after values part of the verification record), the real `verify` (`nodes.make_verify_node(verifier or llm, source)`, which computes the deterministic checks and consults the Verifier agent), and the real `apply_fix` (`nodes.make_apply_fix_node(sandbox)`, which writes the corrected copy with its `Change log` tab only on the approve route), then returns the compiled graph; the caller invokes it and handles the `human_review` interrupt. The `verifier` parameter defaults to `llm` (the Verifier is the same model with a different prompt); tests pass a scripted model so both roles are independent. Tests that exercise graph mechanics pass the stub by name (`diagnose=nodes.stub_diagnose`, default stub `trace`/`test`/`verify`/`apply_fix`).
 
 ### Routing after `verify`
 
@@ -132,7 +132,7 @@ Every UPDATE writes to `hypotheses` in the state, so the interface can show a li
 
 ### Verifier: adversarial second opinion
 
-The two prompts are deliberately incompatible. The Investigator is told to find the most likely explanation and construct a minimal fix. The Verifier is told to assume the diagnosis is wrong and find any evidence that invalidates it.
+The two prompts are deliberately incompatible. The Investigator is told to find the most likely explanation and construct a minimal fix (`src/model_x_ray/prompts/investigator.md`); the Verifier is told to assume the diagnosis is wrong and find any evidence that invalidates it (`src/model_x_ray/prompts/verifier.md`). The Verifier call sends the prompt as the system message and the evidence package as JSON in the human message, through one structured-output call.
 
 | The Verifier receives | The Verifier does not receive |
 |---|---|
@@ -141,7 +141,7 @@ The two prompts are deliberately incompatible. The Investigator is told to find 
 | Relevant formulas (patched cell, its neighbours, its dependents) | |
 | Sandbox before/after values and the deterministic check results | |
 
-It returns `confirmed` or `rejected` with reasons. Deterministic checks run first (anomaly resolved, no new anomalies in dependents, pattern restored); the Verifier can reject a patch that passes them, but cannot confirm one that fails them.
+It returns `confirmed` or `rejected` with reasons. Deterministic checks run first, computed in code from the sandbox values and the engine: `anomaly_resolved` (the target moved from its surprising value toward the prior-period value without inverting), `dependents_consistent` (every dependent's sandbox value equals what the model's own formulas recalculate to, with no gaps), and `pattern_restored` (the patched cell's formula pattern matches a formula neighbour in its row; vacuously true when the row has no formula neighbour). The Verifier can reject a patch that passes all of them, but a failed check forces `rejected` without consulting the Verifier at all.
 
 ## State
 
@@ -158,7 +158,7 @@ class InvestigationState(TypedDict):
     causal_tree: CausalNode | None
     hypotheses: Annotated[list[Hypothesis], merge_by_id]
     patch: Patch | None
-    verifications: Annotated[list[Verification], operator.add]
+    verifications: Annotated[list[Verification], merge_verifications]
     evidence: Annotated[list[Evidence], operator.add]
     attempts: int
     report: str | None
@@ -172,7 +172,8 @@ class InvestigationState(TypedDict):
 | `target`, `patch`, `report`, `human_decision`, `corrected_copy_id` | Overwrite | One current value |
 | `contributions`, `causal_tree` | Overwrite | Recomputed as a whole by `trace` |
 | `hypotheses` | `merge_by_id` (custom) | The Verifier updates a hypothesis status in place; new ids append; never duplicates |
-| `verifications`, `evidence` | `operator.add` | Append-only audit trail behind "show me the evidence" |
+| `verifications` | `merge_verifications` (custom) | `test` writes the before/after values part and `verify` completes the same record with checks and verdict: one record per hypothesis, merged by `hypothesis_id` |
+| `evidence` | `operator.add` | Append-only audit trail behind "show me the evidence" |
 | `attempts` | Overwrite | Incremented by `verify` |
 
 The Investigator's tool-calling messages live in the subgraph's private state, so they do not clutter the main conversation.

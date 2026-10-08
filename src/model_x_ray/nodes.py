@@ -1,12 +1,15 @@
 from collections.abc import Callable
 from datetime import datetime, timezone
 
+from langchain_core.language_models import BaseChatModel
 from langgraph.types import interrupt
 
 from model_x_ray import causal
+from model_x_ray.agents.verifier import build_verifier, deterministic_checks, invoke_verifier
 from model_x_ray.spreadsheet.engine import Workbook
-from model_x_ray.spreadsheet.sandbox import SandboxWithWrite
-from model_x_ray.state import InvestigationState, TargetCell
+from model_x_ray.spreadsheet.sandbox import Sandbox, SandboxWithWrite, run_sandbox_test
+from model_x_ray.spreadsheet.source import SpreadsheetSource
+from model_x_ray.state import Hypothesis, InvestigationState, TargetCell
 
 
 def load_sheet(state: InvestigationState) -> dict:
@@ -73,7 +76,7 @@ def stub_diagnose(state: InvestigationState) -> dict:
             "claim": "Opex 2027 is a typed number, not a formula",
             "evidence_ids": [], "confidence": "high", "status": "open",
         }],
-        "patch": {"cell": "P&L!H7", "old_formula": "-45.2", "new_formula": "=G7*(1+Assumptions!C7)", "source": "agent"},
+        "patch": {"cell": "P&L!H7", "old_formula": "-45.2", "new_formula": "=G7*(1+Assumptions!$C$7)", "source": "agent"},
     }
 
 
@@ -98,6 +101,85 @@ def verify(state: InvestigationState) -> dict:
         "hypotheses": [{"id": hypothesis["id"], "status": "confirmed"}],
         "attempts": state.get("attempts", 0) + 1,
     }
+
+
+def _same_cell(left: str, right: str) -> bool:
+    if left == right:
+        return True
+    return left.endswith(f"!{right}") or right.endswith(f"!{left}")
+
+
+def verification_target(state: InvestigationState) -> Hypothesis | None:
+    patch = state.get("patch")
+    open_hypotheses = [h for h in state.get("hypotheses", []) if h["status"] == "open"]
+    if patch is not None:
+        for hypothesis in open_hypotheses:
+            if _same_cell(hypothesis["cell"], patch["cell"]):
+                return hypothesis
+    return open_hypotheses[0] if open_hypotheses else None
+
+
+def make_test_node(source: SpreadsheetSource, sandbox: Sandbox) -> Callable[[InvestigationState], dict]:
+    def test_node(state: InvestigationState) -> dict:
+        patch = state.get("patch")
+        hypothesis = verification_target(state)
+        if patch is None or hypothesis is None:
+            return {}
+        result = run_sandbox_test(source, sandbox, state["spreadsheet_id"], patch)
+        return {
+            "verifications": [{
+                "hypothesis_id": hypothesis["id"],
+                "before": result["before"],
+                "after": result["after"],
+            }],
+        }
+
+    return test_node
+
+
+def make_verify_node(llm: BaseChatModel, source: SpreadsheetSource) -> Callable[[InvestigationState], dict]:
+    verifier = build_verifier(llm)
+
+    def verify_node(state: InvestigationState) -> dict:
+        attempts = state.get("attempts", 0) + 1
+        hypothesis = verification_target(state)
+        verification = None
+        if hypothesis is not None:
+            verification = next(
+                (v for v in state.get("verifications", []) if v["hypothesis_id"] == hypothesis["id"]),
+                None,
+            )
+        if hypothesis is None or verification is None or "before" not in verification:
+            return {
+                "verifications": [{
+                    "hypothesis_id": hypothesis["id"] if hypothesis else "",
+                    "before": {}, "after": {}, "checks": {},
+                    "verdict": "inconclusive", "reason": "no sandbox result to verify",
+                }],
+                "attempts": attempts,
+            }
+        book = source.load(state["spreadsheet_id"])
+        checks = deterministic_checks(book, state, verification)
+        failed = [name for name, ok in checks.items() if not ok]
+        if failed:
+            final = "rejected"
+            reason = f"deterministic checks failed: {', '.join(failed)}; the verifier was not consulted"
+        else:
+            verdict = invoke_verifier(verifier, state, verification, checks, book)
+            final = verdict.verdict
+            reason = verdict.reason
+        return {
+            "verifications": [{
+                "hypothesis_id": hypothesis["id"],
+                "checks": checks,
+                "verdict": final,
+                "reason": reason,
+            }],
+            "hypotheses": [{"id": hypothesis["id"], "status": "confirmed" if final == "confirmed" else "rejected"}],
+            "attempts": attempts,
+        }
+
+    return verify_node
 
 
 def explain(state: InvestigationState) -> dict:
