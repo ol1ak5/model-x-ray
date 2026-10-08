@@ -6,10 +6,11 @@ from langgraph.types import interrupt
 
 from model_x_ray import causal
 from model_x_ray.agents.verifier import build_verifier, deterministic_checks, invoke_verifier
+from model_x_ray.llm import model_name_of
 from model_x_ray.spreadsheet.engine import Workbook
 from model_x_ray.spreadsheet.sandbox import Sandbox, SandboxWithWrite, run_sandbox_test
 from model_x_ray.spreadsheet.source import SpreadsheetSource
-from model_x_ray.state import CausalNode, Hypothesis, InvestigationState, TargetCell
+from model_x_ray.state import CausalNode, Hypothesis, InvestigationState, RunLog, TargetCell
 
 
 def load_sheet(state: InvestigationState) -> dict:
@@ -172,8 +173,10 @@ def make_test_node(source: SpreadsheetSource, sandbox: Sandbox) -> Callable[[Inv
 
 def make_verify_node(llm: BaseChatModel, source: SpreadsheetSource) -> Callable[[InvestigationState], dict]:
     verifier = build_verifier(llm)
+    model_name = model_name_of(llm)
 
     def verify_node(state: InvestigationState) -> dict:
+        records: list[RunLog] = []
         attempts = state.get("attempts", 0) + 1
         hypothesis = verification_target(state)
         verification = None
@@ -198,7 +201,7 @@ def make_verify_node(llm: BaseChatModel, source: SpreadsheetSource) -> Callable[
             final = "rejected"
             reason = f"deterministic checks failed: {', '.join(failed)}; the verifier was not consulted"
         else:
-            verdict = invoke_verifier(verifier, state, verification, checks, book)
+            verdict, records = invoke_verifier(verifier, state, verification, checks, book, model=model_name)
             final = verdict.verdict
             reason = verdict.reason
         return {
@@ -210,6 +213,7 @@ def make_verify_node(llm: BaseChatModel, source: SpreadsheetSource) -> Callable[
             }],
             "hypotheses": [{"id": hypothesis["id"], "status": "confirmed" if final == "confirmed" else "rejected"}],
             "attempts": attempts,
+            "run_log": records,
         }
 
     return verify_node

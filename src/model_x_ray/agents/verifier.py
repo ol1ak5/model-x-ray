@@ -6,9 +6,10 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import Runnable
 from pydantic import BaseModel
 
+from model_x_ray.llm import invoke_with_usage
 from model_x_ray.prompts import load_prompt
 from model_x_ray.spreadsheet.engine import CellAddress, Workbook, make_ref, split_ref
-from model_x_ray.state import InvestigationState, Patch, Verification
+from model_x_ray.state import InvestigationState, Patch, RunLog, Verification
 
 
 class Verdict(BaseModel):
@@ -114,9 +115,22 @@ def evidence_package(
     }
 
 
-def invoke_verifier(verifier: Runnable, state: InvestigationState, verification: Verification, checks: dict[str, bool], book: Workbook) -> Verdict:
+def invoke_verifier(
+    verifier: Runnable,
+    state: InvestigationState,
+    verification: Verification,
+    checks: dict[str, bool],
+    book: Workbook,
+    model: str | None = None,
+) -> tuple[Verdict, list[RunLog]]:
     package = evidence_package(state, verification, checks, book)
-    return verifier.invoke([
-        SystemMessage(content=load_prompt("verifier")),
-        HumanMessage(content=json.dumps(package, default=str)),
-    ])
+    verdict, records = invoke_with_usage(
+        verifier,
+        [
+            SystemMessage(content=load_prompt("verifier")),
+            HumanMessage(content=json.dumps(package, default=str)),
+        ],
+        role="verifier",
+        model=model,
+    )
+    return verdict, records
