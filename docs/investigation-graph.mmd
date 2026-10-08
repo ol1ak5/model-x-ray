@@ -1,0 +1,35 @@
+---
+config:
+  flowchart:
+    curve: linear
+---
+graph TD;
+	__start__([<p>__start__</p>]):::first
+	load_sheet(load_sheet)
+	map_model(map_model)
+	locate(locate)
+	trace(trace)
+	test(test)
+	verify(verify)
+	explain(explain)
+	human_review(human_review)
+	apply_fix(apply_fix)
+	diagnose(diagnose)
+	__end__([<p>__end__</p>]):::last
+	__start__ --> load_sheet;
+	diagnose --> test;
+	explain --> human_review;
+	human_review -. &nbsp;reject&nbsp; .-> __end__;
+	human_review -. &nbsp;approve&nbsp; .-> apply_fix;
+	human_review -. &nbsp;edit&nbsp; .-> test;
+	load_sheet --> map_model;
+	locate --> trace;
+	map_model --> locate;
+	test --> verify;
+	trace --> diagnose;
+	verify -. &nbsp;retry&nbsp; .-> diagnose;
+	verify -. &nbsp;confirmed&nbsp; .-> explain;
+	apply_fix --> __end__;
+	classDef default fill:#f2f0ff,line-height:1.2
+	classDef first fill-opacity:0
+	classDef last fill:#bfb6fc

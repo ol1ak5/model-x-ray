@@ -49,8 +49,9 @@ Verified 8 Oct 2026. Do not assume tooling that is not there — re-check the tr
 - Setup after cloning: `uv sync`, then `cp .env.example .env` and fill in your own keys.
 - Tests: `uv run pytest` (offline, no credits), single test `uv run pytest path::test_name -k <pattern>`, live tests `uv run pytest -m live`.
 - Smoke check: `uv run model-x-ray`.
+- Graph picture: `scripts/export_graph.sh` (writes `docs/investigation-graph.mmd` and `.png`; re-run after any change to nodes or edges — a test fails if the committed diagram is stale).
 - Tool-calling measurement (live, about 3 cents): `scripts/measure_tool_calling.sh`.
-- `scripts/*.sh` are zero-flag wrappers that call `uv run x.py` with fixed, curated flags; they must run from the repo root with no arguments. The one that exists today is `scripts/measure_tool_calling.sh`; when the benchmark lands, `scripts/benchmark.sh` will wrap `uv run tools/benchmark.py --models planted-50 --output docs/benchmark.md`.
+- `scripts/*.sh` are zero-flag wrappers that call `uv run x.py` with fixed, curated flags; they must run from the repo root with no arguments. The ones that exist today are `scripts/measure_tool_calling.sh` and `scripts/export_graph.sh`; when the benchmark lands, `scripts/benchmark.sh` will wrap `uv run tools/benchmark.py --models planted-50 --output docs/benchmark.md`.
 
 ## Code rules (these differ from Python defaults, so they matter)
 

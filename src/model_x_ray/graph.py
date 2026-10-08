@@ -44,7 +44,7 @@ def build_graph(checkpointer: BaseCheckpointSaver, diagnose: NodeFunction, overr
     builder.add_edge("test", "verify")
     builder.add_conditional_edges("verify", route_after_verify, {"confirmed": "explain", "retry": "diagnose", "inconclusive": "explain"})
     builder.add_edge("explain", "human_review")
-    builder.add_conditional_edges("human_review", route_after_review, {"apply_fix": "apply_fix", "test": "test", END: END})
+    builder.add_conditional_edges("human_review", route_after_review, {"approve": "apply_fix", "edit": "test", "reject": END})
     builder.add_edge("apply_fix", END)
 
     return builder.compile(checkpointer=checkpointer)
