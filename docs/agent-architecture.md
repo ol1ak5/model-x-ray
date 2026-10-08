@@ -245,7 +245,7 @@ Implementation (`src/model_x_ray/causal.py`): `explain_change(book, ref, from_pe
 |---|---|
 | `typed_value` | A typed value replacing a formula |
 | `wrong_reference` | A formula pointing to the wrong cell, row or sheet |
-| `inconsistent_range` | A range that leaves out or adds a row compared with its neighbours (for example a SUM that skips a row) |
+| `range_inconsistency` | A range that leaves out or adds a row compared with its neighbours (for example a SUM that skips a row) |
 | `sign_inconsistency` | A flipped sign compared with the row |
 | `period_inconsistency` | A reference to the wrong period, for example the prior year's column |
 

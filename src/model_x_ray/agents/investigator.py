@@ -23,7 +23,7 @@ MAX_OPEN_HYPOTHESES = 3
 
 class ProposedHypothesis(BaseModel):
     cell: str
-    error_type: Literal["typed_value", "wrong_reference", "inconsistent_range", "sign_inconsistency", "period_inconsistency"]
+    error_type: Literal["typed_value", "wrong_reference", "range_inconsistency", "sign_inconsistency", "period_inconsistency"]
     claim: str
     confidence: Literal["high", "medium", "low"]
 

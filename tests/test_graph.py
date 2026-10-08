@@ -47,7 +47,7 @@ def always_diagnose_two(state: InvestigationState) -> dict:
              "evidence_ids": [], "confidence": "medium", "status": "open"}
             for offset, cell, error_type, claim in [
                 (1, "P&L!H7", "typed_value", "Opex is typed"),
-                (2, "P&L!H6", "inconsistent_range", "Gross profit range breaks the pattern"),
+                (2, "P&L!H6", "range_inconsistency", "Gross profit range breaks the pattern"),
             ]
         ],
     }

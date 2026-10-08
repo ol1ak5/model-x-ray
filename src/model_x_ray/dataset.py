@@ -16,7 +16,7 @@ PLANT_COLUMNS = ("G", "H", "I", "J")
 SINGLE_PLANT_SETS = {
     "type1": "typed_value",
     "type2": "wrong_reference",
-    "type3": "inconsistent_range",
+    "type3": "range_inconsistency",
     "type4": "sign_inconsistency",
     "type5": "period_inconsistency",
 }
@@ -151,7 +151,7 @@ def _period_sites() -> list[str]:
 SITES: dict[str, list[str]] = {
     "typed_value": _typed_sites(),
     "wrong_reference": _wrong_reference_sites(),
-    "inconsistent_range": _range_sites(),
+    "range_inconsistency": _range_sites(),
     "sign_inconsistency": _sign_sites(),
     "period_inconsistency": _period_sites(),
 }
@@ -184,7 +184,7 @@ def _plant(sheet, base_engine: EngineWorkbook, ref: str, error_type: str) -> tup
         comment = OVERRIDE_COMMENT
     elif error_type == "wrong_reference":
         new_content = _rewire(str(original), ref)
-    elif error_type == "inconsistent_range":
+    elif error_type == "range_inconsistency":
         column = _column_of(ref)
         new_content = original.replace(f":{column}8)", f":{column}7)")
     elif error_type == "sign_inconsistency":

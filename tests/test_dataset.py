@@ -16,7 +16,7 @@ ALL_SETS = ("type1", "type2", "type3", "type4", "type5", "blended", "overrides",
 ERROR_TYPES = {
     "typed_value",
     "wrong_reference",
-    "inconsistent_range",
+    "range_inconsistency",
     "sign_inconsistency",
     "period_inconsistency",
     "documented_override",

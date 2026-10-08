@@ -13,7 +13,7 @@ Rules:
 Error types (use exactly these names):
 - typed_value: a typed number replaces a formula where the row uses formulas.
 - wrong_reference: a formula points to the wrong cell, row or sheet.
-- inconsistent_range: a SUM or similar range leaves out or adds a row compared with its neighbours.
+- range_inconsistency: a SUM or similar range leaves out or adds a row compared with its neighbours.
 - sign_inconsistency: a sign is flipped compared with the row, for example a cost added instead of subtracted.
 - period_inconsistency: a formula refers to the wrong period, for example the prior year's column instead of the current one.
 
