@@ -52,17 +52,17 @@ flowchart TD
 | `load_sheet` | Code | Reads values, formulas and labels; builds the dependency graph | (graph cached outside state) |
 | `map_model` | Nemotron 3.5 Lightning (Nano fallback) | Labels rows (revenue, opex, totals) and columns (actuals vs forecast); skipped when the map for this sheet revision is in long-term memory | `model_map_ref` |
 | `locate` | Nemotron Super + `find_cells` | Turns the question into a target cell and comparison period; calls `interrupt()` if several cells match | `target`, `messages` |
-| `trace` | Code | Precedents of the target, the contribution of each input to the change, and the causal tree built from them | `contributions`, `causal_tree`, `evidence` |
+| `trace` | Code | Precedents of the target, the contribution of each input to the change, and the causal tree built from them; writes one evidence record per observation (the target anomaly, then each contribution, `anomaly` or `expected_pattern` by the tree's suspicious flag) | `contributions`, `causal_tree`, `evidence` |
 | `diagnose` | Investigator agent (subgraph) | Hypothesis-driven loop over read-only tools (see below), returns ranked hypotheses with evidence and a minimal patch | `hypotheses`, `evidence`, `patch` |
 | `test` | Code | Copies the sheet, applies the patch, reads recalculated values | `verifications` (values part) |
 | `verify` | Code checks + Verifier agent | Deterministic checks, then an independent attempt to disprove the diagnosis | `verifications`, `hypotheses`, `attempts` |
-| `explain` | Nemotron Super | Evidence-linked report, or an honest "inconclusive" | `report` |
+| `explain` | Code | Evidence-linked report: every cited evidence id resolves in state; an honest "inconclusive" cites nothing | `report` |
 | `human_review` | Interrupt | Approve, edit the fix, or reject with a reason | `human_decision` |
 | `apply_fix` | Code | Writes a corrected copy with a `Change log` tab | `corrected_copy_id` |
 
 ### Building the graph
 
-`build_graph(checkpointer, diagnose, overrides=None)` takes the `diagnose` node as an explicit argument — there is no default, because a default would risk running a stub that fabricates findings. The production entrypoint is `run_investigation(llm, spreadsheet_id, source, sandbox, checkpointer=None, verifier=None)`: it loads the `Workbook` through the `SpreadsheetSource`, builds the real read-only tools from it (`make_read_only_tools(book)`), wires the Investigator as `diagnose`, and as overrides the real `trace` (`nodes.make_trace_node(book)`), the real `test` (`nodes.make_test_node(source, sandbox)`, which runs `run_sandbox_test` and writes the before/after values part of the verification record), the real `verify` (`nodes.make_verify_node(verifier or llm, source)`, which computes the deterministic checks and consults the Verifier agent), and the real `apply_fix` (`nodes.make_apply_fix_node(sandbox)`, which writes the corrected copy with its `Change log` tab only on the approve route), then returns the compiled graph; the caller invokes it and handles the `human_review` interrupt. The `verifier` parameter defaults to `llm` (the Verifier is the same model with a different prompt); tests pass a scripted model so both roles are independent. Tests that exercise graph mechanics pass the stub by name (`diagnose=nodes.stub_diagnose`, default stub `trace`/`test`/`verify`/`apply_fix`).
+`build_graph(checkpointer, diagnose, overrides=None)` takes the `diagnose` node as an explicit argument — there is no default, because a default would risk running a stub that fabricates findings. The production entrypoint is `run_investigation(llm, spreadsheet_id, source, sandbox, checkpointer=None, verifier=None)`: it loads the `Workbook` through the `SpreadsheetSource`, builds the real read-only tools from it (`make_read_only_tools(book)`), wires the Investigator as `diagnose`, and as overrides the real `trace` (`nodes.make_trace_node(book)`), the real `test` (`nodes.make_test_node(source, sandbox)`, which runs `run_sandbox_test` and writes the before/after values part of the verification record), the real `verify` (`nodes.make_verify_node(verifier or llm, source)`, which computes the deterministic checks and consults the Verifier agent), the real `explain` (`nodes.make_explain_node()`, which cites the evidence ids behind each claim — every cited id resolves in state — or reports an inconclusive run without citing anything), and the real `apply_fix` (`nodes.make_apply_fix_node(sandbox)`, which writes the corrected copy with its `Change log` tab only on the approve route), then returns the compiled graph; the caller invokes it and handles the `human_review` interrupt. The `verifier` parameter defaults to `llm` (the Verifier is the same model with a different prompt); tests pass a scripted model so both roles are independent. Tests that exercise graph mechanics pass the stub by name (`diagnose=nodes.stub_diagnose`, default stub `trace`/`test`/`verify`/`explain`/`apply_fix`).
 
 ### Routing after `verify`
 
@@ -265,7 +265,7 @@ Details: #11.
 
 | Use | Model ID | Context | Price per 1M tokens (in / out) |
 |---|---|---|---|
-| Investigator, Verifier, `locate`, `explain` | `nvidia/nemotron-3-super-120b-a12b` | 262K | $0.30 / $0.90 |
+| Investigator, Verifier, `locate` | `nvidia/nemotron-3-super-120b-a12b` | 262K | $0.30 / $0.90 |
 | Model mapper (candidate) | `nvidia/Nemotron-3_5-Lightning` | 1M | $0.06 / $0.24 |
 | Model mapper (fallback), small-model comparison | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | 262K | $0.06 / $0.24 |
 | Optional: hardest verification, strongest benchmark attacker | `nvidia/Nemotron-3-Ultra-550b-a55b` | 1M | $1.00 / $3.00 |

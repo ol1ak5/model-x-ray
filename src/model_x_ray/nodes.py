@@ -9,7 +9,7 @@ from model_x_ray.agents.verifier import build_verifier, deterministic_checks, in
 from model_x_ray.spreadsheet.engine import Workbook
 from model_x_ray.spreadsheet.sandbox import Sandbox, SandboxWithWrite, run_sandbox_test
 from model_x_ray.spreadsheet.source import SpreadsheetSource
-from model_x_ray.state import Hypothesis, InvestigationState, TargetCell
+from model_x_ray.state import CausalNode, Hypothesis, InvestigationState, TargetCell
 
 
 def load_sheet(state: InvestigationState) -> dict:
@@ -53,6 +53,13 @@ def trace(state: InvestigationState) -> dict:
     }
 
 
+def _suspicious_cells(tree: CausalNode) -> set[str]:
+    cells = {tree["cell"]} if tree["suspicious"] else set()
+    for child in tree["children"]:
+        cells |= _suspicious_cells(child)
+    return cells
+
+
 def make_trace_node(book: Workbook) -> Callable[[InvestigationState], dict]:
     def trace_node(state: InvestigationState) -> dict:
         target = state["target"]
@@ -63,7 +70,33 @@ def make_trace_node(book: Workbook) -> Callable[[InvestigationState], dict]:
             raise ValueError(f"No period header for prior cell {prior_ref}")
         explanation = causal.explain_change(book, ref, from_period, target["period"])
         tree = causal.build_causal_tree(book, ref, from_period, target["period"])
-        return {"contributions": explanation["contributions"], "causal_tree": tree}
+        suspicious = _suspicious_cells(tree)
+        start = len(state.get("evidence", []))
+        records = [
+            {
+                "id": f"ev-{start + 1}",
+                "cell": ref,
+                "kind": "anomaly",
+                "text": (
+                    f"{target['label']} {target['period']} = {target['value']}"
+                    f" versus {target['prior_cell']} = {target['prior_value']}"
+                ),
+            },
+            *[
+                {
+                    "id": f"ev-{start + index + 2}",
+                    "cell": contribution["cell"],
+                    "kind": "anomaly" if contribution["cell"] in suspicious else "expected_pattern",
+                    "text": f"{contribution['label']} contributes {contribution['delta']:+.2f}",
+                }
+                for index, contribution in enumerate(explanation["contributions"])
+            ],
+        ]
+        return {
+            "contributions": explanation["contributions"],
+            "causal_tree": tree,
+            "evidence": records,
+        }
 
     return trace_node
 
@@ -186,6 +219,52 @@ def explain(state: InvestigationState) -> dict:
     if state["verifications"][-1]["verdict"] == "confirmed":
         return {"report": f"Root cause found in {state['patch']['cell']}."}
     return {"report": "Inconclusive: no hypothesis survived verification."}
+
+
+def _citations(state: InvestigationState, hypothesis: Hypothesis | None) -> list[str]:
+    evidence = state.get("evidence", [])
+    if hypothesis and hypothesis["evidence_ids"]:
+        return list(hypothesis["evidence_ids"])
+    if hypothesis:
+        same_cell = [record["id"] for record in evidence if record["cell"] == hypothesis["cell"]]
+        if same_cell:
+            return same_cell
+    return [record["id"] for record in evidence if record["kind"] == "anomaly"][:1]
+
+
+def make_explain_node() -> Callable[[InvestigationState], dict]:
+    def explain_node(state: InvestigationState) -> dict:
+        verifications = state.get("verifications", [])
+        latest = verifications[-1] if verifications else None
+        if latest is None or latest["verdict"] != "confirmed":
+            return {"report": "Inconclusive: no hypothesis survived verification."}
+        hypothesis = next(
+            (h for h in state.get("hypotheses", []) if h["id"] == latest["hypothesis_id"]),
+            None,
+        )
+        target = state.get("target")
+        target_ref = f"{target['sheet']}!{target['cell']}" if target else None
+        target_record = next(
+            (e for e in state.get("evidence", []) if target_ref and e["cell"] == target_ref and e["kind"] == "anomaly"),
+            None,
+        )
+        parts = []
+        if target and target_record:
+            parts.append(
+                f"{target['label']} {target['period']} moved from {target['prior_value']}"
+                f" to {target['value']} ({target_record['id']})."
+            )
+        patch = state.get("patch")
+        cell = patch["cell"] if patch else (hypothesis["cell"] if hypothesis else "")
+        claim = hypothesis["claim"] if hypothesis else "the patch held in the sandbox"
+        citations = _citations(state, hypothesis)
+        if citations:
+            parts.append(f"Root cause found in {cell}: {claim} (evidence: {', '.join(citations)}).")
+        else:
+            parts.append(f"Root cause found in {cell}: {claim}.")
+        return {"report": " ".join(parts)}
+
+    return explain_node
 
 
 def human_review(state: InvestigationState) -> dict:

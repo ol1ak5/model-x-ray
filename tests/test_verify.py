@@ -65,7 +65,7 @@ def test_verify_rejects_then_confirms_across_the_retry_loop(
     state = graph.get_state(config).values
 
     assert graph.get_state(config).next == ("human_review",)
-    assert state["report"] == "Root cause found in P&L!H7."
+    assert "Root cause found in P&L!H7:" in state["report"]
     assert state["attempts"] == 2
     assert [(h["id"], h["cell"], h["status"]) for h in state["hypotheses"]] == [
         ("hyp-1", "P&L!H7", "rejected"),
