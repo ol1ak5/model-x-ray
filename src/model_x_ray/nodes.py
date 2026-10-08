@@ -269,7 +269,15 @@ def make_explain_node() -> Callable[[InvestigationState], dict]:
 
 def human_review(state: InvestigationState) -> dict:
     decision = interrupt({"report": state["report"], "patch": state.get("patch")})
-    return {"human_decision": decision}
+    update: dict = {"human_decision": decision}
+    if decision.get("patch"):
+        update["patch"] = {**decision["patch"], "source": "human"}
+    if decision.get("action") == "edit":
+        verifications = state.get("verifications", [])
+        reopen_id = verifications[-1]["hypothesis_id"] if verifications else None
+        if reopen_id and reopen_id in {h["id"] for h in state.get("hypotheses", [])}:
+            update["hypotheses"] = [{"id": reopen_id, "status": "open"}]
+    return update
 
 
 def apply_fix(state: InvestigationState) -> dict:
