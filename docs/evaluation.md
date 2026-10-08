@@ -19,14 +19,15 @@ A fix is correct when the corrected copy's outputs match the clean base model. T
 | Set | Count | Content | What it tests |
 |---|---|---|---|
 | Type 1 | X | One typed value replacing a formula | Detection of hardcodes |
-| Type 2 | X | One broken or wrong reference | Detection of bad links |
+| Type 2 | X | One wrong reference | Detection of bad links |
 | Type 3 | X | One inconsistent range (e.g. a SUM that skips a row) | Detection of aggregation errors |
-| Type 4 | X | One sign or period inconsistency | Detection of sign and period slips |
+| Type 4 | X | One sign inconsistency | Detection of flipped signs |
+| Type 5 | X | One period inconsistency | Detection of references to the wrong period |
 | Blended | X | Two or three errors of mixed types, including cases where the symptom cell is not the cause | Root cause under noise; the retry loop |
 | Overrides | X / 2 | Deliberate, documented typed values (e.g. a cell note "per budget meeting") with no real error | False alarms; Nemotron's judgment |
 | Clean | X / 2 | No changes | The agent must report that nothing is wrong |
 
-Default `X = 25`, configurable: 149 investigations per full run (25 × five single-purpose sets, plus floor-rounded halves for overrides and clean). Each variant comes with one or more questions generated from templates ("Why did {line} {year} change by {pct}%?"), where the asked line is downstream of a planted error. Generation is seeded so runs are reproducible. Ground truth is stored next to each variant as JSON: planted cells, error types, original formulas, expected outputs.
+Default `X = 25`, configurable: 174 investigations per full run (25 × six sets: five error types plus blended, and floor-rounded halves for overrides and clean). Each variant comes with one or more questions generated from templates ("Why did {line} {year} change by {pct}%?"), where the asked line is downstream of a planted error. Generation is seeded so runs are reproducible. Ground truth is stored next to each variant as JSON: planted cells, error types, original formulas, expected outputs.
 
 ### Output layout
 

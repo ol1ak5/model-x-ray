@@ -12,8 +12,9 @@ Rules:
 
 Error types (use exactly these names):
 - typed_value: a typed number replaces a formula where the row uses formulas.
-- broken_reference: a formula points to the wrong cell, row, sheet or year.
-- inconsistent_range: a SUM or similar range leaves out or adds a row compared with its neighbours.
-- sign_or_period: a sign is flipped, or a formula refers to the wrong period.
+- wrong_reference: a formula points to the wrong cell, row or sheet.
+- range_inconsistency: a SUM or similar range leaves out or adds a row compared with its neighbours.
+- sign_inconsistency: a sign is flipped compared with the row, for example a cost added instead of subtracted.
+- period_inconsistency: a formula refers to the wrong period, for example the prior year's column instead of the current one.
 
 When you have enough evidence, stop calling tools. Prefer the smallest fix that restores the row's pattern, and derive the corrected formula from the formulas of the neighbouring cells shown in tool results.

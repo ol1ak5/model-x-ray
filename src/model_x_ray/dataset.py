@@ -13,8 +13,13 @@ OVERRIDE_COMMENT = "Per budget meeting: keep as entered."
 PERIODS = {"F": "2024A", "G": "2025A", "H": "2026E", "I": "2027E", "J": "2028E"}
 FORECAST_COLUMNS = ("H", "I", "J")
 PLANT_COLUMNS = ("G", "H", "I", "J")
-SINGLE_PLANT_SETS = {"type1": "typed_value", "type2": "wrong_reference", "type3": "inconsistent_range"}
-TYPE4_KINDS = ("sign_inconsistency", "period_inconsistency")
+SINGLE_PLANT_SETS = {
+    "type1": "typed_value",
+    "type2": "wrong_reference",
+    "type3": "range_inconsistency",
+    "type4": "sign_inconsistency",
+    "type5": "period_inconsistency",
+}
 
 
 def _previous_column(column: str) -> str | None:
@@ -146,7 +151,7 @@ def _period_sites() -> list[str]:
 SITES: dict[str, list[str]] = {
     "typed_value": _typed_sites(),
     "wrong_reference": _wrong_reference_sites(),
-    "inconsistent_range": _range_sites(),
+    "range_inconsistency": _range_sites(),
     "sign_inconsistency": _sign_sites(),
     "period_inconsistency": _period_sites(),
 }
@@ -179,7 +184,7 @@ def _plant(sheet, base_engine: EngineWorkbook, ref: str, error_type: str) -> tup
         comment = OVERRIDE_COMMENT
     elif error_type == "wrong_reference":
         new_content = _rewire(str(original), ref)
-    elif error_type == "inconsistent_range":
+    elif error_type == "range_inconsistency":
         column = _column_of(ref)
         new_content = original.replace(f":{column}8)", f":{column}7)")
     elif error_type == "sign_inconsistency":
@@ -214,9 +219,7 @@ def _write_variant(variant_path: Path, plants: list[tuple[str, str]], base_engin
 def _single_plants(rng: random.Random, set_name: str) -> list[tuple[str, str]]:
     if set_name == "clean":
         return []
-    if set_name == "type4":
-        error_type = rng.choice(TYPE4_KINDS)
-    elif set_name == "overrides":
+    if set_name == "overrides":
         error_type = "documented_override"
     else:
         error_type = SINGLE_PLANT_SETS[set_name]
@@ -295,7 +298,7 @@ def generate(output_dir: Path, per_set: int = 25, seed: int = 42) -> dict:
     expected_outputs = {
         ref: base_engine.value(ref) for ref in base_engine.cells() if base_engine.formula(ref) is not None
     }
-    counts = {name: per_set for name in ("type1", "type2", "type3", "type4", "blended")}
+    counts = {name: per_set for name in ("type1", "type2", "type3", "type4", "type5", "blended")}
     counts["overrides"] = per_set // 2
     counts["clean"] = per_set // 2
     variants = []
