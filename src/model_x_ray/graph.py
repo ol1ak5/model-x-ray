@@ -67,6 +67,7 @@ def run_investigation(
             "trace": nodes.make_trace_node(book),
             "test": nodes.make_test_node(source, sandbox),
             "verify": nodes.make_verify_node(verifier or llm, source),
+            "explain": nodes.make_explain_node(),
             "apply_fix": nodes.make_apply_fix_node(sandbox),
         },
     )
