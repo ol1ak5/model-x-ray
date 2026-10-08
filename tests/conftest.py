@@ -5,6 +5,10 @@ from openpyxl import Workbook as OpenpyxlWorkbook
 from openpyxl.comments import Comment
 from openpyxl.styles import Font
 
+from model_x_ray.spreadsheet.engine import Workbook
+from model_x_ray.spreadsheet.source import SpreadsheetSource, XlsxSource
+from model_x_ray.state import Patch
+
 ASSUMPTIONS = {
     "B5": "Revenue growth", "C5": 0.08,
     "B6": "COGS % of revenue", "C6": 0.55,
@@ -48,3 +52,37 @@ def demo_workbook_path(tmp_path: Path) -> Path:
 @pytest.fixture
 def demo_workbook_with_override_note(tmp_path: Path) -> Path:
     return write_demo_workbook(tmp_path / "demo_model_override.xlsx", notes={"H7": "Per budget meeting, opex frozen at 45.2"})
+
+
+class EngineSandbox:
+    def __init__(self, source: SpreadsheetSource) -> None:
+        self._source = source
+        self._copies: dict[str, Workbook] = {}
+        self.created: list[str] = []
+        self.discarded: list[str] = []
+        self.writes: list[dict] = []
+
+    def create_copy(self, spreadsheet_id: str) -> str:
+        copy_id = f"copy-{len(self.created) + 1}"
+        self.created.append(copy_id)
+        self._copies[copy_id] = self._source.load(spreadsheet_id)
+        return copy_id
+
+    def apply_patch(self, copy_id: str, patch: Patch) -> None:
+        self._copies[copy_id] = self._copies[copy_id].with_patch(patch["cell"], patch["new_formula"])
+
+    def read_values(self, copy_id: str, cells: list[str]) -> dict[str, object]:
+        return {cell: self._copies[copy_id].value(cell) for cell in cells}
+
+    def discard(self, copy_id: str) -> None:
+        del self._copies[copy_id]
+        self.discarded.append(copy_id)
+
+    def write_corrected_copy(self, spreadsheet_id: str, patch: Patch, log_rows: list[list[object]]) -> str:
+        self.writes.append({"spreadsheet_id": spreadsheet_id, "patch": dict(patch), "log_rows": log_rows})
+        return f"corrected:{spreadsheet_id}"
+
+
+@pytest.fixture
+def engine_sandbox(demo_workbook_path: Path) -> EngineSandbox:
+    return EngineSandbox(XlsxSource({"demo": demo_workbook_path}))

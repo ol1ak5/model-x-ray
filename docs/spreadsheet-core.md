@@ -11,6 +11,7 @@ Issues: #5 (reading, dependency graph, tools), #6 (sandbox). Design context: `do
 | `spreadsheet/engine.py` | `Workbook`: contents, notes, metadata, formulas, values, dependency graph, relative formula patterns, labels, patched copies |
 | `spreadsheet/xlsx.py` | `load_xlsx(path)`: reads an `.xlsx` file (for example a model downloaded from Google Sheets with File, Download, Microsoft Excel) into a `Workbook` |
 | `spreadsheet/source.py` | `SpreadsheetSource` protocol (`load`, `list_sheets`, `read_range`, `row_label`, `column_header`) and `XlsxSource`, which serves files by id |
+| `spreadsheet/sandbox.py` | `Sandbox` protocol (`create_copy`, `apply_patch`, `read_values`, `discard`), `SandboxWithWrite` (adds `write_corrected_copy`), `GoogleSandbox`, `run_sandbox_test`, `a1_range`, `build_google_services` |
 | `rules.py` | `find_formula_outliers(range)` — the pattern rules, independent of LangChain so the rules-only baseline (#16) can reuse them |
 | `causal.py` | `explain_change` (one-input-at-a-time contributions) and `build_causal_tree` (the `CausalNode` dict, suspicious branches marked) |
 | `tools.py` | The read-only investigation API the Investigator and the nodes call: `find_cells`, `get_cell`, `trace_precedents`, `trace_dependents`, `explain_change`, `compare_formulas`, `find_formula_outliers`, `get_cell_metadata`, plus `make_read_only_tools(book)` which wraps them as LangChain tools |
@@ -70,7 +71,19 @@ Plain functions take the `Workbook` first (nodes and rules call those); `make_re
 
 ## Sandbox
 
-`with_patch` is the local sandbox: it copies the cell contents, applies the patch, and recalculates lazily, so the before and after values of any cell can be compared while the original stays untouched. With Google Sheets, the same role is played by copying the spreadsheet and letting Google recalculate (#6).
+`with_patch` is the local recalculation engine; the `Sandbox` interface (`spreadsheet/sandbox.py`) is what the `test` step uses to prove a fix without ever writing the original:
+
+| Piece | Behaviour |
+|---|---|
+| `Sandbox` protocol | `create_copy(spreadsheet_id)`, `apply_patch(copy_id, patch)`, `read_values(copy_id, cells)`, `discard(copy_id)` |
+| `SandboxWithWrite` | adds `write_corrected_copy(...)` — the `apply_fix` node's capability, kept out of the test path by the narrower type |
+| `run_sandbox_test(source, sandbox, id, patch)` | before-values from the source workbook, then copy → patch → read → discard (discard in a `finally`), returning `{"before": {...}, "after": {...}}` for the patched cell and every transitive dependent (`affected_cells` = the cell + `all_dependents`) |
+| `GoogleSandbox(sheets, drive, folder_id=None)` | `files.copy` into a dedicated folder (created lazily, named `Model X-Ray sandbox`), `values.update` with `valueInputOption=USER_ENTERED` so Google enters the formula and recalculates, `values.batchGet` with `valueRenderOption=UNFORMATTED_VALUE`, `files.delete` on discard |
+| `write_corrected_copy(...)` | copies the original into the same folder, applies the patch, adds a `Change log` tab (`addSheet`, then `values.update` on `'Change log'!A1` with the timestamp/cell/old/new/reason rows), and returns the id — it is never discarded |
+| `a1_range(ref)` | `P&L!H7` → `'P&L'!H7`: quotes sheet names that are not plain identifiers |
+| `build_google_services(path=None)` | service-account credentials from `GOOGLE_APPLICATION_CREDENTIALS`, scopes `spreadsheets` + `drive`; the google libraries are imported lazily so offline tests never touch them |
+
+Tests use `EngineSandbox` (`tests/conftest.py`), which recalculates through the real engine on a `with_patch` copy, and `FakeGoogle` (`tests/test_sandbox.py`), a fluent stand-in for the discovery services that records every request. The live roundtrip test is marked `live` and needs the service account from #14.
 
 ## Testing
 

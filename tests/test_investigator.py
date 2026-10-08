@@ -8,6 +8,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMe
 from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.tools import tool
 from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.types import Command
 
 from model_x_ray.agents.investigator import build_investigator, make_diagnose_node
 from model_x_ray.graph import build_graph, run_investigation
@@ -197,9 +198,9 @@ def test_investigator_runs_as_the_diagnose_node_of_the_main_graph(demo_workbook_
     assert graph.get_state(config).next == ("human_review",)
 
 
-def test_run_investigation_wires_the_real_investigator_into_the_graph(demo_workbook_path: Path) -> None:
+def test_run_investigation_wires_the_real_investigator_into_the_graph(demo_workbook_path: Path, engine_sandbox) -> None:
     model = ScriptedDiagnosis(turns=[(["P&L!H5"], "P&L!H5")])
-    graph = run_investigation(model, "demo", XlsxSource({"demo": demo_workbook_path}))
+    graph = run_investigation(model, "demo", XlsxSource({"demo": demo_workbook_path}), engine_sandbox)
     config = {"configurable": {"thread_id": "entrypoint"}}
 
     graph.invoke({"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump on the P&L sheet?"}, config)
@@ -312,8 +313,8 @@ class OutlierScanner(BaseChatModel):
         return ChatResult(generations=[ChatGeneration(message=AIMessage(content="Enough evidence."))])
 
 
-def test_investigator_finds_the_planted_typed_value_through_the_real_tools(demo_workbook_path: Path) -> None:
-    graph = run_investigation(OutlierScanner(), "demo", XlsxSource({"demo": demo_workbook_path}))
+def test_investigator_finds_the_planted_typed_value_through_the_real_tools(demo_workbook_path: Path, engine_sandbox) -> None:
+    graph = run_investigation(OutlierScanner(), "demo", XlsxSource({"demo": demo_workbook_path}), engine_sandbox)
     config = {"configurable": {"thread_id": "planted-real-tools"}}
 
     graph.invoke({"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump on the P&L sheet?"}, config)
@@ -341,8 +342,8 @@ def test_investigator_finds_the_planted_typed_value_through_the_real_tools(demo_
     assert patched.value("P&L!H8") == pytest.approx(44.73, abs=0.01)
 
 
-def test_investigator_leaves_a_deliberate_override_alone(demo_workbook_with_override_note: Path) -> None:
-    graph = run_investigation(OutlierScanner(), "demo", XlsxSource({"demo": demo_workbook_with_override_note}))
+def test_investigator_leaves_a_deliberate_override_alone(demo_workbook_with_override_note: Path, engine_sandbox) -> None:
+    graph = run_investigation(OutlierScanner(), "demo", XlsxSource({"demo": demo_workbook_with_override_note}), engine_sandbox)
     config = {"configurable": {"thread_id": "override-real-tools"}}
 
     graph.invoke({"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump on the P&L sheet?"}, config)
@@ -356,9 +357,9 @@ def test_investigator_leaves_a_deliberate_override_alone(demo_workbook_with_over
 
 
 @pytest.mark.live
-def test_nemotron_super_finds_the_planted_typed_value_on_the_fixture(demo_workbook_path: Path) -> None:
+def test_nemotron_super_finds_the_planted_typed_value_on_the_fixture(demo_workbook_path: Path, engine_sandbox) -> None:
     llm = build_chat_model("nvidia/nemotron-3-super-120b-a12b")
-    graph = run_investigation(llm, "demo", XlsxSource({"demo": demo_workbook_path}))
+    graph = run_investigation(llm, "demo", XlsxSource({"demo": demo_workbook_path}), engine_sandbox)
     config = {"configurable": {"thread_id": "live-planted"}}
 
     graph.invoke({"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump on the P&L sheet?"}, config)
@@ -402,3 +403,23 @@ def verify_keep_open_then_confirm(state: InvestigationState) -> dict:
         "hypotheses": [{"id": hypothesis["id"], "status": "confirmed"}],
         "attempts": 2,
     }
+
+
+def test_approve_writes_a_corrected_copy_with_a_change_log(demo_workbook_path: Path, engine_sandbox) -> None:
+    model = ScriptedDiagnosis(turns=[(["P&L!H7"], "P&L!H7")])
+    graph = run_investigation(model, "demo", XlsxSource({"demo": demo_workbook_path}), engine_sandbox)
+    config = {"configurable": {"thread_id": "approve-corrected"}}
+
+    graph.invoke({"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump on the P&L sheet?"}, config)
+    assert graph.get_state(config).next == ("human_review",)
+    graph.invoke(Command(resume={"action": "approve", "reason": "", "patch": None}), config)
+    state = graph.get_state(config).values
+
+    assert state["corrected_copy_id"] == "corrected:demo"
+    assert engine_sandbox.writes[0]["spreadsheet_id"] == "demo"
+    assert engine_sandbox.writes[0]["patch"]["cell"] == "P&L!H7"
+    log_rows = engine_sandbox.writes[0]["log_rows"]
+    assert log_rows[0] == ["Timestamp", "Cell", "Old formula", "New formula", "Reason"]
+    assert log_rows[1][1:] == [
+        "P&L!H7", "-45.2", "=G7*(1+Assumptions!C7)", "P&L!H7 is a typed number, not a formula",
+    ]
