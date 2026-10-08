@@ -9,6 +9,7 @@ from langgraph.graph.state import CompiledStateGraph
 from model_x_ray import nodes
 from model_x_ray.agents.investigator import build_investigator, make_diagnose_node
 from model_x_ray.routing import route_after_review, route_after_verify
+from model_x_ray.spreadsheet.sandbox import SandboxWithWrite
 from model_x_ray.spreadsheet.source import SpreadsheetSource
 from model_x_ray.state import InputState, InvestigationState, OutputState
 from model_x_ray.tools import make_read_only_tools
@@ -49,11 +50,20 @@ def build_graph(checkpointer: BaseCheckpointSaver, diagnose: NodeFunction, overr
     return builder.compile(checkpointer=checkpointer)
 
 
-def run_investigation(llm: BaseChatModel, spreadsheet_id: str, source: SpreadsheetSource, checkpointer: BaseCheckpointSaver | None = None) -> CompiledStateGraph:
+def run_investigation(
+    llm: BaseChatModel,
+    spreadsheet_id: str,
+    source: SpreadsheetSource,
+    sandbox: SandboxWithWrite,
+    checkpointer: BaseCheckpointSaver | None = None,
+) -> CompiledStateGraph:
     book = source.load(spreadsheet_id)
     investigator = build_investigator(llm, make_read_only_tools(book))
     return build_graph(
         checkpointer or InMemorySaver(),
         diagnose=make_diagnose_node(investigator, book),
-        overrides={"trace": nodes.make_trace_node(book)},
+        overrides={
+            "trace": nodes.make_trace_node(book),
+            "apply_fix": nodes.make_apply_fix_node(sandbox),
+        },
     )

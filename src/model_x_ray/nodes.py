@@ -1,9 +1,11 @@
 from collections.abc import Callable
+from datetime import datetime, timezone
 
 from langgraph.types import interrupt
 
 from model_x_ray import causal
 from model_x_ray.spreadsheet.engine import Workbook
+from model_x_ray.spreadsheet.sandbox import SandboxWithWrite
 from model_x_ray.state import InvestigationState, TargetCell
 
 
@@ -111,3 +113,24 @@ def human_review(state: InvestigationState) -> dict:
 
 def apply_fix(state: InvestigationState) -> dict:
     return {"corrected_copy_id": f"corrected:{state['spreadsheet_id']}"}
+
+
+def make_apply_fix_node(sandbox: SandboxWithWrite) -> Callable[[InvestigationState], dict]:
+    def apply_fix_node(state: InvestigationState) -> dict:
+        patch = state.get("patch")
+        if patch is None:
+            return {"corrected_copy_id": None}
+        reason = next((h["claim"] for h in state.get("hypotheses", []) if h["cell"] == patch["cell"]), "")
+        log_rows = [
+            ["Timestamp", "Cell", "Old formula", "New formula", "Reason"],
+            [
+                datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                patch["cell"],
+                patch["old_formula"],
+                patch["new_formula"],
+                reason,
+            ],
+        ]
+        return {"corrected_copy_id": sandbox.write_corrected_copy(state["spreadsheet_id"], patch, log_rows)}
+
+    return apply_fix_node
