@@ -1,5 +1,3 @@
-from langgraph.graph import END
-
 from model_x_ray.state import InvestigationState
 
 MAX_ATTEMPTS = 3
@@ -17,7 +15,7 @@ def route_after_verify(state: InvestigationState) -> str:
 def route_after_review(state: InvestigationState) -> str:
     action = state["human_decision"]["action"]
     if action == "approve":
-        return "apply_fix"
+        return "approve"
     if action == "edit":
-        return "test"
-    return END
+        return "edit"
+    return "reject"
