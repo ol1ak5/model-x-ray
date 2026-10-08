@@ -26,7 +26,21 @@ A fix is correct when the corrected copy's outputs match the clean base model. T
 | Overrides | X / 2 | Deliberate, documented typed values (e.g. a cell note "per budget meeting") with no real error | False alarms; Nemotron's judgment |
 | Clean | X / 2 | No changes | The agent must report that nothing is wrong |
 
-Default `X = 25`, configurable: 150 investigations per full run. Each variant comes with one or more questions generated from templates ("Why did {line} {year} change by {pct}%?"), where the asked line is downstream of a planted error. Generation is seeded so runs are reproducible. Ground truth is stored next to each variant as JSON: planted cells, error types, original formulas, expected outputs.
+Default `X = 25`, configurable: 149 investigations per full run (25 × five single-purpose sets, plus floor-rounded halves for overrides and clean). Each variant comes with one or more questions generated from templates ("Why did {line} {year} change by {pct}%?"), where the asked line is downstream of a planted error. Generation is seeded so runs are reproducible. Ground truth is stored next to each variant as JSON: planted cells, error types, original formulas, expected outputs.
+
+### Output layout
+
+`uv run tools/generate_dataset.py --output dataset --per-set 25 --seed 42` writes:
+
+```
+dataset/
+  base.xlsx                     the clean base model: P&L (two actual and three forecast years), Assumptions, Summary
+  manifest.json                 seed, per-set counts, and the per-variant file map
+  <set>/variant-NNN.xlsx        one variant workbook
+  <set>/variant-NNN.json        ground truth for that variant
+```
+
+Each ground-truth JSON holds `planted` (cell, error type, original formula, new content, comment), `questions` (text, target cell, expected error cells, expected verdict) and `expected_outputs` (the value of every formula cell in the clean base — the target a correct fix must reproduce). The question target is the planted cell's first downstream dependent with a usable prior period, preferring the same-column EBITDA line; the percentage is computed from the variant itself, so the question describes what an analyst would actually see. Typed values are planted as stale prior-period numbers (a real hardcode, outputs shift), while override variants are typed to their own computed value with a cell comment (outputs stay at the base — nothing should be flagged).
 
 With 25 cases per set, an accuracy figure carries roughly ±10 to 20 points of uncertainty, so results are reported with 95% Wilson intervals rather than as bare percentages.
 
