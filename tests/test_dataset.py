@@ -11,8 +11,8 @@ from model_x_ray.spreadsheet.xlsx import load_xlsx
 
 ROOT = Path(__file__).resolve().parents[1]
 
-PLANTED_SETS = ("type1", "type2", "type3", "type4", "blended")
-ALL_SETS = ("type1", "type2", "type3", "type4", "blended", "overrides", "clean")
+PLANTED_SETS = ("type1", "type2", "type3", "type4", "type5", "blended")
+ALL_SETS = ("type1", "type2", "type3", "type4", "type5", "blended", "overrides", "clean")
 ERROR_TYPES = {
     "typed_value",
     "wrong_reference",
@@ -31,7 +31,7 @@ def ground_truth(output_dir: Path, set_name: str, index: int) -> dict:
 def test_generator_writes_every_set_with_the_design_counts(tmp_path: Path) -> None:
     manifest = generate(tmp_path, per_set=2, seed=42)
 
-    expected = {"type1": 2, "type2": 2, "type3": 2, "type4": 2, "blended": 2, "overrides": 1, "clean": 1}
+    expected = {"type1": 2, "type2": 2, "type3": 2, "type4": 2, "type5": 2, "blended": 2, "overrides": 1, "clean": 1}
     assert manifest["seed"] == 42
     assert manifest["per_set"] == 2
     assert manifest["counts"] == expected
@@ -135,4 +135,4 @@ def test_the_cli_wrapper_generates_the_dataset(tmp_path: Path) -> None:
     assert (tmp_path / "manifest.json").exists()
     assert (tmp_path / "type1" / "variant-000.xlsx").exists()
     manifest = json.loads((tmp_path / "manifest.json").read_text())
-    assert len(manifest["variants"]) == 12
+    assert len(manifest["variants"]) == 14

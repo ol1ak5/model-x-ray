@@ -35,7 +35,7 @@ class CausalNode(TypedDict):
 class Hypothesis(TypedDict):
     id: str
     cell: str
-    error_type: Literal["typed_value", "broken_reference", "inconsistent_range", "sign_or_period"]
+    error_type: Literal["typed_value", "wrong_reference", "inconsistent_range", "sign_inconsistency", "period_inconsistency"]
     claim: str
     evidence_ids: list[str]
     confidence: Literal["high", "medium", "low"]

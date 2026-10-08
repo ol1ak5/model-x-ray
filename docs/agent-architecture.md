@@ -241,10 +241,15 @@ Implementation (`src/model_x_ray/causal.py`): `explain_change(book, ref, from_pe
 
 ## Error types in scope
 
-1. A typed value replacing a formula
-2. A broken or wrong reference
-3. An inconsistent range (for example a SUM that skips a row)
-4. A sign or period inconsistency
+| Code name | Error |
+|---|---|
+| `typed_value` | A typed value replacing a formula |
+| `wrong_reference` | A formula pointing to the wrong cell, row or sheet |
+| `inconsistent_range` | A range that leaves out or adds a row compared with its neighbours (for example a SUM that skips a row) |
+| `sign_inconsistency` | A flipped sign compared with the row |
+| `period_inconsistency` | A reference to the wrong period, for example the prior year's column |
+
+These exact names are shared by the agent (`state.py`, the Investigator's `Diagnosis`, the Investigator prompt) and the benchmark dataset (`dataset.py`), so a diagnosis can be scored against ground truth by direct comparison. `documented_override` exists only in the dataset, for deliberate overrides that are not errors.
 
 The rule scanner and the tool set are extensible to further model-risk patterns after the hackathon.
 

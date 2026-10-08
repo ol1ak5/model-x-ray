@@ -8,7 +8,7 @@ def propose(state: InvestigationState) -> dict:
     return {
         "hypotheses": [
             {"id": "h1", "cell": "P&L!H7", "error_type": "typed_value", "claim": "Opex 2027 is a typed number, not a formula", "evidence_ids": ["e1"], "confidence": "high", "status": "open"},
-            {"id": "h2", "cell": "P&L!H5", "error_type": "sign_or_period", "claim": "COGS 2027 has a flipped sign", "evidence_ids": [], "confidence": "low", "status": "open"},
+            {"id": "h2", "cell": "P&L!H5", "error_type": "sign_inconsistency", "claim": "COGS 2027 has a flipped sign", "evidence_ids": [], "confidence": "low", "status": "open"},
         ],
         "evidence": [{"id": "e1", "cell": "P&L!H7", "kind": "anomaly", "text": "H7 is a typed number while G7 is a formula"}],
     }

@@ -13,8 +13,13 @@ OVERRIDE_COMMENT = "Per budget meeting: keep as entered."
 PERIODS = {"F": "2024A", "G": "2025A", "H": "2026E", "I": "2027E", "J": "2028E"}
 FORECAST_COLUMNS = ("H", "I", "J")
 PLANT_COLUMNS = ("G", "H", "I", "J")
-SINGLE_PLANT_SETS = {"type1": "typed_value", "type2": "wrong_reference", "type3": "inconsistent_range"}
-TYPE4_KINDS = ("sign_inconsistency", "period_inconsistency")
+SINGLE_PLANT_SETS = {
+    "type1": "typed_value",
+    "type2": "wrong_reference",
+    "type3": "inconsistent_range",
+    "type4": "sign_inconsistency",
+    "type5": "period_inconsistency",
+}
 
 
 def _previous_column(column: str) -> str | None:
@@ -214,9 +219,7 @@ def _write_variant(variant_path: Path, plants: list[tuple[str, str]], base_engin
 def _single_plants(rng: random.Random, set_name: str) -> list[tuple[str, str]]:
     if set_name == "clean":
         return []
-    if set_name == "type4":
-        error_type = rng.choice(TYPE4_KINDS)
-    elif set_name == "overrides":
+    if set_name == "overrides":
         error_type = "documented_override"
     else:
         error_type = SINGLE_PLANT_SETS[set_name]
@@ -295,7 +298,7 @@ def generate(output_dir: Path, per_set: int = 25, seed: int = 42) -> dict:
     expected_outputs = {
         ref: base_engine.value(ref) for ref in base_engine.cells() if base_engine.formula(ref) is not None
     }
-    counts = {name: per_set for name in ("type1", "type2", "type3", "type4", "blended")}
+    counts = {name: per_set for name in ("type1", "type2", "type3", "type4", "type5", "blended")}
     counts["overrides"] = per_set // 2
     counts["clean"] = per_set // 2
     variants = []
