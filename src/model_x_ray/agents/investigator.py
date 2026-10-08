@@ -1,3 +1,4 @@
+import operator
 from collections.abc import Callable
 from typing import Annotated, Literal, TypedDict
 
@@ -11,9 +12,10 @@ from langgraph.prebuilt import ToolNode
 from pydantic import BaseModel
 
 from model_x_ray.causal import render_causal_tree
+from model_x_ray.llm import invoke_with_usage, model_name_of
 from model_x_ray.prompts import load_prompt
 from model_x_ray.spreadsheet.engine import Workbook, normalize_ref
-from model_x_ray.state import Evidence, InvestigationState
+from model_x_ray.state import Evidence, InvestigationState, RunLog
 
 MAX_TOOL_CALLS = 8
 MAX_OPEN_HYPOTHESES = 3
@@ -39,6 +41,7 @@ class Diagnosis(BaseModel):
 class InvestigatorState(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
     tool_calls_used: int
+    run_log: Annotated[list[RunLog], operator.add]
     diagnosis: Diagnosis | None
 
 
@@ -47,9 +50,13 @@ def build_investigator(llm: BaseChatModel, tools: list[BaseTool], max_tool_calls
     structured = llm.with_structured_output(Diagnosis, method="function_calling")
     tool_node = ToolNode(tools)
     system = SystemMessage(content=load_prompt("investigator"))
+    model_name = model_name_of(llm)
 
     def think(state: InvestigatorState) -> dict:
-        return {"messages": [model.invoke([system, *state["messages"]])]}
+        response, records = invoke_with_usage(
+            model, [system, *state["messages"]], role="investigator", model=model_name
+        )
+        return {"messages": [response], "run_log": records}
 
     def act(state: InvestigatorState) -> dict:
         calls = state["messages"][-1].tool_calls
@@ -72,8 +79,13 @@ def build_investigator(llm: BaseChatModel, tools: list[BaseTool], max_tool_calls
         last = messages[-1]
         if isinstance(last, AIMessage) and last.tool_calls:
             messages += [ToolMessage(content="Tool budget exhausted.", tool_call_id=call["id"]) for call in last.tool_calls]
-        diagnosis = structured.invoke([system, *messages, HumanMessage(content=load_prompt("investigator_conclude"))])
-        return {"diagnosis": diagnosis}
+        diagnosis, records = invoke_with_usage(
+            structured,
+            [system, *messages, HumanMessage(content=load_prompt("investigator_conclude"))],
+            role="investigator",
+            model=model_name,
+        )
+        return {"diagnosis": diagnosis, "run_log": records}
 
     builder = StateGraph(InvestigatorState)
     builder.add_node("think", think)
@@ -181,6 +193,6 @@ def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook) -> Call
         if diagnosis.patch is not None:
             patch_cell = full_ref(diagnosis.patch.cell, sheet)
             patch = {"cell": patch_cell, "old_formula": old_formula(book, patch_cell), "new_formula": diagnosis.patch.new_formula, "source": "agent"}
-        return {"hypotheses": hypotheses, "evidence": new_evidence, "patch": patch}
+        return {"hypotheses": hypotheses, "evidence": new_evidence, "patch": patch, "run_log": result.get("run_log", [])}
 
     return diagnose

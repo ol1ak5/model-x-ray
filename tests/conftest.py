@@ -112,7 +112,8 @@ class ScriptedVerdict(BaseChatModel):
         self.human.append(messages[-1].content)
         verdict, reason = self.verdicts[min(len(self.human), len(self.verdicts)) - 1]
         call = {"name": "Verdict", "args": {"verdict": verdict, "reason": reason}, "id": "verify"}
-        return ChatResult(generations=[ChatGeneration(message=AIMessage(content="", tool_calls=[call]))])
+        usage = {"input_tokens": 800, "output_tokens": 50, "total_tokens": 850}
+        return ChatResult(generations=[ChatGeneration(message=AIMessage(content="", tool_calls=[call], usage_metadata=usage))])
 
 
 @pytest.fixture

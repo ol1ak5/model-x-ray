@@ -172,7 +172,8 @@ class ScriptedDiagnosis(BaseChatModel):
     def _generate(self, messages: list[BaseMessage], stop: list[str] | None = None, **kwargs: Any) -> ChatResult:
         if "Diagnosis" not in self.bound:
             self.briefs.append(messages[1].content)
-            return ChatResult(generations=[ChatGeneration(message=AIMessage(content="Enough evidence."))])
+            usage = {"input_tokens": 1200, "output_tokens": 150, "total_tokens": 1350}
+            return ChatResult(generations=[ChatGeneration(message=AIMessage(content="Enough evidence.", usage_metadata=usage))])
         turn = self.turns[min(len(self.briefs), len(self.turns)) - 1]
         cells, patch_cell = turn[0], turn[1]
         new_formula = turn[2] if len(turn) > 2 else "=G7*(1+Assumptions!$C$7)"
@@ -184,7 +185,8 @@ class ScriptedDiagnosis(BaseChatModel):
             "patch": {"cell": patch_cell, "new_formula": new_formula},
         }
         call = {"name": "Diagnosis", "args": args, "id": "conclude"}
-        return ChatResult(generations=[ChatGeneration(message=AIMessage(content="", tool_calls=[call]))])
+        usage = {"input_tokens": 1200, "output_tokens": 150, "total_tokens": 1350}
+        return ChatResult(generations=[ChatGeneration(message=AIMessage(content="", tool_calls=[call], usage_metadata=usage))])
 
 
 def test_investigator_runs_as_the_diagnose_node_of_the_main_graph(demo_workbook_path: Path) -> None:
@@ -458,3 +460,24 @@ def test_edit_replaces_the_patch_and_reruns_the_sandbox(demo_workbook_path: Path
     assert final["corrected_copy_id"] == "corrected:demo"
     assert engine_sandbox.writes[0]["patch"]["new_formula"] == edited["new_formula"]
     assert engine_sandbox.writes[0]["log_rows"][1][3] == edited["new_formula"]
+
+
+def test_graph_run_records_role_usage_for_the_evaluators(demo_workbook_path: Path, engine_sandbox, scripted_verdict) -> None:
+    model = ScriptedDiagnosis(turns=[(["P&L!H7"], "P&L!H7")])
+    graph = run_investigation(model, "demo", XlsxSource({"demo": demo_workbook_path}), engine_sandbox, verifier=scripted_verdict)
+    config = {"configurable": {"thread_id": "usage-log"}}
+
+    graph.invoke({"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump on the P&L sheet?"}, config)
+    run_log = graph.get_state(config).values["run_log"]
+
+    assert {entry["role"] for entry in run_log} == {"investigator", "verifier"}
+    assert len(run_log) >= 3
+    by_role = {entry["role"]: entry for entry in run_log}
+    assert by_role["investigator"]["model"] == "scripted-diagnosis"
+    assert by_role["investigator"]["input_tokens"] == 1200
+    assert by_role["investigator"]["output_tokens"] == 150
+    assert by_role["verifier"]["model"] == "scripted-verdict"
+    assert by_role["verifier"]["input_tokens"] == 800
+    assert by_role["verifier"]["output_tokens"] == 50
+    for entry in run_log:
+        assert entry["latency_ms"] >= 0

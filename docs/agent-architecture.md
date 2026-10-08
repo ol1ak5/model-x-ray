@@ -160,6 +160,7 @@ class InvestigationState(TypedDict):
     patch: Patch | None
     verifications: Annotated[list[Verification], merge_verifications]
     evidence: Annotated[list[Evidence], operator.add]
+    run_log: Annotated[list[RunLog], operator.add]
     attempts: int
     report: str | None
     human_decision: HumanDecision | None
@@ -174,6 +175,7 @@ class InvestigationState(TypedDict):
 | `hypotheses` | `merge_by_id` (custom) | The Verifier updates a hypothesis status in place; new ids append; never duplicates |
 | `verifications` | `merge_verifications` (custom) | `test` writes the before/after values part and `verify` completes the same record with checks and verdict: one record per hypothesis, merged by `hypothesis_id` |
 | `evidence` | `operator.add` | Append-only audit trail behind "show me the evidence" |
+| `run_log` | `operator.add` | One entry per LLM call as it happens; token and latency records for the benchmark evaluators, no LangSmith needed |
 | `attempts` | Overwrite | Incremented by `verify` |
 
 The Investigator's tool-calling messages live in the subgraph's private state, so they do not clutter the main conversation.
@@ -192,6 +194,7 @@ Schemas at the boundary: the graph accepts `spreadsheet_id` and `question` (inpu
 | `Verification` | `hypothesis_id`, `before`, `after`, `checks`, `verdict`, `reason` |
 | `Evidence` | `id`, `cell`, `kind` (`anomaly`, `expected_pattern`, `verification`), `text` |
 | `HumanDecision` | `action` (`approve`, `edit`, `reject`), `reason`, `patch` |
+| `RunLog` | `role` (`investigator`, `verifier`, `mapper`, `locate`, `explain`), `model`, `input_tokens`, `output_tokens`, `reasoning_tokens`, `latency_ms` |
 
 Evidence is created by `diagnose` from the run's actual tool results, not from the model's prose: each tool result becomes one record per cell that tool returned (the `ref` argument for single-cell tools, the flagged lines for `find_formula_outliers`, the matches for `find_cells`), with `kind: anomaly` when the output carries a pattern-breaking verdict and `expected_pattern` otherwise. Ids are `ev-<n>` numbered in state order, deduplicated against what is already there, so they stay stable across retries. Every hypothesis links the records whose cell is its own, and `Patch.old_formula` is read from the sheet at diagnosis time, before `test` runs.
 
@@ -273,6 +276,8 @@ Details: #11.
 IDs, context and prices were confirmed with `GET /v1/models` on 6 Oct 2026; all four list `tools` and `reasoning` in `supported_features`. IDs are case-sensitive. Lightning passed every tool-calling and structured-output check in #4 and was the fastest model, so it is the provisional mapper; the decision is confirmed on the real tool schemas (see `docs/research/nemotron-tool-calling.md`). Structured output uses `with_structured_output(..., method="function_calling")`, because the catalog lists no JSON-schema mode.
 
 All run on Nebius Token Factory through LangChain's `ChatOpenAI` with `base_url=https://api.tokenfactory.nebius.com/v1/` and `NEBIUS_API_KEY` from `.env`. The regional `https://api.tokenfactory.us-central1.nebius.com/v1/` also works but lists fewer models (18 vs 25).
+
+Role-to-model mapping lives in one registry in `llm.py` (`ROLE_MODELS`): `investigator`, `verifier` and `locate` → Super, `mapper` → Lightning, `explain` → Super. `build_chat_model(role=...)` resolves a role and is overridable from `.env` with `NEBIUS_MODEL_<ROLE>` (empty means the built-in default); `build_chat_model(model=...)` pins an explicit id, which makes the four-way comparison in `docs/evaluation.md` configuration only. The client sets `timeout=120s` and `max_retries=3` (the OpenAI SDK's exponential backoff covers rate limits and transient errors), and raises a `ValueError` naming the missing variable when `NEBIUS_API_KEY` or `NEBIUS_BASE_URL` is unset. Every LLM call goes through `invoke_with_usage`, which attaches a `UsageRecorder` callback and returns the result together with `RunLog` entries — role, model, input, output and reasoning tokens, latency. The Investigator's `think`/`conclude` and the Verifier append them to `state["run_log"]`, so evaluators get token and latency records without LangSmith.
 
 ## Evaluation
 

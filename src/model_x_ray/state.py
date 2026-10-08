@@ -71,6 +71,15 @@ class HumanDecision(TypedDict):
     patch: Patch | None
 
 
+class RunLog(TypedDict):
+    role: Literal["investigator", "verifier", "mapper", "locate", "explain"]
+    model: str | None
+    input_tokens: int | None
+    output_tokens: int | None
+    reasoning_tokens: int | None
+    latency_ms: float
+
+
 def merge_by_id(left: list[Hypothesis], right: list[Hypothesis]) -> list[Hypothesis]:
     merged = {h["id"]: h for h in left}
     for update in right:
@@ -97,6 +106,7 @@ class InvestigationState(TypedDict):
     patch: Patch | None
     verifications: Annotated[list[Verification], merge_verifications]
     evidence: Annotated[list[Evidence], operator.add]
+    run_log: Annotated[list[RunLog], operator.add]
     attempts: int
     report: str | None
     human_decision: HumanDecision | None
