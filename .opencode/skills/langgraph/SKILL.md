@@ -7,16 +7,16 @@ description: Building the Model X-Ray investigation graph — verified import pa
 
 Model X-Ray's agent graph is LangGraph (`docs/agent-architecture.md` is the authoritative design; this skill covers the API mechanics). Read that doc before changing node wiring.
 
-## Versions verified in this environment (2026-10-06)
+## Versions verified in this environment (2026-10-08)
 
-Installed with `uv run --no-project --with langgraph --with langchain-openai --with langgraph-checkpoint-sqlite`:
+Verified against the project environment with `uv run --with langgraph --with langchain-openai --with langgraph-checkpoint-sqlite`:
 
 | Fact | Value |
 |---|---|
-| langgraph | 1.2.13 |
+| langgraph | 1.2.14 |
 | langchain-openai | 1.6.7 |
 | `SqliteSaver` | **separate package** `langgraph-checkpoint-sqlite` (3.1.1), not in langgraph core |
-| `create_react_agent` | `from langgraph.prebuilt import ToolNode, tools_condition, create_react_agent` — **`langgraph.react_agent` does NOT exist** in 1.2.13 |
+| `create_react_agent` | `from langgraph.prebuilt import ToolNode, tools_condition, create_react_agent` — **`langgraph.react_agent` does NOT exist** in 1.2.14 |
 | `interrupt` / `Command` | `from langgraph.types import interrupt, Command` |
 | `Command` params | `graph`, `update`, `resume`, `goto` |
 | `interrupt` params | `value`, `response_schema` |

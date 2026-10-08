@@ -15,9 +15,9 @@ Also: TDD — write the failing test first, then implement. Modern types only. N
 
 "Deep" means realistic inputs and real orchestration, not live APIs. Layered pattern that stays fast:
 
-1. **Fixture spreadsheets, real parsers** — store small recorded sheets (A1 ranges with formulas, labels, one planted error per scenario) as fixtures. Feed them through the *real* formula parser, dependency graph, contribution math. Never mock the code under test.
-2. **Fake LLM, real graph** — scripted `ChatModel` stub that returns predetermined tool calls / verdicts in sequence. Runs the *actual* LangGraph with interrupts, reducers, conditional edges, retry loop. Assert on state fields (`hypotheses`, `verifications`, `evidence`), not on message text.
-3. **Fake Sandbox, real patch logic** — in-memory `Sandbox` over a fixture sheet that actually recalculates the affected formula (small helper, not a full engine), so before/after values are real numbers.
+1. **Fixture spreadsheets, real parsers** — fixture builders live in `tests/conftest.py` (`write_demo_workbook`, `demo_workbook_path`, `demo_workbook_with_override_note`: a small P&L with formulas, labels, one planted typed value, optional cell notes). Feed them through the *real* formula parser, dependency graph, contribution math. Never mock the code under test.
+2. **Fake LLM, real graph** — scripted `ChatModel` stub that returns predetermined tool calls / verdicts in sequence (`ScriptedDiagnosis`, `OutlierScanner`, `AlwaysCallsATool` in `tests/test_investigator.py`). Runs the *actual* LangGraph with interrupts, reducers, conditional edges, retry loop. Assert on state fields (`hypotheses`, `verifications`, `evidence`), not on message text.
+3. **Real patch logic** — patch a fixture copy with `Workbook.with_patch` and read the recalculated values from the engine, so before/after values are real numbers (the Google sandbox, issue #6, will do the same on a Sheet copy).
 
 ```python
 def test_blended_error_symptom_is_not_cause(fixture_sheet: Workbook, scripted_llm: ChatModel) -> None:
@@ -42,14 +42,14 @@ That one test covers: parser → graph → tool loop → hypothesis merge → ro
 
 ## Live tests
 
-Google API and Token Factory tests are **opt-in**: mark `@pytest.mark.live`, register a `live` marker that skips by default. Unit/deep tests never touch the network — this is also what keeps `uv run pytest` usable offline with a broken scaffold (see `uv` skill for the current `uv run` breakage).
+Google API and Token Factory tests are **opt-in**: mark `@pytest.mark.live`, register a `live` marker that skips by default. Unit/deep tests never touch the network — this is also what keeps `uv run pytest` usable offline.
 
 ## Commands
 
-```sh
-uv run pytest                                  # once pytest is added (issue #4)
-uv run pytest tests/test_graph.py -k blended   # focused
-uv run pytest -m live                          # opt-in network tests
-```
+Exactly as in AGENTS.md §Commands:
 
-No test runner exists yet — adding pytest belongs to issue #4; when it lands, record the exact commands in AGENTS.md §Commands.
+```sh
+uv run pytest                                  # offline, no credits
+uv run pytest path::test_name -k <pattern>     # single test, filtered
+uv run pytest -m live                          # opt-in network tests (spend credits)
+```
