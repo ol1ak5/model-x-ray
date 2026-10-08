@@ -78,6 +78,13 @@ def merge_by_id(left: list[Hypothesis], right: list[Hypothesis]) -> list[Hypothe
     return list(merged.values())
 
 
+def merge_verifications(left: list[Verification], right: list[Verification]) -> list[Verification]:
+    merged = {v["hypothesis_id"]: v for v in left}
+    for update in right:
+        merged[update["hypothesis_id"]] = {**merged.get(update["hypothesis_id"], {}), **update}
+    return list(merged.values())
+
+
 class InvestigationState(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
     spreadsheet_id: str
@@ -88,7 +95,7 @@ class InvestigationState(TypedDict):
     causal_tree: CausalNode | None
     hypotheses: Annotated[list[Hypothesis], merge_by_id]
     patch: Patch | None
-    verifications: Annotated[list[Verification], operator.add]
+    verifications: Annotated[list[Verification], merge_verifications]
     evidence: Annotated[list[Evidence], operator.add]
     attempts: int
     report: str | None

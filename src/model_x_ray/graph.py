@@ -56,6 +56,7 @@ def run_investigation(
     source: SpreadsheetSource,
     sandbox: SandboxWithWrite,
     checkpointer: BaseCheckpointSaver | None = None,
+    verifier: BaseChatModel | None = None,
 ) -> CompiledStateGraph:
     book = source.load(spreadsheet_id)
     investigator = build_investigator(llm, make_read_only_tools(book))
@@ -64,6 +65,8 @@ def run_investigation(
         diagnose=make_diagnose_node(investigator, book),
         overrides={
             "trace": nodes.make_trace_node(book),
+            "test": nodes.make_test_node(source, sandbox),
+            "verify": nodes.make_verify_node(verifier or llm, source),
             "apply_fix": nodes.make_apply_fix_node(sandbox),
         },
     )
