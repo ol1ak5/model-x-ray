@@ -426,3 +426,35 @@ def test_approve_writes_a_corrected_copy_with_a_change_log(demo_workbook_path: P
     assert log_rows[1][1:] == [
         "P&L!H7", "-45.2", "=G7*(1+Assumptions!$C$7)", "P&L!H7 is a typed number, not a formula",
     ]
+
+
+def test_edit_replaces_the_patch_and_reruns_the_sandbox(demo_workbook_path: Path, engine_sandbox, scripted_verdict) -> None:
+    model = ScriptedDiagnosis(turns=[(["P&L!H7"], "P&L!H7")])
+    graph = run_investigation(model, "demo", XlsxSource({"demo": demo_workbook_path}), engine_sandbox, verifier=scripted_verdict)
+    config = {"configurable": {"thread_id": "edit-patch"}}
+
+    graph.invoke({"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump on the P&L sheet?"}, config)
+    assert graph.get_state(config).next == ("human_review",)
+    confirmed_after = graph.get_state(config).values["verifications"][-1]["after"]["P&L!H8"]
+
+    edited = {"cell": "P&L!H7", "old_formula": "-45.2", "new_formula": "=G7*(1+Assumptions!$C$6)", "source": "human"}
+    graph.invoke(Command(resume={"action": "edit", "reason": "use the cost-ratio driver", "patch": edited}), config)
+    state = graph.get_state(config).values
+
+    assert state["patch"] == edited
+    record = state["verifications"][-1]
+    assert record["after"]["P&L!H8"] != confirmed_after
+    patched = load_xlsx(demo_workbook_path).with_patch("P&L!H7", edited["new_formula"])
+    assert record["after"]["P&L!H7"] == pytest.approx(patched.value("P&L!H7"))
+    assert record["after"]["P&L!H8"] == pytest.approx(patched.value("P&L!H8"))
+    assert record["verdict"] == "rejected"
+    assert state["hypotheses"][0]["status"] == "rejected"
+    assert graph.get_state(config).next == ("human_review",)
+
+    graph.invoke(Command(resume={"action": "approve", "reason": "", "patch": None}), config)
+    final = graph.get_state(config).values
+
+    assert final["patch"] == edited
+    assert final["corrected_copy_id"] == "corrected:demo"
+    assert engine_sandbox.writes[0]["patch"]["new_formula"] == edited["new_formula"]
+    assert engine_sandbox.writes[0]["log_rows"][1][3] == edited["new_formula"]

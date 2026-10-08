@@ -57,7 +57,7 @@ flowchart TD
 | `test` | Code | Copies the sheet, applies the patch, reads recalculated values | `verifications` (values part) |
 | `verify` | Code checks + Verifier agent | Deterministic checks, then an independent attempt to disprove the diagnosis | `verifications`, `hypotheses`, `attempts` |
 | `explain` | Code | Evidence-linked report: every cited evidence id resolves in state; an honest "inconclusive" cites nothing | `report` |
-| `human_review` | Interrupt | Approve, edit the fix, or reject with a reason | `human_decision` |
+| `human_review` | Interrupt | Approve, edit the fix, or reject with a reason; an `edit` replaces `patch` with the human's (marked `source: human`) and reopens the last-verified hypothesis so the sandbox re-proves it | `human_decision`, `patch`, `hypotheses` |
 | `apply_fix` | Code | Writes a corrected copy with a `Change log` tab | `corrected_copy_id` |
 
 ### Building the graph
@@ -77,7 +77,7 @@ flowchart TD
 | Decision | Next node | Side effect |
 |---|---|---|
 | `approve` | `apply_fix` | Finding stored in long-term memory |
-| `edit` | `test` | The human's patch replaces the agent's |
+| `edit` | `test` | The human's patch replaces the agent's (marked `source: human`), and the last-verified hypothesis reopens so `test`/`verify` re-prove the edited patch |
 | `reject` | `END` | If the reason is "intentional", an override is stored in long-term memory |
 
 ## Agents
