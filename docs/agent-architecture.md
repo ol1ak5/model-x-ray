@@ -55,7 +55,7 @@ flowchart TD
 | `trace` | Code | Precedents of the target, the contribution of each input to the change, and the causal tree built from them; writes one evidence record per observation (the target anomaly, then each contribution, `anomaly` or `expected_pattern` by the tree's suspicious flag) | `contributions`, `causal_tree`, `evidence` |
 | `diagnose` | Investigator agent (subgraph) | Hypothesis-driven loop over read-only tools (see below), returns ranked hypotheses with evidence and a minimal patch | `hypotheses`, `evidence`, `patch` |
 | `test` | Code | Copies the sheet, applies the patch, reads recalculated values | `verifications` (values part) |
-| `verify` | Code checks + Verifier agent | Deterministic checks, then an independent attempt to disprove the diagnosis | `verifications`, `hypotheses`, `attempts` |
+| `verify` | Code checks + Verifier agent | Deterministic checks, then an independent attempt to disprove the diagnosis; a `confirmed` verdict also writes a `verification` evidence record with the target's sandbox before and after (e.g. `P&L!H8 52.01 -> 44.73 in a sandbox copy after patching P&L!H7`), which `explain` cites as the proof of the fix | `verifications`, `hypotheses`, `evidence`, `attempts` |
 | `explain` | Code | Evidence-linked report: every cited evidence id resolves in state; an honest "inconclusive" cites nothing | `report` |
 | `human_review` | Interrupt | Approve, edit the fix, or reject with a reason; an `edit` replaces `patch` with the human's (marked `source: human`) and reopens the last-verified hypothesis so the sandbox re-proves it | `human_decision`, `patch`, `hypotheses` |
 | `apply_fix` | Code | Writes a corrected copy with a `Change log` tab | `corrected_copy_id` |
@@ -215,6 +215,8 @@ Schemas at the boundary: the graph accepts `spreadsheet_id` and `question` (inpu
 | `Patch` | `cell`, `old_formula`, `new_formula`, `source` (`agent`, `human`) |
 | `Verification` | `hypothesis_id`, `before`, `after`, `checks`, `verdict`, `reason` |
 | `Evidence` | `id`, `cell`, `kind` (`anomaly`, `expected_pattern`, `verification`), `text` |
+
+Evidence ids follow one sequence (`ev-1`, `ev-2`, ...) across trace, the Investigator and verify: each writer starts from `len(state.evidence)`. Records are never overwritten. When a human edits the fix, it is tested and verified again, and the new proof gets the next id; the report cites only the latest proof for the patched cell, while the earlier one stays in the evidence list as history.
 | `HumanDecision` | `action` (`approve`, `edit`, `reject`), `reason`, `patch` |
 | `RunLog` | `role` (`investigator`, `verifier`, `mapper`, `locate`, `explain`), `model`, `input_tokens`, `output_tokens`, `reasoning_tokens`, `latency_ms` |
 
