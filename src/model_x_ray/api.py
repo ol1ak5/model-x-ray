@@ -143,7 +143,10 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
             yield sse("error", {"status": status, "detail": detail})
 
     def build(spreadsheet_id: str) -> CompiledStateGraph:
-        return run_investigation(models.llm, spreadsheet_id, source, sandbox, checkpointer, verifier=models.verifier, locator=models.locator, mapper=models.mapper)
+        try:
+            return run_investigation(models.llm, spreadsheet_id, source, sandbox, checkpointer, verifier=models.verifier, locator=models.locator, mapper=models.mapper)
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from error
 
     def graph_of(investigation_id: str) -> CompiledStateGraph:
         if investigation_id not in graphs:
