@@ -79,8 +79,8 @@ def make_trace_node(book: Workbook) -> Callable[[InvestigationState], dict]:
                 "cell": ref,
                 "kind": "anomaly",
                 "text": (
-                    f"{target['label']} {target['period']} = {target['value']}"
-                    f" versus {target['prior_cell']} = {target['prior_value']}"
+                    f"{target['label']} {target['period']} = {target['value']:.2f}"
+                    f" versus {target['prior_cell']} = {target['prior_value']:.2f}"
                 ),
             },
             *[

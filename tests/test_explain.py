@@ -26,8 +26,8 @@ def test_trace_writes_evidence_for_the_target_and_every_contribution(
         ("ev-2", "P&L!H6", "expected_pattern"),
         ("ev-3", "P&L!H7", "anomaly"),
     ]
-    assert "EBITDA 2027 = 52.0" in state["evidence"][0]["text"]
-    assert "G8 = 40.0" in state["evidence"][0]["text"]
+    assert "EBITDA 2027E = 52.01" in state["evidence"][0]["text"]
+    assert "G8 = 40.03" in state["evidence"][0]["text"]
     assert "Gross profit" in state["evidence"][1]["text"]
     assert "+7.20" in state["evidence"][1]["text"]
     assert "Opex" in state["evidence"][2]["text"]
