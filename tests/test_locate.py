@@ -1,11 +1,6 @@
-from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
 
 import pytest
-from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, BaseMessage
-from langchain_core.outputs import ChatGeneration, ChatResult
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
 
@@ -15,23 +10,11 @@ from model_x_ray.graph import build_graph
 from model_x_ray.llm import build_chat_model
 from model_x_ray.spreadsheet.engine import Workbook
 from model_x_ray.spreadsheet.xlsx import load_xlsx
+from conftest import ScriptedAnswer
 
 
-class ScriptedLocator(BaseChatModel):
-    answer: dict = {}
-    prompts: list[str] = []
-
-    @property
-    def _llm_type(self) -> str:
-        return "scripted-locator"
-
-    def bind_tools(self, tools: Sequence[Any], **kwargs: Any) -> "ScriptedLocator":
-        return self.model_copy(update={"prompts": self.prompts})
-
-    def _generate(self, messages: list[BaseMessage], stop: list[str] | None = None, **kwargs: Any) -> ChatResult:
-        self.prompts.append(messages[-1].content)
-        call = {"name": "LocateRequest", "args": self.answer, "id": "locate"}
-        return ChatResult(generations=[ChatGeneration(message=AIMessage(content="", tool_calls=[call]))])
+def ScriptedLocator(answer: dict | None = None) -> ScriptedAnswer:
+    return ScriptedAnswer(tool="LocateRequest", answer=answer or {})
 
 
 TWO_SHEETS = Workbook({

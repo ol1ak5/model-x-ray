@@ -24,7 +24,12 @@ class XlsxSource:
 
     def load(self, spreadsheet_id: str) -> Workbook:
         if spreadsheet_id not in self._cache:
-            self._cache[spreadsheet_id] = load_xlsx(self._files[spreadsheet_id])
+            path = self._files.get(spreadsheet_id)
+            if path is None:
+                raise ValueError(f"Unknown spreadsheet {spreadsheet_id!r}; known: {', '.join(sorted(self._files)) or 'none'}")
+            if not path.exists():
+                raise ValueError(f"Spreadsheet {spreadsheet_id!r} points to {path.name}, which does not exist")
+            self._cache[spreadsheet_id] = load_xlsx(path)
         return self._cache[spreadsheet_id]
 
     def list_sheets(self, spreadsheet_id: str) -> list[str]:

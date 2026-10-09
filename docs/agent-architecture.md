@@ -49,8 +49,8 @@ flowchart TD
 
 | Node | Kind | What it does | Writes to state |
 |---|---|---|---|
-| `load_sheet` | Code | Reads values, formulas and labels; builds the dependency graph | (graph cached outside state) |
-| `map_model` | Nemotron 3.5 Lightning (Nano fallback) | Labels rows (revenue, opex, totals) and columns (actuals vs forecast); skipped when the map for this sheet revision is in long-term memory | `model_map_ref` |
+| `load_sheet` | Code | The workbook is loaded once through the `SpreadsheetSource` (an unknown id or a missing file raises a clear `ValueError`); the node stops the run when no cell has both a line label and a period header | (workbook cached outside state) |
+| `map_model` | Nemotron 3.5 Lightning (Nano fallback) | Labels every line (`revenue`, `cost`, `subtotal`, `ratio`, `other`) and every period (`actual`, `forecast`); see Model map below | `model_map` |
 | `locate` | Code first, Nemotron Super when needed, then `find_cells` | Turns the question into a target cell and its prior-period cell (see Locate below); calls `interrupt()` when several cells match or none does | `target` |
 | `trace` | Code | Precedents of the target, the contribution of each input to the change, and the causal tree built from them; writes one evidence record per observation (the target anomaly, then each contribution, `anomaly` or `expected_pattern` by the tree's suspicious flag) | `contributions`, `causal_tree`, `evidence` |
 | `diagnose` | Investigator agent (subgraph) | Hypothesis-driven loop over read-only tools (see below), returns ranked hypotheses with evidence and a minimal patch | `hypotheses`, `evidence`, `patch` |
@@ -79,6 +79,17 @@ flowchart TD
 | `approve` | `apply_fix` | Finding stored in long-term memory |
 | `edit` | `test` | The human's patch replaces the agent's (marked `source: human`), and the last-verified hypothesis reopens so `test`/`verify` re-prove the edited patch |
 | `reject` | `END` | If the reason is "intentional", an override is stored in long-term memory |
+
+## Model map
+
+Implementation: `src/model_x_ray/agents/mapper.py`, prompt `prompts/map_model.md`, wired by `run_investigation` when a `mapper` model is passed (the API passes Lightning; without one the map stays empty and every other step still works).
+
+1. **Brief.** The mapper sees the periods and one line per catalogue label: the formula of the line's right-most cell (or "typed number") and the labels of the lines it uses, e.g. `EBITDA: =H6+H7; uses Gross profit, Opex`. Formulas plus the names they use are what an analyst reads to tell a subtotal from a cost.
+2. **One structured call.** `with_structured_output(ModelMapAnswer, method="function_calling")` returns a kind per line and per period.
+3. **Only real names.** Lines and periods that are not in the catalogue are dropped, as in locate.
+4. **Readers.** `locate` adds the actual and forecast periods to its brief, so "next year" resolves even when periods carry no A/E suffix; `investigation_brief` adds the line kinds and period kinds, so the Investigator knows which cells are subtotals and which are forecasts.
+
+Follow-up: cache the map per sheet revision in long-term memory (#11).
 
 ## Locate
 
@@ -163,7 +174,7 @@ class InvestigationState(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
     spreadsheet_id: str
     question: str
-    model_map_ref: str | None
+    model_map: ModelMap | None
     target: TargetCell | None
     contributions: list[Contribution]
     causal_tree: CausalNode | None

@@ -119,3 +119,21 @@ class ScriptedVerdict(BaseChatModel):
 @pytest.fixture
 def scripted_verdict() -> ScriptedVerdict:
     return ScriptedVerdict()
+
+
+class ScriptedAnswer(BaseChatModel):
+    tool: str = ""
+    answer: dict = {}
+    prompts: list[str] = []
+
+    @property
+    def _llm_type(self) -> str:
+        return "scripted-answer"
+
+    def bind_tools(self, tools: Sequence[Any], **kwargs: Any) -> "ScriptedAnswer":
+        return self.model_copy(update={"prompts": self.prompts})
+
+    def _generate(self, messages: list[BaseMessage], stop: list[str] | None = None, **kwargs: Any) -> ChatResult:
+        self.prompts.append(messages[-1].content)
+        call = {"name": self.tool, "args": self.answer, "id": self.tool}
+        return ChatResult(generations=[ChatGeneration(message=AIMessage(content="", tool_calls=[call]))])

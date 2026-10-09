@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from model_x_ray.llm import invoke_with_usage, model_name_of
 from model_x_ray.prompts import load_prompt
 from model_x_ray.spreadsheet.engine import CellAddress, Workbook, make_ref, normalize_ref, split_ref
-from model_x_ray.state import InvestigationState, TargetCell
+from model_x_ray.state import InvestigationState, ModelMap, TargetCell
 from model_x_ray.tools import find_cells
 
 YEAR = re.compile(r"\b(?:19|20)\d{2}\b")
@@ -54,13 +54,18 @@ def read_question(question: str, catalogue: Catalogue) -> LocateRequest | None:
     return LocateRequest(label=labels[0], period=periods[0], sheet=sheets[0] if len(sheets) == 1 else None)
 
 
-def locate_brief(question: str, catalogue: Catalogue) -> str:
-    return "\n".join([
+def locate_brief(question: str, catalogue: Catalogue, model_map: ModelMap | None = None) -> str:
+    lines = [
         f"Question: {question}",
         f"Sheets: {', '.join(catalogue.sheets)}",
         f"Lines: {', '.join(catalogue.labels)}",
         f"Periods: {', '.join(catalogue.periods)}",
-    ])
+    ]
+    if model_map:
+        for kind in ("actual", "forecast"):
+            periods = [c["period"] for c in model_map["columns"] if c["kind"] == kind]
+            lines.append(f"{kind.capitalize()} periods: {', '.join(periods) or 'none'}")
+    return "\n".join(lines)
 
 
 def prior_cell(book: Workbook, ref: str) -> str | None:
@@ -100,7 +105,7 @@ def make_locate_node(llm: BaseChatModel, book: Workbook) -> Callable[[Investigat
         request = read_question(state["question"], catalogue)
         records = []
         if request is None:
-            messages = [system, HumanMessage(content=locate_brief(state["question"], catalogue))]
+            messages = [system, HumanMessage(content=locate_brief(state["question"], catalogue, state.get("model_map")))]
             request, records = invoke_with_usage(structured, messages, role="locate", model=model_name_of(llm))
         candidates = find_cells(book, request.label, request.period) if request.label in catalogue.labels else []
         if request.sheet:
