@@ -24,7 +24,7 @@ The API wraps the investigation graph so the React app (#74) can start an invest
 Every endpoint answers with the same JSON, built by `investigation_view` from the graph's checkpoint:
 
 - `id`: also the LangGraph `thread_id`, so one investigation is one thread.
-- `status`: `needs_cell` (paused in `locate`), `needs_review` (paused in `human_review`) or `done`.
+- `status`: `needs_cell` (paused in `choose_target`), `needs_review` (paused in `human_review`) or `done`.
 - `pause`: the value the graph passed to `interrupt()`: the question and candidate cells, or the report and patch to approve. `null` when not paused.
 - The public state fields: `question`, `target`, `causal_tree`, `hypotheses`, `evidence`, `verifications`, `patch`, `report`, `corrected_copy_id`, `run_log`. LangChain messages are never sent.
 

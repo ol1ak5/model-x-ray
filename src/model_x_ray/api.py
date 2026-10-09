@@ -59,7 +59,7 @@ class ResumeRequest(BaseModel):
 def investigation_view(graph: CompiledStateGraph, investigation_id: str) -> dict:
     snapshot = graph.get_state({"configurable": {"thread_id": investigation_id}})
     pauses = [interrupt.value for task in snapshot.tasks for interrupt in task.interrupts]
-    if "locate" in snapshot.next:
+    if "choose_target" in snapshot.next:
         status = "needs_cell"
     elif "human_review" in snapshot.next:
         status = "needs_review"

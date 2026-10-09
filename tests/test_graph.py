@@ -98,7 +98,7 @@ def test_ambiguous_question_pauses_until_the_user_picks_a_cell() -> None:
 
     paused = graph.invoke({"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump?"}, config)
 
-    assert graph.get_state(config).next == ("locate",)
+    assert graph.get_state(config).next == ("choose_target",)
     assert paused["__interrupt__"][0].value["candidates"] == ["P&L!H8", "Summary!D10"]
 
     graph.invoke(Command(resume={"ref": "Summary!D10"}), config)
