@@ -30,7 +30,7 @@ event: step
 data: {"step": "locate", "label": "Finding the cell"}
 
 event: step
-data: {"step": "diagnose", "label": "Investigating the suspects"}
+data: {"step": "diagnose", "label": "Looking for the root cause"}
 
 event: view
 data: {"id": "...", "status": "needs_review", ...}
