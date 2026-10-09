@@ -25,7 +25,7 @@ logger = logging.getLogger("model_x_ray.api")
 
 STEP_LABELS = {
     "load_sheet": "Reading the workbook",
-    "map_model": "Reading the model's layout",
+    "map_model": "Understanding the model's layout",
     "locate": "Finding the cell",
     "trace": "Tracing the formulas",
     "diagnose": "Looking for the root cause",
