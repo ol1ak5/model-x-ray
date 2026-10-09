@@ -104,6 +104,10 @@ def investigation_brief(state: InvestigationState) -> str:
         f"Question: {state['question']}",
         f"Target: {target['sheet']}!{target['cell']} ({target['label']} {target['period']}) = {target['value']}, prior period {target['prior_cell']} = {target['prior_value']}",
     ]
+    model_map = state.get("model_map")
+    if model_map:
+        lines.append("Model map: " + ", ".join(f"{r['label']} ({r['kind']})" for r in model_map["rows"]))
+        lines.append("Periods: " + ", ".join(f"{c['period']} ({c['kind']})" for c in model_map["columns"]))
     lines += [f"Contribution: {c['cell']} {c['label']} {c['delta']:+}" for c in state.get("contributions", [])]
     tree = state.get("causal_tree")
     if tree:

@@ -15,6 +15,21 @@ class TargetCell(TypedDict):
     prior_value: float
 
 
+class RowRole(TypedDict):
+    label: str
+    kind: Literal["revenue", "cost", "subtotal", "ratio", "other"]
+
+
+class ColumnRole(TypedDict):
+    period: str
+    kind: Literal["actual", "forecast"]
+
+
+class ModelMap(TypedDict):
+    rows: list[RowRole]
+    columns: list[ColumnRole]
+
+
 class Contribution(TypedDict):
     cell: str
     label: str
@@ -98,7 +113,7 @@ class InvestigationState(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
     spreadsheet_id: str
     question: str
-    model_map_ref: str | None
+    model_map: ModelMap | None
     target: TargetCell | None
     contributions: list[Contribution]
     causal_tree: CausalNode | None

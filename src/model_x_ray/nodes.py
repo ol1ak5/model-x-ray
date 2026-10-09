@@ -17,8 +17,18 @@ def load_sheet(state: InvestigationState) -> dict:
     return {}
 
 
+def make_load_sheet_node(book: Workbook) -> Callable[[InvestigationState], dict]:
+    def load_sheet_node(state: InvestigationState) -> dict:
+        readable = any(book.row_label(ref) and book.column_header(ref) for ref in book.cells())
+        if not readable:
+            raise ValueError(f"Spreadsheet {state['spreadsheet_id']!r} has no lines with a label on the left and a period header above, so Model X-Ray cannot read it")
+        return {}
+
+    return load_sheet_node
+
+
 def map_model(state: InvestigationState) -> dict:
-    return {"model_map_ref": f"map:{state['spreadsheet_id']}"}
+    return {"model_map": None}
 
 
 STUB_CELLS: list[TargetCell] = [
