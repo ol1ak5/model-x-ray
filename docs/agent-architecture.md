@@ -51,7 +51,7 @@ flowchart TD
 |---|---|---|---|
 | `load_sheet` | Code | Reads values, formulas and labels; builds the dependency graph | (graph cached outside state) |
 | `map_model` | Nemotron 3.5 Lightning (Nano fallback) | Labels rows (revenue, opex, totals) and columns (actuals vs forecast); skipped when the map for this sheet revision is in long-term memory | `model_map_ref` |
-| `locate` | Nemotron Super + `find_cells` | Turns the question into a target cell and comparison period; calls `interrupt()` if several cells match | `target`, `messages` |
+| `locate` | Code first, Nemotron Super when needed, then `find_cells` | Turns the question into a target cell and its prior-period cell (see Locate below); calls `interrupt()` when several cells match or none does | `target` |
 | `trace` | Code | Precedents of the target, the contribution of each input to the change, and the causal tree built from them; writes one evidence record per observation (the target anomaly, then each contribution, `anomaly` or `expected_pattern` by the tree's suspicious flag) | `contributions`, `causal_tree`, `evidence` |
 | `diagnose` | Investigator agent (subgraph) | Hypothesis-driven loop over read-only tools (see below), returns ranked hypotheses with evidence and a minimal patch | `hypotheses`, `evidence`, `patch` |
 | `test` | Code | Copies the sheet, applies the patch, reads recalculated values | `verifications` (values part) |
@@ -79,6 +79,17 @@ flowchart TD
 | `approve` | `apply_fix` | Finding stored in long-term memory |
 | `edit` | `test` | The human's patch replaces the agent's (marked `source: human`), and the last-verified hypothesis reopens so `test`/`verify` re-prove the edited patch |
 | `reject` | `END` | If the reason is "intentional", an override is stored in long-term memory |
+
+## Locate
+
+Implementation: `src/model_x_ray/agents/locator.py`, prompt `prompts/locate.md`, wired by `run_investigation` (optional `locator` model, defaulting to the main model).
+
+1. **Catalogue.** From the workbook, collect the sheets, the line labels (row labels of cells that have a period header) and the periods (column headers).
+2. **Cheap path, no LLM.** If exactly one catalogue line and exactly one period (by year) appear in the question, use them directly; a sheet named in the question narrows the search. Most questions ("Why did EBITDA jump in 2027?") never call a model.
+3. **Nemotron path.** Otherwise Nemotron receives the question plus the catalogue and returns a `LocateRequest` (`label`, `period`, optional `sheet`) chosen only from the catalogue. The prompt maps analyst wording to lines ("operating profit before D&A" is EBITDA) and fixes relative periods: periods ending in A are actuals, E are estimates; "this year" is the first estimate period, "next year" the one after, "last year" the latest actual.
+4. **Lookup in code.** `find_cells(label, period)` returns the real cells. One match becomes the target; its prior cell is the nearest cell to the left in the same row that has a period header. Several matches pause with the candidates; no match pauses with an empty list and asks for the cell. The user resumes with `Command(resume={"ref": "Sheet!Cell"})`.
+
+Nemotron never writes a cell address: it can only pick names that exist, and code turns them into cells.
 
 ## Agents
 
