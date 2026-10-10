@@ -1,9 +1,14 @@
 import os
 import re
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Protocol
+from uuid import uuid4
+
+import openpyxl
 
 from model_x_ray.spreadsheet.engine import Workbook, column_letters, normalize_ref, split_ref
-from model_x_ray.spreadsheet.source import SpreadsheetSource
+from model_x_ray.spreadsheet.source import SpreadsheetSource, XlsxSource
 from model_x_ray.state import Patch
 
 FOLDER_MIME = "application/vnd.google-apps.folder"
@@ -133,3 +138,49 @@ class GoogleSandbox:
             body={"values": log_rows},
         ).execute()
         return copy_id
+
+
+def cell_content(text: str) -> float | str:
+    try:
+        return float(text)
+    except ValueError:
+        return text
+
+
+class XlsxSandbox:
+    def __init__(self, source: XlsxSource, output_dir: Path) -> None:
+        self._source = source
+        self._output_dir = output_dir
+        self._copies: dict[str, Workbook] = {}
+
+    def open_copies(self) -> int:
+        return len(self._copies)
+
+    def create_copy(self, spreadsheet_id: str) -> str:
+        copy_id = uuid4().hex
+        self._copies[copy_id] = self._source.load(spreadsheet_id)
+        return copy_id
+
+    def apply_patch(self, copy_id: str, patch: Patch) -> None:
+        self._copies[copy_id] = self._copies[copy_id].with_patch(patch["cell"], cell_content(patch["new_formula"]))
+
+    def read_values(self, copy_id: str, cells: list[str]) -> dict[str, object]:
+        return {cell: self._copies[copy_id].value(cell) for cell in cells}
+
+    def discard(self, copy_id: str) -> None:
+        self._copies.pop(copy_id, None)
+
+    def write_corrected_copy(self, spreadsheet_id: str, patch: Patch, log_rows: list[list[object]]) -> str:
+        book = openpyxl.load_workbook(self._source.path_of(spreadsheet_id))
+        sheet, address = split_ref(normalize_ref(patch["cell"]))
+        book[sheet].cell(row=address.row, column=address.column).value = cell_content(patch["new_formula"])
+        if CHANGE_LOG_SHEET in book.sheetnames:
+            del book[CHANGE_LOG_SHEET]
+        log = book.create_sheet(CHANGE_LOG_SHEET)
+        for row in log_rows:
+            log.append(row)
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        name = f"{spreadsheet_id}-corrected-{stamp}-{uuid4().hex[:6]}.xlsx"
+        self._output_dir.mkdir(parents=True, exist_ok=True)
+        book.save(self._output_dir / name)
+        return name
