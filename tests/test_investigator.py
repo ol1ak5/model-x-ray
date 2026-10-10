@@ -333,7 +333,8 @@ def test_investigator_finds_the_planted_typed_value_through_the_real_tools(demo_
     assert patch["old_formula"] == "-45.2"
 
     evidence_by_id = {e["id"]: e for e in state["evidence"]}
-    assert [e["id"] for e in state["evidence"]] == ["ev-1", "ev-2", "ev-3", "ev-4", "ev-5"]
+    assert [e["id"] for e in state["evidence"]] == ["ev-1", "ev-2", "ev-3", "ev-4", "ev-5", "ev-6"]
+    assert [e["kind"] for e in state["evidence"]][-1] == "verification"
     assert [e["cell"] for e in state["evidence"][:3]] == ["P&L!H8", "P&L!H6", "P&L!H7"]
     assert all(e["cell"] == "P&L!H7" for e in state["evidence"][3:])
     assert any(e["kind"] == "anomaly" for e in state["evidence"])

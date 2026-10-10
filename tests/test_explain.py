@@ -1,6 +1,7 @@
 import re
 from pathlib import Path
 
+from langgraph.types import Command
 from test_investigator import ScriptedDiagnosis
 
 from model_x_ray.graph import run_investigation
@@ -25,6 +26,7 @@ def test_trace_writes_evidence_for_the_target_and_every_contribution(
         ("ev-1", "P&L!H8", "anomaly"),
         ("ev-2", "P&L!H6", "expected_pattern"),
         ("ev-3", "P&L!H7", "anomaly"),
+        ("ev-4", "P&L!H7", "verification"),
     ]
     assert "EBITDA 2027E = 52.01" in state["evidence"][0]["text"]
     assert "G8 = 40.03" in state["evidence"][0]["text"]
@@ -55,6 +57,8 @@ def test_explain_cites_only_ids_that_resolve_in_state(
     assert set(cited) <= known
     assert "ev-1" in cited, "the target anomaly backs the movement claim"
     assert "ev-3" in cited, "the H7 evidence backs the root cause claim"
+    assert "ev-4" in cited, "the sandbox proof backs the fix"
+    assert state["evidence"][3]["text"] == "P&L!H8 52.01 -> 44.73 in a sandbox copy after patching P&L!H7"
     assert report.endswith(".")
 
 
@@ -74,3 +78,26 @@ def test_explain_reports_inconclusive_without_citing_anything(
     assert state["report"] == "Inconclusive: no hypothesis survived verification."
     assert re.findall(r"ev-\d+", state["report"]) == []
     assert state["evidence"], "trace evidence exists even when the run fails"
+    assert [e for e in state["evidence"] if e["kind"] == "verification"] == []
+
+
+def test_a_human_edit_is_proven_again_with_a_new_verification_record(
+    demo_workbook_path: Path, engine_sandbox, scripted_verdict,
+) -> None:
+    model = ScriptedDiagnosis(turns=[(["P&L!H7"], "P&L!H7")])
+    graph = run_investigation(
+        model, "demo", XlsxSource({"demo": demo_workbook_path}), engine_sandbox, verifier=scripted_verdict,
+    )
+    config = {"configurable": {"thread_id": "edit-reverified"}}
+
+    graph.invoke({"spreadsheet_id": "demo", "question": QUESTION}, config)
+    edited = {"cell": "P&L!H7", "old_formula": "-45.2", "new_formula": "=G7*(1+Assumptions!$C$7)"}
+    graph.invoke(Command(resume={"action": "edit", "reason": "same fix, written by me", "patch": edited}), config)
+    state = graph.get_state(config).values
+
+    ids = [e["id"] for e in state["evidence"]]
+    assert len(ids) == len(set(ids))
+    proofs = [e["id"] for e in state["evidence"] if e["kind"] == "verification"]
+    assert proofs == ["ev-4", "ev-5"]
+    assert "ev-5" in state["report"] and "ev-4" not in state["report"]
+    assert graph.get_state(config).next == ("human_review",)

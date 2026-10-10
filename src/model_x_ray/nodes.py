@@ -10,7 +10,7 @@ from model_x_ray.llm import model_name_of
 from model_x_ray.spreadsheet.engine import Workbook
 from model_x_ray.spreadsheet.sandbox import Sandbox, SandboxWithWrite, run_sandbox_test
 from model_x_ray.spreadsheet.source import SpreadsheetSource
-from model_x_ray.state import CausalNode, Hypothesis, InvestigationState, RunLog, TargetCell
+from model_x_ray.state import CausalNode, Evidence, Hypothesis, InvestigationState, RunLog, TargetCell, Verification
 
 
 def load_sheet(state: InvestigationState) -> dict:
@@ -183,6 +183,20 @@ def make_test_node(source: SpreadsheetSource, sandbox: Sandbox) -> Callable[[Inv
     return test_node
 
 
+def sandbox_proof(state: InvestigationState, verification: Verification) -> Evidence:
+    target = state["target"]
+    target_ref = f"{target['sheet']}!{target['cell']}"
+    patched = state["patch"]["cell"]
+    before = verification["before"][target_ref]
+    after = verification["after"][target_ref]
+    return {
+        "id": f"ev-{len(state.get('evidence', [])) + 1}",
+        "cell": patched,
+        "kind": "verification",
+        "text": f"{target_ref} {before:.2f} -> {after:.2f} in a sandbox copy after patching {patched}",
+    }
+
+
 def make_verify_node(llm: BaseChatModel, source: SpreadsheetSource) -> Callable[[InvestigationState], dict]:
     verifier = build_verifier(llm)
     model_name = model_name_of(llm)
@@ -224,6 +238,7 @@ def make_verify_node(llm: BaseChatModel, source: SpreadsheetSource) -> Callable[
                 "reason": reason,
             }],
             "hypotheses": [{"id": hypothesis["id"], "status": "confirmed" if final == "confirmed" else "rejected"}],
+            "evidence": [sandbox_proof(state, verification)] if final == "confirmed" else [],
             "attempts": attempts,
             "run_log": records,
         }
@@ -242,7 +257,7 @@ def _citations(state: InvestigationState, hypothesis: Hypothesis | None) -> list
     if hypothesis and hypothesis["evidence_ids"]:
         return list(hypothesis["evidence_ids"])
     if hypothesis:
-        same_cell = [record["id"] for record in evidence if record["cell"] == hypothesis["cell"]]
+        same_cell = [record["id"] for record in evidence if record["cell"] == hypothesis["cell"] and record["kind"] != "verification"]
         if same_cell:
             return same_cell
     return [record["id"] for record in evidence if record["kind"] == "anomaly"][:1]
@@ -278,6 +293,9 @@ def make_explain_node() -> Callable[[InvestigationState], dict]:
             parts.append(f"Root cause found in {cell}: {claim} (evidence: {', '.join(citations)}).")
         else:
             parts.append(f"Root cause found in {cell}: {claim}.")
+        proofs = [e for e in state.get("evidence", []) if e["kind"] == "verification" and e["cell"] == cell]
+        if proofs:
+            parts.append(f"The fix was tested: {proofs[-1]['text']} ({proofs[-1]['id']}).")
         return {"report": " ".join(parts)}
 
     return explain_node
