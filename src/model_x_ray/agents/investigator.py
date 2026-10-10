@@ -104,6 +104,8 @@ def investigation_brief(state: InvestigationState) -> str:
         f"Question: {state['question']}",
         f"Target: {target['sheet']}!{target['cell']} ({target['label']} {target['period']}) = {target['value']}, prior period {target['prior_cell']} = {target['prior_value']}",
     ]
+    lines += [f"Marked intentional by a reviewer, do not propose: {o['cell']} ({o['reason']})" for o in state.get("known_overrides", [])]
+    lines += [f"Fixed before on this model: {f['cell']} {f['error_type']}, {f['old_formula']} -> {f['new_formula']}" for f in state.get("past_findings", [])]
     model_map = state.get("model_map")
     if model_map:
         lines.append("Model map: " + ", ".join(f"{r['label']} ({r['kind']})" for r in model_map["rows"]))
@@ -179,7 +181,8 @@ def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook) -> Call
         all_evidence = [*existing, *new_evidence]
         currently_open = sum(1 for h in state.get("hypotheses", []) if h["status"] == "open")
         budget = max(0, MAX_OPEN_HYPOTHESES - currently_open)
-        proposed = diagnosis.hypotheses[:budget]
+        intentional = {o["cell"] for o in state.get("known_overrides", [])}
+        proposed = [h for h in diagnosis.hypotheses if full_ref(h.cell, sheet) not in intentional][:budget]
         first_number = len(state.get("hypotheses", [])) + 1
         hypotheses = []
         for i, h in enumerate(proposed):
@@ -194,7 +197,7 @@ def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook) -> Call
                 "status": "open",
             })
         patch = None
-        if diagnosis.patch is not None:
+        if diagnosis.patch is not None and full_ref(diagnosis.patch.cell, sheet) not in intentional:
             patch_cell = full_ref(diagnosis.patch.cell, sheet)
             patch = {"cell": patch_cell, "old_formula": old_formula(book, patch_cell), "new_formula": diagnosis.patch.new_formula, "source": "agent"}
         return {"hypotheses": hypotheses, "evidence": new_evidence, "patch": patch, "run_log": result.get("run_log", [])}

@@ -7,6 +7,7 @@ from langgraph.types import interrupt
 from model_x_ray import causal
 from model_x_ray.agents.verifier import build_verifier, deterministic_checks, invoke_verifier
 from model_x_ray.llm import model_name_of
+from model_x_ray.memory import ModelMemory
 from model_x_ray.spreadsheet.engine import Workbook
 from model_x_ray.spreadsheet.sandbox import Sandbox, SandboxWithWrite, run_sandbox_test
 from model_x_ray.spreadsheet.source import SpreadsheetSource
@@ -17,12 +18,14 @@ def load_sheet(state: InvestigationState) -> dict:
     return {}
 
 
-def make_load_sheet_node(book: Workbook) -> Callable[[InvestigationState], dict]:
+def make_load_sheet_node(book: Workbook, memory: ModelMemory | None = None) -> Callable[[InvestigationState], dict]:
     def load_sheet_node(state: InvestigationState) -> dict:
         readable = any(book.row_label(ref) and book.column_header(ref) for ref in book.cells())
         if not readable:
             raise ValueError(f"Spreadsheet {state['spreadsheet_id']!r} has no lines with a label on the left and a period header above, so Model X-Ray cannot read it")
-        return {}
+        if memory is None:
+            return {}
+        return {"known_overrides": memory.overrides(state["spreadsheet_id"], book), "past_findings": memory.findings(state["spreadsheet_id"])}
 
     return load_sheet_node
 
@@ -312,6 +315,29 @@ def human_review(state: InvestigationState) -> dict:
         if reopen_id and reopen_id in {h["id"] for h in state.get("hypotheses", [])}:
             update["hypotheses"] = [{"id": reopen_id, "status": "open"}]
     return update
+
+
+def make_human_review_node(book: Workbook, memory: ModelMemory | None) -> Callable[[InvestigationState], dict]:
+    def human_review_node(state: InvestigationState) -> dict:
+        update = human_review(state)
+        if memory is not None:
+            remember_decision(memory, book, state, update["human_decision"])
+        return update
+
+    return human_review_node
+
+
+def remember_decision(memory: ModelMemory, book: Workbook, state: InvestigationState, decision: dict) -> None:
+    patch = state.get("patch")
+    hypotheses = state.get("hypotheses", [])
+    cell = patch["cell"] if patch else (hypotheses[-1]["cell"] if hypotheses else None)
+    if cell is None:
+        return
+    if decision.get("action") == "reject" and decision.get("intentional"):
+        memory.add_override(state["spreadsheet_id"], {"cell": cell, "content": str(book.raw(cell)), "reason": decision.get("reason", "")})
+    if decision.get("action") == "approve" and patch is not None:
+        error_type = next((h["error_type"] for h in hypotheses if h["cell"] == cell and h["status"] == "confirmed"), "")
+        memory.add_finding(state["spreadsheet_id"], {"cell": cell, "error_type": error_type, "old_formula": patch["old_formula"], "new_formula": patch["new_formula"]})
 
 
 def apply_fix(state: InvestigationState) -> dict:
