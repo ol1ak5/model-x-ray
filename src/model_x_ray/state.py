@@ -35,6 +35,19 @@ class CellChoice(TypedDict):
     candidates: list[str]
 
 
+class Override(TypedDict):
+    cell: str
+    content: str
+    reason: str
+
+
+class Finding(TypedDict):
+    cell: str
+    error_type: str
+    old_formula: str
+    new_formula: str
+
+
 class Contribution(TypedDict):
     cell: str
     label: str
@@ -119,6 +132,8 @@ class InvestigationState(TypedDict):
     spreadsheet_id: str
     question: str
     model_map: ModelMap | None
+    known_overrides: list[Override]
+    past_findings: list[Finding]
     target: TargetCell | None
     cell_choice: CellChoice | None
     contributions: list[Contribution]

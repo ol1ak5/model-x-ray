@@ -21,6 +21,7 @@ The first command fills `models/` with the clean base model and planted-error va
 | `MODEL_X_RAY_OUTPUT_DIR` | `corrected` | Where approved corrected copies are saved |
 | `MODEL_X_RAY_CHECKPOINTS` | `checkpoints.db` | SQLite checkpointer file (Postgres on Supabase in the deployed app, #72) |
 | `MODEL_X_RAY_ALLOWED_ORIGINS` | `http://localhost:5173` | Comma-separated web addresses allowed to call the API from a browser (CORS): the React dev server, then the Vercel URL |
+| `MODEL_X_RAY_MEMORY` | `memory.db` | SQLite long-term memory: model maps, intentional overrides, past fixes (Postgres on Supabase in the deployed app, #72) |
 | `DEMO_MAX_PER_VISITOR` / `DEMO_MAX_PER_DAY` | `5` / `100` | The usage cap |
 
 Models come from the role registry: Super for the Investigator, Verifier and locate, Lightning for the mapper.
@@ -41,7 +42,7 @@ Models come from the role registry: Super for the Investigator, Verifier and loc
 | `GET /spreadsheets` | | The models that can be investigated: `[{"id", "sheets"}]` |
 | `GET /investigations/{id}` | | The investigation view |
 | `GET /investigations/{id}/corrected` | | The corrected `.xlsx` after approval (404 before) |
-| `POST /investigations/{id}/resume` | A cell choice `{"ref": "P&L!H8"}` or a decision `{"action": "approve" \| "edit" \| "reject", "reason", "patch"}` | The investigation view after the graph continued |
+| `POST /investigations/{id}/resume` | A cell choice `{"ref": "P&L!H8"}` or a decision `{"action": "approve" \| "edit" \| "reject", "reason", "patch", "intentional"}` (`intentional: true` with `reject` remembers the cell as deliberate, see `docs/agent-architecture.md` §Memory) | The investigation view after the graph continued |
 | `POST /investigations/stream` | Same as `POST /investigations` | A live stream of progress events, then the view |
 | `POST /investigations/{id}/resume/stream` | Same as `resume` | A live stream of progress events, then the view |
 
@@ -72,7 +73,7 @@ Every endpoint answers with the same JSON, built by `investigation_view` from th
 - `id`: also the LangGraph `thread_id`, so one investigation is one thread.
 - `status`: `needs_cell` (paused in `choose_target`), `needs_review` (paused in `human_review`) or `done`.
 - `pause`: the value the graph passed to `interrupt()`: the question and candidate cells, or the report and patch to approve. `null` when not paused.
-- The public state fields: `question`, `target`, `causal_tree`, `hypotheses`, `evidence`, `verifications`, `patch`, `report`, `corrected_copy_id`, `run_log`. LangChain messages are never sent.
+- The public state fields: `question`, `model_map`, `known_overrides`, `past_findings`, `target`, `causal_tree`, `hypotheses`, `evidence`, `verifications`, `patch`, `report`, `corrected_copy_id`, `run_log`. LangChain messages are never sent.
 
 ## Errors
 

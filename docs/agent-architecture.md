@@ -293,7 +293,15 @@ Both pauses use `interrupt()` inside the node and resume with `Command(resume=..
 | Short-term | Checkpointer (`SqliteSaver`), one `thread_id` per investigation | Full state after every node: enables pause and resume for the human, and time travel for debugging |
 | Long-term | LangGraph Store | `("models", spreadsheet_id)`: model map per sheet revision. `("findings", spreadsheet_id)`: confirmed fixes. `("overrides", spreadsheet_id)`: cells a human marked as intentional, read by the Investigator so they are not flagged again |
 
-Details: #11.
+Implementation: `ModelMemory` in `src/model_x_ray/memory.py`, a thin layer over any LangGraph `BaseStore`, passed as `store=` to `run_investigation` and `create_app`. Tests use `InMemoryStore`, local runs `sqlite_store("memory.db")`, the deployed app `PostgresStore` on Supabase (#72). Without a store the agent works as before and remembers nothing.
+
+| Memory | Written when | Read by | Rule |
+|---|---|---|---|
+| Model map (`models`) | `map_model` builds a map | `map_model`, before calling Lightning | Keyed by `Workbook.revision()`, a hash of every cell's content: the same file never pays for a second map; any edit makes a new revision and a fresh map |
+| Overrides (`overrides`) | The reviewer rejects with `"intentional": true` (the patched cell, its content at that moment, and the reason) | `load_sheet` puts the still-valid ones in `state.known_overrides`; the Investigator's brief lists them ("Marked intentional by a reviewer, do not propose: ..."), and `diagnose` drops any hypothesis or patch on those cells | An override only holds while the cell's content is unchanged: if someone edits the cell, it can be flagged again |
+| Findings (`findings`) | The reviewer approves a fix (cell, error type, old and new formula) | `load_sheet` → `state.past_findings`; the brief lists them ("Fixed before on this model: ...") as a hint | A hint only: the original file still holds the error after a fix, because the fix goes into a corrected copy |
+
+A plain rejection (without `intentional`) writes nothing: "not convinced" is not the same as "this is deliberate". Writes happen in `human_review` after the user's answer, so they run once even though `interrupt()` re-runs the node.
 
 ## Models
 

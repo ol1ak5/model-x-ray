@@ -6,7 +6,7 @@ from fastapi import FastAPI
 
 from model_x_ray.api import AgentModels, UsageCap, create_app
 from model_x_ray.llm import build_chat_model
-from model_x_ray.memory import sqlite_checkpointer
+from model_x_ray.memory import sqlite_checkpointer, sqlite_store
 from model_x_ray.spreadsheet.sandbox import XlsxSandbox
 from model_x_ray.spreadsheet.source import XlsxSource
 
@@ -32,4 +32,5 @@ def app_from_env() -> FastAPI:
     checkpointer = sqlite_checkpointer(setting("MODEL_X_RAY_CHECKPOINTS", "checkpoints.db"))
     cap = UsageCap(per_visitor=int(setting("DEMO_MAX_PER_VISITOR", "5")), total=int(setting("DEMO_MAX_PER_DAY", "100")))
     origins = [origin.strip() for origin in setting("MODEL_X_RAY_ALLOWED_ORIGINS", "http://localhost:5173").split(",") if origin.strip()]
-    return create_app(source, sandbox, models, checkpointer, cap, origins)
+    store = sqlite_store(setting("MODEL_X_RAY_MEMORY", "memory.db"))
+    return create_app(source, sandbox, models, checkpointer, cap, origins, store)

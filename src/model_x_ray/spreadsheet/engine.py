@@ -1,3 +1,4 @@
+import hashlib
 import re
 from collections import deque
 from collections.abc import Callable, Iterator
@@ -287,6 +288,10 @@ class Workbook:
 
     def cells(self) -> list[str]:
         return list(self._cells)
+
+    def revision(self) -> str:
+        content = "\n".join(f"{ref}={self._cells[ref]!r}" for ref in sorted(self._cells))
+        return hashlib.sha256(content.encode()).hexdigest()[:16]
 
     def raw(self, ref: str) -> CellContent | None:
         return self._cells.get(normalize_ref(ref))

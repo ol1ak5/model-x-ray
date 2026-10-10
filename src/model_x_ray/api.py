@@ -14,6 +14,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from langchain_core.language_models import BaseChatModel
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph.state import CompiledStateGraph
+from langgraph.store.base import BaseStore
 from langgraph.types import Command
 from pydantic import BaseModel
 
@@ -41,7 +42,7 @@ XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.s
 
 GENERIC_FAILURE = "Something went wrong during the investigation. The team has the details; please try again."
 
-PUBLIC_FIELDS = ("question", "target", "causal_tree", "hypotheses", "evidence", "verifications", "patch", "report", "corrected_copy_id", "run_log")
+PUBLIC_FIELDS = ("question", "model_map", "known_overrides", "past_findings", "target", "causal_tree", "hypotheses", "evidence", "verifications", "patch", "report", "corrected_copy_id", "run_log")
 
 
 @dataclass
@@ -81,6 +82,7 @@ class ResumeRequest(BaseModel):
     action: Literal["approve", "edit", "reject"] | None = None
     reason: str = ""
     patch: dict[str, Any] | None = None
+    intentional: bool = False
 
 
 def friendly_error(error: Exception) -> tuple[int, str]:
@@ -125,7 +127,7 @@ def investigation_view(graph: CompiledStateGraph, investigation_id: str) -> dict
     return {"id": investigation_id, "status": status, "pause": pauses[0] if pauses else None, **{name: values.get(name) for name in PUBLIC_FIELDS}}
 
 
-def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: AgentModels, checkpointer: BaseCheckpointSaver, cap: UsageCap, allowed_origins: list[str] | None = None) -> FastAPI:
+def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: AgentModels, checkpointer: BaseCheckpointSaver, cap: UsageCap, allowed_origins: list[str] | None = None, store: BaseStore | None = None) -> FastAPI:
     app = FastAPI(title="Model X-Ray")
     app.add_middleware(CORSMiddleware, allow_origins=allowed_origins or [], allow_methods=["GET", "POST"], allow_headers=["Content-Type"])
     graphs: dict[str, CompiledStateGraph] = {}
@@ -148,7 +150,7 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
 
     def build(spreadsheet_id: str) -> CompiledStateGraph:
         try:
-            return run_investigation(models.llm, spreadsheet_id, source, sandbox, checkpointer, verifier=models.verifier, locator=models.locator, mapper=models.mapper)
+            return run_investigation(models.llm, spreadsheet_id, source, sandbox, checkpointer, verifier=models.verifier, locator=models.locator, mapper=models.mapper, store=store)
         except ValueError as error:
             raise HTTPException(400, str(error)) from error
 
