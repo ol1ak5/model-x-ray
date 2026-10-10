@@ -9,7 +9,8 @@ from uuid import uuid4
 import openai
 import pydantic
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from langchain_core.language_models import BaseChatModel
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph.state import CompiledStateGraph
@@ -35,6 +36,8 @@ STEP_LABELS = {
     "human_review": "Saving the decision",
     "apply_fix": "Saving a new version",
 }
+
+XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 GENERIC_FAILURE = "Something went wrong during the investigation. The team has the details; please try again."
 
@@ -122,8 +125,9 @@ def investigation_view(graph: CompiledStateGraph, investigation_id: str) -> dict
     return {"id": investigation_id, "status": status, "pause": pauses[0] if pauses else None, **{name: values.get(name) for name in PUBLIC_FIELDS}}
 
 
-def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: AgentModels, checkpointer: BaseCheckpointSaver, cap: UsageCap) -> FastAPI:
+def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: AgentModels, checkpointer: BaseCheckpointSaver, cap: UsageCap, allowed_origins: list[str] | None = None) -> FastAPI:
     app = FastAPI(title="Model X-Ray")
+    app.add_middleware(CORSMiddleware, allow_origins=allowed_origins or [], allow_methods=["GET", "POST"], allow_headers=["Content-Type"])
     graphs: dict[str, CompiledStateGraph] = {}
 
     @app.exception_handler(Exception)
@@ -167,6 +171,23 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
         if investigation_view(graph, investigation_id)["status"] == "done":
             raise HTTPException(409, "This investigation is finished and cannot be resumed")
         return graph
+
+    @app.get("/health")
+    def health() -> dict:
+        return {"status": "ok"}
+
+    @app.get("/spreadsheets")
+    def spreadsheets() -> list[dict]:
+        return [{"id": spreadsheet_id, "sheets": source.list_sheets(spreadsheet_id)} for spreadsheet_id in source.ids()]
+
+    @app.get("/investigations/{investigation_id}/corrected")
+    def corrected(investigation_id: str) -> FileResponse:
+        name = investigation_view(graph_of(investigation_id), investigation_id)["corrected_copy_id"]
+        locate_file = getattr(sandbox, "corrected_path", None)
+        path = locate_file(name) if name and locate_file else None
+        if path is None:
+            raise HTTPException(404, "No corrected file for this investigation; it is written only after you approve the fix")
+        return FileResponse(path, media_type=XLSX_MEDIA_TYPE, filename=path.name)
 
     @app.post("/investigations", status_code=201)
     def start(request: StartRequest, http: Request) -> dict:

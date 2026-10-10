@@ -4,6 +4,27 @@ Implementation: `src/model_x_ray/api.py`. Tests: `tests/test_api.py`. Issue: #73
 
 The API wraps the investigation graph so the React app (#74) can start an investigation, show its two pauses (which cell, approve the fix) and resume them.
 
+## Running it locally
+
+```
+uv run tools/generate_dataset.py --output models --per-set 2
+scripts/serve.sh
+```
+
+The first command fills `models/` with the clean base model and planted-error variants (any `.xlsx` you drop there works too; subfolders become part of the id, e.g. `type1/variant-000`). The second starts the API on `http://localhost:8000`; `http://localhost:8000/docs` is FastAPI's interactive page for trying every endpoint. `models/`, `corrected/` and `checkpoints.db` are git-ignored.
+
+`app_from_env()` (`src/model_x_ray/server.py`) builds the real app from `.env`:
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `MODEL_X_RAY_MODELS_DIR` | `models` | Folder with the `.xlsx` models users can investigate |
+| `MODEL_X_RAY_OUTPUT_DIR` | `corrected` | Where approved corrected copies are saved |
+| `MODEL_X_RAY_CHECKPOINTS` | `checkpoints.db` | SQLite checkpointer file (Postgres on Supabase in the deployed app, #72) |
+| `MODEL_X_RAY_ALLOWED_ORIGINS` | `http://localhost:5173` | Comma-separated web addresses allowed to call the API from a browser (CORS): the React dev server, then the Vercel URL |
+| `DEMO_MAX_PER_VISITOR` / `DEMO_MAX_PER_DAY` | `5` / `100` | The usage cap |
+
+Models come from the role registry: Super for the Investigator, Verifier and locate, Lightning for the mapper.
+
 ## Building the app
 
 `create_app(source, sandbox, models, checkpointer, cap)` returns a FastAPI app. Everything it needs is passed in, so tests use the demo workbook, scripted models and an in-memory checkpointer, and production passes Token Factory models and the Postgres checkpointer (#72).
@@ -16,7 +37,10 @@ The API wraps the investigation graph so the React app (#74) can start an invest
 | Method and path | Body | Answer |
 |---|---|---|
 | `POST /investigations` | `{"spreadsheet_id", "question"}` | `201` and the investigation view |
+| `GET /health` | | `{"status": "ok"}` for the host's health check |
+| `GET /spreadsheets` | | The models that can be investigated: `[{"id", "sheets"}]` |
 | `GET /investigations/{id}` | | The investigation view |
+| `GET /investigations/{id}/corrected` | | The corrected `.xlsx` after approval (404 before) |
 | `POST /investigations/{id}/resume` | A cell choice `{"ref": "P&L!H8"}` or a decision `{"action": "approve" \| "edit" \| "reject", "reason", "patch"}` | The investigation view after the graph continued |
 | `POST /investigations/stream` | Same as `POST /investigations` | A live stream of progress events, then the view |
 | `POST /investigations/{id}/resume/stream` | Same as `resume` | A live stream of progress events, then the view |
@@ -67,5 +91,4 @@ Users never see a traceback. `friendly_error(error)` turns any exception into a 
 
 ## Not yet
 
-- The production entry point that builds the app from `.env` and the uploaded models.
 - Investigation ids live in memory, so a restart forgets them; the Postgres checkpointer and store (#72) fix this.
