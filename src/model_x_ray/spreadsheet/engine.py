@@ -35,7 +35,7 @@ CELL_PATTERN = re.compile(r"(\$?)([A-Za-z]{1,3})(\$?)([0-9]+)")
 
 SUPPORTED_FUNCTIONS = (
     "SUM", "AVERAGE", "MIN", "MAX", "IF", "ROUND", "ABS",
-    "IFERROR", "AND", "OR", "NOT", "SUMIF", "SUMPRODUCT", "INDEX", "MATCH", "VLOOKUP", "XLOOKUP", "EOMONTH",
+    "IFERROR", "AND", "OR", "NOT", "SUMIF", "SUMIFS", "COUNTIF", "COUNTIFS", "SUMPRODUCT", "INDEX", "MATCH", "VLOOKUP", "XLOOKUP", "EOMONTH",
 )
 FUNCTION_PREFIXES = ("_XLFN._XLWS.", "_XLFN.", "_XLWS.")
 EXCEL_EPOCH = date(1899, 12, 30)
@@ -600,6 +600,29 @@ class FormulaEvaluator:
         if len(summed) != len(checked):
             raise FormulaError(f"SUMIF ranges have different sizes in {self.ref}")
         return sum(float(total) for value, total in zip(checked, summed) if matches_criteria(value, values[1]) and is_number(total))
+
+    def call_sumifs(self, values: list) -> Value:
+        summed = self.cells_of(values[0])
+        selected = self.rows_meeting(values[1:], len(summed), "SUMIFS")
+        return sum(float(summed[i]) for i in selected if is_number(summed[i]))
+
+    def call_countif(self, values: list) -> Value:
+        return float(sum(1 for value in self.cells_of(values[0]) if matches_criteria(value, values[1])))
+
+    def call_countifs(self, values: list) -> Value:
+        size = len(self.cells_of(values[0])) if values else 0
+        return float(len(self.rows_meeting(values, size, "COUNTIFS")))
+
+    def rows_meeting(self, pairs: list, size: int, name: str) -> list[int]:
+        if len(pairs) % 2:
+            raise FormulaError(f"{name} needs criteria in range and value pairs in {self.ref}")
+        selected = list(range(size))
+        for criteria_range, criteria in zip(pairs[::2], pairs[1::2]):
+            cells = self.cells_of(criteria_range)
+            if len(cells) != size:
+                raise FormulaError(f"{name} ranges have different sizes in {self.ref}")
+            selected = [i for i in selected if matches_criteria(cells[i], criteria)]
+        return selected
 
     def call_sumproduct(self, values: list) -> Value:
         arrays = [self.cells_of(value) for value in values]
