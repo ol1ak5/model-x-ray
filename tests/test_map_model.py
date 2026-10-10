@@ -7,7 +7,7 @@ from openpyxl import Workbook as OpenpyxlWorkbook
 
 from model_x_ray import nodes
 from model_x_ray.agents.investigator import investigation_brief
-from model_x_ray.agents.locator import make_locate_node
+from model_x_ray.agents.locator import make_choose_target_node, make_locate_node
 from model_x_ray.agents.mapper import make_map_model_node
 from model_x_ray.graph import build_graph
 from model_x_ray.llm import build_chat_model
@@ -38,6 +38,7 @@ def investigate(book, mapper, locator, question: str):
         "load_sheet": nodes.make_load_sheet_node(book),
         "map_model": make_map_model_node(mapper, book),
         "locate": make_locate_node(locator, book),
+        "choose_target": make_choose_target_node(book),
     }
     graph = build_graph(InMemorySaver(), diagnose=nodes.stub_diagnose, overrides=overrides)
     config = {"configurable": {"thread_id": question}}
