@@ -66,7 +66,7 @@ def test_supported_functions_ranges_and_errors_are_explicit() -> None:
         "S!B1": "=SUM(A1:A3)", "S!B2": "=AVERAGE(A1:A3)", "S!B3": "=MAX(A1:A3)-MIN(A1:A3)",
         "S!B4": "=IF(A1>5,ROUND(A2/3,2),0)", "S!B5": "=ABS(-A3)+2^2", "S!B6": "=50%*A2",
         "S!C1": "=C2+1", "S!C2": "=C1+1",
-        "S!D1": "=VLOOKUP(A1,A1:A3,1,FALSE)",
+        "S!D1": "=INDIRECT(\"A1\")",
     })
 
     assert book.value("S!B1") == 60.0
@@ -78,7 +78,7 @@ def test_supported_functions_ranges_and_errors_are_explicit() -> None:
     assert book.precedents("S!B1") == ["S!A1", "S!A2", "S!A3"]
     with pytest.raises(CircularReferenceError):
         book.value("S!C1")
-    with pytest.raises(UnsupportedFormulaError, match="VLOOKUP"):
+    with pytest.raises(UnsupportedFormulaError, match="INDIRECT"):
         book.value("S!D1")
 
 

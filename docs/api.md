@@ -59,7 +59,7 @@ Users never see a traceback. `friendly_error(error)` turns any exception into a 
 | `400` | Unknown spreadsheet or a workbook Model X-Ray cannot read | The `ValueError` message |
 | `404` | No investigation with that id | |
 | `409` | Resume on a finished investigation | |
-| `422` | A formula the engine cannot calculate (e.g. `XLOOKUP`) or a formula problem such as division by zero | "This model uses a formula Model X-Ray cannot calculate yet: ..." |
+| `422` | A formula the engine cannot calculate (e.g. `INDIRECT`) or a formula problem such as division by zero | "This model uses a formula Model X-Ray cannot calculate yet: ..." |
 | `429` | A daily limit is reached | |
 | `502` | Token Factory returned an error, or the model's answer did not fit the expected format | "The AI service returned an error. Please try again." |
 | `503` | Token Factory timed out, is rate limiting, rejected the key, or cannot be reached | e.g. "The AI service took too long to answer. Please try again in a minute." |
