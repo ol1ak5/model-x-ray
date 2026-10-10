@@ -26,6 +26,7 @@ def test_export_lists_every_node_and_edge_of_the_investigation(tmp_path: Path) -
         "load_sheet",
         "map_model",
         "locate",
+        "choose_target",
         "trace",
         "diagnose",
         "test",
@@ -35,7 +36,7 @@ def test_export_lists_every_node_and_edge_of_the_investigation(tmp_path: Path) -
         "apply_fix",
     ):
         assert node in mermaid, node
-    for label in ("confirmed", "retry", "approve", "edit", "reject"):
+    for label in ("found", "ask", "confirmed", "retry", "approve", "edit", "reject"):
         assert f"&nbsp;{label}&nbsp;" in mermaid, label
     assert "START" in mermaid or "__start__" in mermaid
 

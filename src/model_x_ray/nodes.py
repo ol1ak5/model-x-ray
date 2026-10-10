@@ -46,13 +46,15 @@ def find_candidates(question: str) -> list[TargetCell]:
 def locate(state: InvestigationState) -> dict:
     candidates = find_candidates(state["question"])
     if len(candidates) == 1:
-        return {"target": candidates[0]}
-    choice = interrupt({
-        "question": "Which cell do you mean?",
-        "candidates": [f"{c['sheet']}!{c['cell']}" for c in candidates],
-    })
-    chosen = next(c for c in candidates if f"{c['sheet']}!{c['cell']}" == choice["ref"])
-    return {"target": chosen}
+        return {"target": candidates[0], "cell_choice": None}
+    refs = [f"{c['sheet']}!{c['cell']}" for c in candidates]
+    return {"target": None, "cell_choice": {"question": "Which cell do you mean?", "candidates": refs}}
+
+
+def choose_target(state: InvestigationState) -> dict:
+    choice = interrupt(state["cell_choice"])
+    chosen = next(c for c in STUB_CELLS if f"{c['sheet']}!{c['cell']}" == choice["ref"])
+    return {"target": chosen, "cell_choice": None}
 
 
 def trace(state: InvestigationState) -> dict:

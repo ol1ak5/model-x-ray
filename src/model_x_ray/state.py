@@ -30,6 +30,11 @@ class ModelMap(TypedDict):
     columns: list[ColumnRole]
 
 
+class CellChoice(TypedDict):
+    question: str
+    candidates: list[str]
+
+
 class Contribution(TypedDict):
     cell: str
     label: str
@@ -115,6 +120,7 @@ class InvestigationState(TypedDict):
     question: str
     model_map: ModelMap | None
     target: TargetCell | None
+    cell_choice: CellChoice | None
     contributions: list[Contribution]
     causal_tree: CausalNode | None
     hypotheses: Annotated[list[Hypothesis], merge_by_id]

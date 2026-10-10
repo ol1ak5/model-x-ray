@@ -111,9 +111,16 @@ def make_locate_node(llm: BaseChatModel, book: Workbook) -> Callable[[Investigat
         if request.sheet:
             candidates = [ref for ref in candidates if ref.startswith(f"{request.sheet}!")] or candidates
         if len(candidates) == 1:
-            return {"target": target_cell(book, candidates[0]), "run_log": records}
+            return {"target": target_cell(book, candidates[0]), "cell_choice": None, "run_log": records}
         question = "Which cell do you mean?" if candidates else f"I could not find {request.label} {request.period} in this model. Which cell do you mean?"
-        choice = interrupt({"question": question, "candidates": candidates})
-        return {"target": target_cell(book, choice["ref"]), "run_log": records}
+        return {"target": None, "cell_choice": {"question": question, "candidates": candidates}, "run_log": records}
 
     return locate
+
+
+def make_choose_target_node(book: Workbook) -> Callable[[InvestigationState], dict]:
+    def choose_target(state: InvestigationState) -> dict:
+        choice = interrupt(state["cell_choice"])
+        return {"target": target_cell(book, choice["ref"]), "cell_choice": None}
+
+    return choose_target

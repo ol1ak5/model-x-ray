@@ -32,8 +32,9 @@ flowchart TD
   S([START]) --> load_sheet
   load_sheet --> map_model
   map_model --> locate
-  locate -->|ambiguous: interrupt| locate
-  locate --> trace
+  locate -->|found| trace
+  locate -->|ask| choose_target
+  choose_target -->|interrupt: user picks a cell| trace
   trace --> diagnose
   diagnose --> test
   test --> verify
@@ -51,7 +52,8 @@ flowchart TD
 |---|---|---|---|
 | `load_sheet` | Code | The workbook is loaded once through the `SpreadsheetSource` (an unknown id or a missing file raises a clear `ValueError`); the node stops the run when no cell has both a line label and a period header | (workbook cached outside state) |
 | `map_model` | Nemotron 3.5 Lightning (Nano fallback) | Labels every line (`revenue`, `cost`, `subtotal`, `ratio`, `other`) and every period (`actual`, `forecast`); see Model map below | `model_map` |
-| `locate` | Code first, Nemotron Super when needed, then `find_cells` | Turns the question into a target cell and its prior-period cell (see Locate below); calls `interrupt()` when several cells match or none does | `target` |
+| `locate` | Code first, Nemotron Super when needed, then `find_cells` | Turns the question into a target cell and its prior-period cell (see Locate below); when several cells match or none does, writes the question and candidates instead | `target`, `cell_choice` |
+| `choose_target` | Interrupt | Runs only when `locate` found no single cell: shows `cell_choice` and builds the target from the user's pick | `target`, `cell_choice` |
 | `trace` | Code | Precedents of the target, the contribution of each input to the change, and the causal tree built from them; writes one evidence record per observation (the target anomaly, then each contribution, `anomaly` or `expected_pattern` by the tree's suspicious flag) | `contributions`, `causal_tree`, `evidence` |
 | `diagnose` | Investigator agent (subgraph) | Hypothesis-driven loop over read-only tools (see below), returns ranked hypotheses with evidence and a minimal patch | `hypotheses`, `evidence`, `patch` |
 | `test` | Code | Copies the sheet, applies the patch, reads recalculated values | `verifications` (values part) |
@@ -98,7 +100,7 @@ Implementation: `src/model_x_ray/agents/locator.py`, prompt `prompts/locate.md`,
 1. **Catalogue.** From the workbook, collect the sheets, the line labels (row labels of cells that have a period header) and the periods (column headers).
 2. **Cheap path, no LLM.** If exactly one catalogue line and exactly one period (by year) appear in the question, use them directly; a sheet named in the question narrows the search. Most questions ("Why did EBITDA jump in 2027?") never call a model.
 3. **Nemotron path.** Otherwise Nemotron receives the question plus the catalogue and returns a `LocateRequest` (`label`, `period`, optional `sheet`) chosen only from the catalogue. The prompt maps analyst wording to lines ("operating profit before D&A" is EBITDA) and fixes relative periods: periods ending in A are actuals, E are estimates; "this year" is the first estimate period, "next year" the one after, "last year" the latest actual.
-4. **Lookup in code.** `find_cells(label, period)` returns the real cells. One match becomes the target; its prior cell is the nearest cell to the left in the same row that has a period header. Several matches pause with the candidates; no match pauses with an empty list and asks for the cell. The user resumes with `Command(resume={"ref": "Sheet!Cell"})`.
+4. **Lookup in code.** `find_cells(label, period)` returns the real cells. One match becomes the target; its prior cell is the nearest cell to the left in the same row that has a period header. Several matches, or none, are written to `cell_choice` (the question and the candidate cells, empty when nothing matched), and the graph routes to `choose_target`, which calls `interrupt()`. The user resumes with `Command(resume={"ref": "Sheet!Cell"})`. The pause lives in its own node because `interrupt()` re-runs the whole node on resume: inside `locate` it would call Nemotron a second time for the same question.
 
 Nemotron never writes a cell address: it can only pick names that exist, and code turns them into cells.
 
