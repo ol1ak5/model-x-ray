@@ -32,6 +32,13 @@ class XlsxSource:
             self._cache[spreadsheet_id] = load_xlsx(path)
         return self._cache[spreadsheet_id]
 
+    def ids(self) -> list[str]:
+        return sorted(self._files)
+
+    def path_of(self, spreadsheet_id: str) -> Path:
+        self.load(spreadsheet_id)
+        return self._files[spreadsheet_id]
+
     def list_sheets(self, spreadsheet_id: str) -> list[str]:
         return self.load(spreadsheet_id).sheets
 
