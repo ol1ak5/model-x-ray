@@ -46,11 +46,20 @@ Deliberately small, matching standard financial models:
 - Numbers, percentages (`50%`), text in quotes, `TRUE` / `FALSE`
 - References: `A1`, `$C$7`, ranges `A1:A3`, other sheets `Assumptions!C7` and quoted names `'P&L'!H8`
 - Operators: `+ - * / ^`, unary minus, `&` (join text), comparisons `= <> < > <= >=`, parentheses
-- Functions: `SUM`, `AVERAGE`, `MIN`, `MAX`, `IF`, `ROUND` (half away from zero, as in Excel and Google Sheets), `ABS`
+- Maths: `SUM`, `AVERAGE`, `MIN`, `MAX`, `ROUND` (half away from zero, as in Excel and Google Sheets), `ABS`, `SUMPRODUCT` (equal-size ranges, text counts as 0)
+- Logic: `IF`, `IFERROR`, `AND`, `OR`, `NOT`
+- Conditional sum: `SUMIF(range, criteria, [sum_range])` with criteria as a value (`"Data Center"`, `5`) or a comparison in text (`">10"`, `"<>US"`, `"="` for blanks)
+- Lookups: `INDEX(range, row, [column])`, `MATCH(value, range, [type])` with type `0` (exact) or `1` (default: largest value not above the target, range sorted ascending), `VLOOKUP(value, table, column, [approximate])` (approximate by default, as in Excel), `XLOOKUP(value, lookup, results, [if_not_found])` (exact match)
+- Dates: `EOMONTH(start, months)`. Dates are Excel serial numbers (days since 30 Dec 1899); a date typed in a cell is loaded as ISO text (so it can still be a column header) and turns into its serial number when a formula uses it as a number.
+- Excel's `_xlfn.` prefix (how Excel stores newer functions such as `XLOOKUP` in the file) is ignored.
 
-Anything else raises `UnsupportedFormulaError` naming the function, so an unsupported model fails clearly instead of producing wrong numbers. Circular references raise `CircularReferenceError`. Empty cells count as 0 in arithmetic.
+Errors behave like Excel's where it matters for models. `IF` evaluates only the branch it returns, so `=IF(G8=0,0,H8/G8)` works when `G8` is 0. `IFERROR` returns its fallback when the first argument fails with a formula error (division by zero, a lookup that finds nothing, text used as a number). It never hides an unsupported function or a circular reference, because those mean the engine cannot calculate the model, not that the model has an error. A lookup with no match raises `FormulaError("#N/A: ...")`; an `INDEX` outside its range raises `FormulaError("#REF: ...")`.
 
-Consequence for building demo models (including the NVIDIA model): use only the functions above. Add a function here, with a test, when a model needs it.
+Every reference inside a function counts as a precedent, including whole ranges inside `SUMIF`, `INDEX`, `VLOOKUP` and `XLOOKUP`. This is deliberately cautious: a cell behind a lookup can always be traced.
+
+Not supported, and raising `UnsupportedFormulaError` naming the function: `INDIRECT`, `OFFSET`, named ranges, wildcard criteria, `MATCH` type `-1`, approximate `XLOOKUP` modes, array maths inside `SUMPRODUCT` (such as `(A1:A3="x")*B1:B3`), and any other function. An unsupported model fails clearly instead of producing wrong numbers. Circular references raise `CircularReferenceError`. Empty cells count as 0 in arithmetic.
+
+Consequence for building demo models (including the NVIDIA model): use only the functions above. Add a function here, with a test, when a model needs it (#86).
 
 ## Read-only tools
 

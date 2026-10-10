@@ -2,6 +2,7 @@ import re
 from collections import deque
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
+from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import TypedDict
 
@@ -32,7 +33,14 @@ TOKEN_PATTERN = re.compile(
 
 CELL_PATTERN = re.compile(r"(\$?)([A-Za-z]{1,3})(\$?)([0-9]+)")
 
-SUPPORTED_FUNCTIONS = ("SUM", "AVERAGE", "MIN", "MAX", "IF", "ROUND", "ABS")
+SUPPORTED_FUNCTIONS = (
+    "SUM", "AVERAGE", "MIN", "MAX", "IF", "ROUND", "ABS",
+    "IFERROR", "AND", "OR", "NOT", "SUMIF", "SUMPRODUCT", "INDEX", "MATCH", "VLOOKUP", "XLOOKUP", "EOMONTH",
+)
+FUNCTION_PREFIXES = ("_XLFN._XLWS.", "_XLFN.", "_XLWS.")
+EXCEL_EPOCH = date(1899, 12, 30)
+ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+CRITERIA = re.compile(r"(<=|>=|<>|<|>|=)?(.*)", re.DOTALL)
 
 
 class FormulaError(Exception):
@@ -45,6 +53,27 @@ class UnsupportedFormulaError(FormulaError):
 
 class CircularReferenceError(FormulaError):
     pass
+
+
+class Grid(list):
+    def __init__(self, values: list["Value"], width: int) -> None:
+        super().__init__(values)
+        self.width = width
+
+    @property
+    def height(self) -> int:
+        return len(self) // self.width if self.width else 0
+
+    def at(self, row: int, column: int) -> "Value":
+        return self[(row - 1) * self.width + (column - 1)]
+
+    def column(self, column: int) -> list["Value"]:
+        return [self.at(row, column) for row in range(1, self.height + 1)]
+
+
+@dataclass
+class Failure:
+    error: "FormulaError"
 
 
 @dataclass(frozen=True)
@@ -166,6 +195,63 @@ def relative_part(address: CellAddress, base: CellAddress) -> str:
         offset = address.column - base.column
         column = "C" if offset == 0 else f"C[{offset}]"
     return row + column
+
+
+def to_serial(value: Value) -> float:
+    if isinstance(value, str) and ISO_DATE.match(value):
+        return float((datetime.fromisoformat(value).date() - EXCEL_EPOCH).days)
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    raise FormulaError(f"{value!r} is not a date")
+
+
+def from_serial(serial: float) -> date:
+    return EXCEL_EPOCH + timedelta(days=int(serial))
+
+
+def end_of_month(start: date, months: int) -> date:
+    month_index = start.year * 12 + start.month - 1 + months
+    year, month = divmod(month_index, 12)
+    first_of_next = date(year + (month + 1) // 12, (month + 1) % 12 + 1, 1)
+    return first_of_next - timedelta(days=1)
+
+
+def is_number(value: Value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def same_value(left: Value, right: Value) -> bool:
+    if isinstance(left, str) and isinstance(right, str):
+        return left.lower() == right.lower()
+    if is_number(left) and is_number(right):
+        return float(left) == float(right)
+    return left == right
+
+
+def not_greater(item: Value, target: Value) -> bool:
+    if is_number(item) and is_number(target):
+        return float(item) <= float(target)
+    if isinstance(item, str) and isinstance(target, str):
+        return item.lower() <= target.lower()
+    return False
+
+
+def matches_criteria(value: Value, criteria: Value) -> bool:
+    if not isinstance(criteria, str):
+        return same_value(value, criteria)
+    found = CRITERIA.fullmatch(criteria)
+    op, operand = (found.group(1) or "=", found.group(2)) if found else ("=", criteria)
+    try:
+        target: Value = float(operand)
+    except ValueError:
+        target = operand
+    if op in ("=", "<>"):
+        equal = (value is None or value == "") if operand == "" else same_value(value, target)
+        return equal if op == "=" else not equal
+    if not (is_number(value) and is_number(target)):
+        return False
+    a, b = float(value), float(target)
+    return {"<": a < b, ">": a > b, "<=": a <= b, ">=": a >= b}[op]
 
 
 def round_half_up(value: float, digits: int) -> float:
@@ -414,11 +500,16 @@ class FormulaEvaluator:
         if token.kind == "bool":
             return token.text == "TRUE"
         if token.kind == "ref":
-            cells = expand(parse_reference(token.text), self.sheet)
-            values = [self.book.value(cell) for cell in cells]
-            return values if parse_reference(token.text).end is not None else values[0]
+            reference = parse_reference(token.text)
+            values = [self.book.value(cell) for cell in expand(reference, self.sheet)]
+            if reference.end is None:
+                return values[0]
+            return Grid(values, abs(reference.end.column - reference.start.column) + 1)
         if token.kind == "func":
-            return self.function(token.text.upper())
+            name = token.text.upper()
+            for prefix in FUNCTION_PREFIXES:
+                name = name.removeprefix(prefix)
+            return self.function(name)
         if token.kind == "lparen":
             value = self.comparison()
             self.expect("rparen")
@@ -429,32 +520,172 @@ class FormulaEvaluator:
         if name not in SUPPORTED_FUNCTIONS:
             raise UnsupportedFormulaError(f"Unsupported function {name} in {self.ref}; supported: {', '.join(SUPPORTED_FUNCTIONS)}")
         self.expect("lparen")
-        arguments: list[Value | list[Value]] = []
+        arguments: list[Value | list[Value] | Failure] = []
         if not (self.peek() and self.peek().kind == "rparen"):
-            arguments.append(self.comparison())
+            arguments.append(self.argument())
             while self.peek() and self.peek().kind == "comma":
                 self.take()
-                arguments.append(self.comparison())
+                arguments.append(self.argument())
         self.expect("rparen")
-        if name == "SUM":
-            return sum(numbers(arguments))
-        if name == "AVERAGE":
-            values = numbers(arguments)
-            if not values:
-                raise FormulaError(f"AVERAGE of no numbers in {self.ref}")
-            return sum(values) / len(values)
-        if name == "MIN":
-            return min(numbers(arguments), default=0.0)
-        if name == "MAX":
-            return max(numbers(arguments), default=0.0)
-        if name == "ABS":
-            return abs(self.number(arguments[0]))
-        if name == "ROUND":
-            return round_half_up(self.number(arguments[0]), int(self.number(arguments[1])))
-        condition = arguments[0]
-        if condition:
-            return arguments[1] if len(arguments) > 1 else True
-        return arguments[2] if len(arguments) > 2 else False
+        if name == "IFERROR":
+            return self.settled(arguments[1]) if isinstance(arguments[0], Failure) else arguments[0]
+        if name == "IF":
+            condition = self.settled(arguments[0])
+            if condition:
+                return self.settled(arguments[1]) if len(arguments) > 1 else True
+            return self.settled(arguments[2]) if len(arguments) > 2 else False
+        values = [self.settled(argument) for argument in arguments]
+        return getattr(self, f"call_{name.lower()}")(values)
+
+    def argument(self) -> Value | list[Value] | Failure:
+        if self.peek() is not None and self.peek().kind in ("comma", "rparen"):
+            return None
+        start = self.position
+        try:
+            return self.comparison()
+        except (UnsupportedFormulaError, CircularReferenceError):
+            raise
+        except FormulaError as error:
+            self.skip_argument(start)
+            return Failure(error)
+
+    def skip_argument(self, start: int) -> None:
+        self.position = start
+        depth = 0
+        while self.peek() is not None:
+            kind = self.peek().kind
+            if depth == 0 and kind in ("comma", "rparen"):
+                return
+            depth += 1 if kind == "lparen" else -1 if kind == "rparen" else 0
+            self.position += 1
+
+    def settled(self, argument: Value | list[Value] | Failure) -> Value | list[Value]:
+        if isinstance(argument, Failure):
+            raise argument.error
+        return argument
+
+    def call_sum(self, values: list) -> Value:
+        return sum(numbers(values))
+
+    def call_average(self, values: list) -> Value:
+        found = numbers(values)
+        if not found:
+            raise FormulaError(f"AVERAGE of no numbers in {self.ref}")
+        return sum(found) / len(found)
+
+    def call_min(self, values: list) -> Value:
+        return min(numbers(values), default=0.0)
+
+    def call_max(self, values: list) -> Value:
+        return max(numbers(values), default=0.0)
+
+    def call_abs(self, values: list) -> Value:
+        return abs(self.number(values[0]))
+
+    def call_round(self, values: list) -> Value:
+        return round_half_up(self.number(values[0]), int(self.number(values[1])))
+
+    def call_and(self, values: list) -> Value:
+        return all(bool(v) for v in flatten(values) if v is not None and not isinstance(v, str))
+
+    def call_or(self, values: list) -> Value:
+        return any(bool(v) for v in flatten(values) if v is not None and not isinstance(v, str))
+
+    def call_not(self, values: list) -> Value:
+        return not bool(values[0])
+
+    def call_sumif(self, values: list) -> Value:
+        checked = self.cells_of(values[0])
+        summed = self.cells_of(values[2]) if len(values) > 2 and values[2] is not None else checked
+        if len(summed) != len(checked):
+            raise FormulaError(f"SUMIF ranges have different sizes in {self.ref}")
+        return sum(float(total) for value, total in zip(checked, summed) if matches_criteria(value, values[1]) and is_number(total))
+
+    def call_sumproduct(self, values: list) -> Value:
+        arrays = [self.cells_of(value) for value in values]
+        if len({len(array) for array in arrays}) != 1:
+            raise FormulaError(f"SUMPRODUCT ranges have different sizes in {self.ref}")
+        total = 0.0
+        for items in zip(*arrays):
+            product = 1.0
+            for item in items:
+                product *= float(item) if is_number(item) else 0.0
+            total += product
+        return total
+
+    def call_index(self, values: list) -> Value:
+        grid = self.grid_of(values[0])
+        row = int(self.number(values[1]))
+        column = int(self.number(values[2])) if len(values) > 2 and values[2] is not None else None
+        if column is None:
+            row, column = (row, 1) if grid.width == 1 else (1, row) if grid.height == 1 else (row, None)
+        if column is None:
+            raise UnsupportedFormulaError(f"INDEX on a table needs a row and a column in {self.ref}")
+        if not (1 <= row <= grid.height and 1 <= column <= grid.width):
+            raise FormulaError(f"#REF: INDEX position outside the range in {self.ref}")
+        return grid.at(row, column)
+
+    def call_match(self, values: list) -> Value:
+        mode = int(self.number(values[2])) if len(values) > 2 and values[2] is not None else 1
+        return float(self.position_of(values[0], self.line_of(values[1]), mode))
+
+    def call_vlookup(self, values: list) -> Value:
+        table = self.grid_of(values[1])
+        column = int(self.number(values[2]))
+        approximate = bool(values[3]) if len(values) > 3 and values[3] is not None else True
+        if not 1 <= column <= table.width:
+            raise FormulaError(f"#REF: VLOOKUP column {column} is outside the table in {self.ref}")
+        row = self.position_of(values[0], table.column(1), 1 if approximate else 0)
+        return table.at(row, column)
+
+    def call_xlookup(self, values: list) -> Value:
+        mode = int(self.number(values[4])) if len(values) > 4 and values[4] is not None else 0
+        if mode != 0:
+            raise UnsupportedFormulaError(f"XLOOKUP supports exact match only in {self.ref}")
+        lookup, results = self.line_of(values[1]), self.line_of(values[2])
+        if len(lookup) != len(results):
+            raise FormulaError(f"XLOOKUP ranges have different sizes in {self.ref}")
+        try:
+            return results[self.position_of(values[0], lookup, 0) - 1]
+        except FormulaError:
+            if len(values) > 3 and values[3] is not None:
+                return values[3]
+            raise
+
+    def call_eomonth(self, values: list) -> Value:
+        start = from_serial(to_serial(values[0]))
+        return float((end_of_month(start, int(self.number(values[1]))) - EXCEL_EPOCH).days)
+
+    def position_of(self, target: Value, line: list[Value], mode: int) -> int:
+        if mode == 0:
+            for index, item in enumerate(line, start=1):
+                if same_value(item, target):
+                    return index
+        elif mode == 1:
+            found = 0
+            for index, item in enumerate(line, start=1):
+                if item is None:
+                    continue
+                if not not_greater(item, target):
+                    break
+                found = index
+            if found:
+                return found
+        else:
+            raise UnsupportedFormulaError(f"Match type {mode} is not supported in {self.ref}")
+        raise FormulaError(f"#N/A: {target!r} not found in {self.ref}")
+
+    def cells_of(self, value: Value | list[Value]) -> list[Value]:
+        return list(value) if isinstance(value, list) else [value]
+
+    def grid_of(self, value: Value | list[Value]) -> Grid:
+        return value if isinstance(value, Grid) else Grid(self.cells_of(value), 1)
+
+    def line_of(self, value: Value | list[Value]) -> list[Value]:
+        grid = self.grid_of(value)
+        if grid.width != 1 and grid.height != 1:
+            raise UnsupportedFormulaError(f"A lookup range must be one row or one column in {self.ref}")
+        return list(grid)
 
     def number(self, value: Value | list[Value]) -> float:
         if value is None:
@@ -465,6 +696,8 @@ class FormulaEvaluator:
             return float(value)
         if isinstance(value, list):
             raise UnsupportedFormulaError(f"A range is used where a single value is needed in {self.ref}")
+        if isinstance(value, str) and ISO_DATE.match(value):
+            return to_serial(value)
         raise FormulaError(f"Text {value!r} used as a number in {self.ref}")
 
     def compare(self, op: str, left: Value, right: Value) -> bool:

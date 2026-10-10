@@ -82,13 +82,13 @@ def test_an_ai_service_timeout_gives_a_short_message_instead_of_a_traceback(demo
 
 def test_a_formula_we_cannot_calculate_and_an_unexpected_crash_both_get_clear_messages(demo_workbook_path: Path, engine_sandbox, scripted_verdict, tmp_path: Path) -> None:
     book = openpyxl.load_workbook(demo_workbook_path)
-    book["P&L"]["H4"] = "=XLOOKUP(G4,F4:G4,F4:G4)"
-    book.save(tmp_path / "xlookup.xlsx")
+    book["P&L"]["H4"] = '=INDIRECT("G4")*1.08'
+    book.save(tmp_path / "indirect.xlsx")
     models = AgentModels(llm=BrokenModel(error=RuntimeError("boom")), verifier=scripted_verdict)
-    app = create_app(XlsxSource({"demo": tmp_path / "xlookup.xlsx"}), engine_sandbox, models, InMemorySaver(), UsageCap(per_visitor=10, total=100))
+    app = create_app(XlsxSource({"demo": tmp_path / "indirect.xlsx"}), engine_sandbox, models, InMemorySaver(), UsageCap(per_visitor=10, total=100))
     unsupported = TestClient(app, raise_server_exceptions=False).post("/investigations", json=QUESTION)
     assert unsupported.status_code == 422
-    assert unsupported.json()["detail"].startswith("This model uses a formula Model X-Ray cannot calculate yet: Unsupported function XLOOKUP in P&L!H4")
+    assert unsupported.json()["detail"].startswith("This model uses a formula Model X-Ray cannot calculate yet: Unsupported function INDIRECT in P&L!H4")
 
     crash = broken_client(demo_workbook_path, engine_sandbox, RuntimeError("boom at line 42")).post("/investigations", json=QUESTION)
     assert crash.status_code == 500
