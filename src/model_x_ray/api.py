@@ -32,8 +32,8 @@ STEP_LABELS = {
     "test": "Testing the fix",
     "verify": "Verifying the fix",
     "explain": "Writing the explanation",
-    "human_review": "Recording your decision",
-    "apply_fix": "Writing the corrected copy",
+    "human_review": "Saving the decision",
+    "apply_fix": "Saving a new version",
 }
 
 GENERIC_FAILURE = "Something went wrong during the investigation. The team has the details; please try again."
