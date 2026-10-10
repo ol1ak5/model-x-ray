@@ -39,12 +39,18 @@ FORMULAS = {
     "B17": "=VLOOKUP(150,Data!H2:I4,2)",
     "B18": "=MATCH(150,Data!H2:H4)",
     "B19": "=XLOOKUP(\"Gaming\",Data!A2:A5,Data!C2:C5,,0)",
+    "B20": '=SUMIFS(Data!C2:C5,Data!A2:A5,"Data Center",Data!B2:B5,"EU")',
+    "B21": '=SUMIFS(Data!C2:C5,Data!D2:D5,">=0.6")',
+    "B22": '=COUNTIF(Data!A2:A5,"Data Center")',
+    "B23": '=COUNTIFS(Data!B2:B5,"US",Data!C2:C5,">1")',
+    "B24": '=COUNTIF(Data!C2:C5,">10")',
 }
 
 EXPECTED = {
     "B1": 150.0, "B2": 162.0, "B3": 42.0, "B4": 119.0, "B5": 12.0, "B6": 0.7, "B7": 2.0, "B8": 0.6,
     "B9": 0.0, "B10": -1.0, "B11": 0.0, "B12": 0.0, "B13": True, "B14": False, "B15": True,
     "B16": float((date(2026, 2, 28) - date(1899, 12, 30)).days), "B17": 0.2, "B18": 2.0, "B19": 12.0,
+    "B20": 30.0, "B21": 162.0, "B22": 2.0, "B23": 2.0, "B24": 3.0,
 }
 
 
@@ -62,6 +68,7 @@ def write_functions_workbook(path: Path) -> Path:
         calc[ref] = formula
     calc["C1"] = '=VLOOKUP("Robotics",Data!A2:D5,3,FALSE)'
     calc["C2"] = "=INDIRECT(\"Data!C2\")"
+    calc["C3"] = '=SUMIFS(Data!C2:C5,Data!A2:A4,"Gaming")'
     book.save(path)
     return path
 
@@ -74,6 +81,9 @@ def test_every_new_function_calculates_like_excel_and_reads_its_ranges_as_inputs
 
     assert set(book.precedents("Calc!B1")) == {f"Data!{c}{r}" for c in "AC" for r in range(2, 6)}
     assert "Calc!B7" in book.dependents("Data!C5")
+    assert set(book.precedents("Calc!B20")) == {f"Data!{c}{r}" for c in "ABC" for r in range(2, 6)}
+    with pytest.raises(FormulaError, match="different sizes"):
+        book.value("Calc!C3")
 
     with pytest.raises(FormulaError, match="Robotics") as not_found:
         book.value("Calc!C1")
