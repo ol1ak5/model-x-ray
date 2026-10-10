@@ -170,6 +170,10 @@ class XlsxSandbox:
     def discard(self, copy_id: str) -> None:
         self._copies.pop(copy_id, None)
 
+    def corrected_path(self, name: str) -> Path | None:
+        path = self._output_dir / name
+        return path if path.parent == self._output_dir and path.is_file() else None
+
     def write_corrected_copy(self, spreadsheet_id: str, patch: Patch, log_rows: list[list[object]]) -> str:
         book = openpyxl.load_workbook(self._source.path_of(spreadsheet_id))
         sheet, address = split_ref(normalize_ref(patch["cell"]))
