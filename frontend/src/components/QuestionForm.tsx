@@ -33,7 +33,7 @@ export default function QuestionForm({ demos, onStart, onError }: { demos: Sprea
           <span className="play-ring">
             <Icon name="play" size={13} />
           </span>
-          Try demo
+          See it in action
         </button>
       )}
       <p className="ask-note">Excel .xlsx, up to 10 MB. Your file stays private. Approved changes are saved to a new copy.</p>
