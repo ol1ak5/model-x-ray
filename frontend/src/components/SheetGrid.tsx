@@ -36,7 +36,14 @@ export default function SheetGrid({ sheet, marks, title, showFormulaBar = true }
       </div>
       )}
       <div className="grid-scroll">
-        <table className="grid">
+        <table className="grid" style={{ minWidth: 36 + 170 + sheet.columns.length * 96 }}>
+          <colgroup>
+            <col className="col-row" />
+            <col className="col-label" />
+            {sheet.columns.map((column) => (
+              <col key={column.letter} />
+            ))}
+          </colgroup>
           <thead>
             <tr>
               <th className="corner" />

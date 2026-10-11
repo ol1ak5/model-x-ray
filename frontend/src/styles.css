@@ -66,7 +66,7 @@ h3 {
 }
 
 .page {
-  max-width: 1280px;
+  max-width: 1320px;
   margin: 0 auto;
   padding: 0 clamp(16px, 3vw, 40px);
 }
@@ -594,6 +594,7 @@ input:not([type="checkbox"]):not([type="file"]) {
 
 .grid {
   border-collapse: collapse;
+  table-layout: fixed;
   width: 100%;
   font-size: 0.84rem;
 }
@@ -639,12 +640,21 @@ input:not([type="checkbox"]):not([type="file"]) {
   text-align: center;
 }
 
+.col-row {
+  width: 36px;
+}
+
+.col-label {
+  width: 34%;
+}
+
 .label-col {
   padding: 0 12px !important;
   text-align: left !important;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-weight: 500;
-  min-width: 140px;
 }
 
 .num button {
