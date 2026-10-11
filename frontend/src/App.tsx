@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   ApiError,
@@ -13,7 +13,10 @@ import {
   resumeInvestigation,
   startInvestigation,
 } from "./api";
+import Alert from "./components/Alert";
+import Button from "./components/Button";
 import CellChoice from "./components/CellChoice";
+import Chip from "./components/Chip";
 import DetailTabs, { type Tab } from "./components/DetailTabs";
 import Hero from "./components/Hero";
 import Logo from "./components/Logo";
@@ -22,6 +25,8 @@ import Progress, { type Step } from "./components/Progress";
 import Report from "./components/Report";
 import Review from "./components/Review";
 import SheetGrid, { type Marks } from "./components/SheetGrid";
+import { GLOW, VARIANT } from "./theme";
+import styles from "./App.module.css";
 
 type Phase = "idle" | "running" | "paused" | "done";
 
@@ -45,6 +50,14 @@ function marksOf(view: InvestigationView): Marks {
   };
 }
 
+const MemoSheetGrid = memo(SheetGrid);
+const MemoReport = memo(Report);
+const MemoDetailTabs = memo(DetailTabs);
+const MemoProgress = memo(Progress);
+const MemoCellChoice = memo(CellChoice);
+const MemoReview = memo(Review);
+const MemoOutcome = memo(Outcome);
+
 export default function App() {
   const [demos, setDemos] = useState<Spreadsheet[]>([]);
   const [phase, setPhase] = useState<Phase>("idle");
@@ -55,13 +68,13 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("tree");
 
-  function showEvidence(id: string) {
+  const showEvidence = useCallback((id: string) => {
     setTab("evidence");
     window.setTimeout(() => {
       const record = document.getElementById(id);
       record?.scrollIntoView?.({ behavior: "smooth", block: "center" });
     }, 50);
-  }
+  }, []);
 
   useEffect(() => {
     listSpreadsheets()
@@ -98,7 +111,7 @@ export default function App() {
     }
   }
 
-  function start(spreadsheetId: string, question: string, name: string) {
+  const start = useCallback((spreadsheetId: string, question: string, name: string) => {
     setSteps([]);
     setView(null);
     setSheet(null);
@@ -106,79 +119,92 @@ export default function App() {
     setModelName(name);
     setPhase("running");
     void run(startInvestigation(spreadsheetId, question, onEvent));
-  }
+  }, []);
 
-  function resume(answer: { ref: string } | Decision) {
-    if (!view) return;
-    setError(null);
-    setPhase("running");
-    void run(resumeInvestigation(view.id, answer, onEvent));
-  }
+  const resume = useCallback(
+    (answer: { ref: string } | Decision) => {
+      if (!view) return;
+      setError(null);
+      setPhase("running");
+      void run(resumeInvestigation(view.id, answer, onEvent));
+    },
+    [view],
+  );
 
-  function reset() {
+  const reset = useCallback(() => {
     setSteps([]);
     setView(null);
     setSheet(null);
     setError(null);
     setPhase("idle");
-  }
+  }, []);
+
+  const marks = useMemo(() => (view ? marksOf(view) : null), [view]);
 
   const started = phase === "running" || steps.length > 0 || view !== null;
   const choice = view?.status === "needs_cell" ? (view.pause as CellChoicePause) : null;
+  const status =
+    phase === "running"
+      ? { label: "Checking…", tone: "blue" as const }
+      : phase === "paused" && view?.status === "needs_cell"
+        ? { label: "Needs your input", tone: "amber" as const }
+        : phase === "paused"
+          ? { label: "Review needed", tone: "amber" as const }
+          : phase === "done"
+            ? { label: "Done", tone: "green" as const }
+            : { label: "Stopped", tone: "neutral" as const };
 
   return (
-    <div className="page">
-      <header className="nav">
-        <button type="button" className="brand" onClick={reset}>
+    <div className={styles.page}>
+      <header className={styles.nav}>
+        <button type="button" className={styles.brand} onClick={reset}>
           <Logo />
           Model X-Ray
         </button>
-        <p className="powered">Powered by NVIDIA Nemotron on Nebius Token Factory</p>
+        <p className={styles.powered}>Powered by NVIDIA Nemotron on Nebius Token Factory</p>
       </header>
 
       {!started && <Hero demos={demos} error={error} onStart={start} onError={setError} />}
 
       {started && (
-        <main className="workspace">
-          <div className="topbar">
+        <main className={styles.workspace}>
+          <div className={styles.topbar}>
             <div>
-              <p className="eyebrow">Model check</p>
-              <h1 className="ws-title">
+              <p className={styles.eyebrow}>Model check</p>
+              <h1 className={styles.title}>
                 {modelName}
-                <span className={`status ${phase}`}>{phase === "running" ? "Checking…" : phase === "paused" && view?.status === "needs_cell" ? "Needs your input" : phase === "paused" ? "Review needed" : phase === "done" ? "Done" : "Stopped"}</span>
+                <Chip tone={status.tone} pulse={phase === "running"}>
+                  {status.label}
+                </Chip>
               </h1>
             </div>
-            <button type="button" className="secondary" onClick={reset} disabled={phase === "running"}>
+            <Button variant="ghost" disabled={phase === "running"} onClick={reset}>
               Check another model
-            </button>
+            </Button>
           </div>
-          <div className="ws-main">
-            <div className="ws-left">
-              {view?.report && <Report view={view} onEvidence={showEvidence} />}
-              {sheet && view ? (
-                <SheetGrid key={view.id + sheet.sheet} sheet={sheet} marks={marksOf(view)} title="Sheet" />
+          <div className={styles.columns}>
+            <div className={styles.main}>
+              {view?.report && <MemoReport view={view} onEvidence={showEvidence} />}
+              {sheet && view && marks ? (
+                <MemoSheetGrid key={view.id + sheet.sheet} sheet={sheet} marks={marks} title="Sheet" light={GLOW && VARIANT === "dark"} />
               ) : (
                 phase === "running" && (
-                  <div className="card scanning" aria-hidden="true">
-                    <p className="scanning-title">Scanning your model…</p>
+                  <div className={styles.scanning} aria-hidden="true">
+                    <p className={styles.scanningTitle}>Scanning your model…</p>
                     {Array.from({ length: 7 }, (_, index) => (
-                      <span key={index} className="skeleton-row" style={{ animationDelay: `${index * 0.12}s` }} />
+                      <span key={index} className={styles.skeletonRow} style={{ animationDelay: `${index * 0.12}s` }} />
                     ))}
                   </div>
                 )
               )}
-              {view && <DetailTabs view={view} tab={tab} onTab={setTab} />}
+              {view && <MemoDetailTabs view={view} tab={tab} onTab={setTab} />}
             </div>
-            <aside className="ws-side">
-              <Progress steps={steps} running={phase === "running"} />
-              {error && (
-                <p className="alert" role="alert">
-                  {error}
-                </p>
-              )}
-              {choice && phase === "paused" && <CellChoice pause={choice} onChoose={(ref) => resume({ ref })} />}
-              {view?.status === "needs_review" && phase === "paused" && <Review patch={view.patch} onDecide={resume} />}
-              {phase === "done" && view && <Outcome view={view} />}
+            <aside className={styles.side}>
+              <MemoProgress steps={steps} running={phase === "running"} />
+              {error && <Alert>{error}</Alert>}
+              {choice && phase === "paused" && <MemoCellChoice pause={choice} onChoose={(ref) => resume({ ref })} />}
+              {view?.status === "needs_review" && phase === "paused" && <MemoReview patch={view.patch} onDecide={resume} />}
+              {phase === "done" && view && <MemoOutcome view={view} />}
             </aside>
           </div>
         </main>

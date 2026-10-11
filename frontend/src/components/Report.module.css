@@ -1,0 +1,86 @@
+.report {
+  padding-left: 1.25rem;
+  border-left: 0.25rem solid var(--line-strong);
+  animation: fade-up var(--dur-slow) var(--ease) both;
+}
+
+.found {
+  border-left-color: var(--danger);
+}
+
+.clean {
+  border-left-color: var(--accent-bright);
+}
+
+.unproven {
+  border-left-color: var(--warn);
+}
+
+.head {
+  margin-bottom: 0.5rem;
+}
+
+.title {
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.detail {
+  color: var(--muted);
+  margin: 0.25rem 0 0.875rem;
+}
+
+.kpis {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.625rem;
+  margin-bottom: 0.875rem;
+}
+
+.kpi {
+  display: grid;
+  gap: 0.125rem;
+  padding: 0.625rem 0.875rem;
+  border-radius: var(--radius-m);
+  background: var(--soft);
+  min-width: 10rem;
+}
+
+.kpiGood {
+  background: var(--accent-soft);
+}
+
+.kpiGood .kpiValue {
+  color: var(--accent);
+}
+
+.kpiLabel {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.kpiValue {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.text {
+  overflow-wrap: anywhere;
+  font-size: 0.9rem;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  padding-top: 0.75rem;
+}
+
+.evidenceLink {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color var(--dur-fast) var(--ease);
+}
+
+.evidenceLink:hover {
+  border-bottom-color: var(--accent);
+}
