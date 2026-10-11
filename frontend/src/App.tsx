@@ -17,6 +17,7 @@ import CauseTree from "./components/CauseTree";
 import CellChoice from "./components/CellChoice";
 import EvidencePanel from "./components/EvidencePanel";
 import Hero from "./components/Hero";
+import Logo from "./components/Logo";
 import HypothesisBoard from "./components/HypothesisBoard";
 import Outcome from "./components/Outcome";
 import Progress, { type Step } from "./components/Progress";
@@ -122,13 +123,13 @@ export default function App() {
     <div className="page">
       <header className="nav">
         <button type="button" className="brand" onClick={reset}>
-          <span className="logo" aria-hidden="true">X</span>
+          <Logo />
           Model X-Ray
         </button>
         <p className="powered">Powered by NVIDIA Nemotron on Nebius Token Factory</p>
       </header>
 
-      {!started && <Hero demos={demos} busy={false} error={error} onStart={start} onError={setError} />}
+      {!started && <Hero demos={demos} error={error} onStart={start} onError={setError} />}
 
       {started && (
         <main className="workspace">

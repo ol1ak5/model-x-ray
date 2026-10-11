@@ -1,15 +1,10 @@
-import { type ChangeEvent, type FormEvent, useState } from "react";
+import { type ChangeEvent, useState } from "react";
 
 import { ApiError, type Spreadsheet, uploadSpreadsheet } from "../api";
 import Icon from "./Icon";
 
-type Chosen = { id: string; name: string };
-
-export default function QuestionForm({ demos, busy, onStart, onError }: { demos: Spreadsheet[]; busy: boolean; onStart: (spreadsheetId: string, question: string, name: string) => void; onError: (message: string) => void }) {
-  const [chosen, setChosen] = useState<Chosen | null>(null);
+export default function QuestionForm({ demos, onStart, onError }: { demos: Spreadsheet[]; onStart: (spreadsheetId: string, question: string, name: string) => void; onError: (message: string) => void }) {
   const [uploading, setUploading] = useState(false);
-  const [asking, setAsking] = useState(false);
-  const [question, setQuestion] = useState("");
 
   async function upload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -17,7 +12,7 @@ export default function QuestionForm({ demos, busy, onStart, onError }: { demos:
     setUploading(true);
     try {
       const uploaded = await uploadSpreadsheet(file);
-      setChosen({ id: uploaded.id, name: uploaded.name });
+      onStart(uploaded.id, "", uploaded.name);
     } catch (reason) {
       onError(reason instanceof ApiError ? reason.message : "The upload failed. Please try again.");
     } finally {
@@ -25,40 +20,23 @@ export default function QuestionForm({ demos, busy, onStart, onError }: { demos:
     }
   }
 
-  function submit(event: FormEvent) {
-    event.preventDefault();
-    if (chosen) onStart(chosen.id, asking ? question.trim() : "", chosen.name);
-  }
-
+  const demo = demos[0];
   return (
-    <form className="ask" onSubmit={submit}>
-      <input id="upload" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="visually-hidden" onChange={upload} />
-      <label htmlFor="upload" className="dropzone">
-        <span className="drop-icon"><Icon name="upload" /></span>
-        <span className="drop-title">{uploading ? "Uploading…" : chosen ? chosen.name : "Upload your model"}</span>
-        <span className="drop-hint">{chosen ? "Ready to check. Choose another file to replace it." : "Excel .xlsx, up to 10 MB. Your file stays private."}</span>
+    <div className="ask-row">
+      <input id="upload" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="visually-hidden" onChange={upload} disabled={uploading} />
+      <label htmlFor="upload" className="primary button-like">
+        <Icon name="upload" size={18} />
+        {uploading ? "Uploading…" : "Upload your model"}
       </label>
-      <div className="ask-row">
-        <button type="submit" className="primary" disabled={busy || uploading || !chosen}>
-          {busy ? "Checking…" : "Check model"}
-        </button>
-        {demos.map((demo) => (
-          <button key={demo.id} type="button" className="secondary" onClick={() => setChosen({ id: demo.id, name: demos.length === 1 ? "Demo model" : demo.id })}>
-            <Icon name="play" size={16} />
-            {demos.length === 1 ? "Try the demo model" : `Try demo: ${demo.id}`}
-          </button>
-        ))}
-      </div>
-      {asking ? (
-        <>
-          <label htmlFor="question">Number to explain (optional)</label>
-          <textarea id="question" rows={2} value={question} placeholder="For example: EBITDA 2027" onChange={(event) => setQuestion(event.target.value)} />
-        </>
-      ) : (
-        <button type="button" className="link-button subtle" onClick={() => setAsking(true)}>
-          Ask about a specific number instead
+      {demo && (
+        <button type="button" className="ghost" onClick={() => onStart(demo.id, "", "Demo model")}>
+          <span className="play-ring">
+            <Icon name="play" size={12} />
+          </span>
+          Watch demo
         </button>
       )}
-    </form>
+      <p className="ask-note">Excel .xlsx, up to 10 MB. Your file stays private and is never changed.</p>
+    </div>
   );
 }

@@ -14,8 +14,7 @@ function lastResume(api: ReturnType<typeof fakeApi>) {
 async function checkDemo() {
   const user = userEvent.setup();
   render(<App />);
-  await user.click(await screen.findByRole("button", { name: "Try the demo model" }));
-  await user.click(screen.getByRole("button", { name: "Check model" }));
+  await user.click(await screen.findByRole("button", { name: "Watch demo" }));
   return user;
 }
 
@@ -28,10 +27,10 @@ describe("an investigation in the browser", () => {
     vi.stubGlobal("fetch", api.fetch);
     const user = userEvent.setup();
     render(<App />);
-    expect(screen.queryByRole("button", { name: /Why did/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/specific number/)).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Your Excel models under the X-Ray.");
     await user.upload(screen.getByLabelText(/Upload your model/), new File(["xlsx bytes"], "My model.xlsx"));
     expect(await screen.findByText("My model.xlsx")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Check model" }));
     expect(api.sent.find((request) => request.url.endsWith("/investigations/stream"))?.body).toEqual({ spreadsheet_id: "upload-1", question: "" });
 
     const progress = await screen.findByRole("list", { name: "Progress" });
@@ -78,13 +77,8 @@ describe("an investigation in the browser", () => {
       ],
     );
     vi.stubGlobal("fetch", api.fetch);
-    const user = userEvent.setup();
-    render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Try the demo model" }));
-    await user.click(screen.getByRole("button", { name: "Ask about a specific number instead" }));
-    await user.type(screen.getByLabelText("Number to explain (optional)"), "EBITDA 2027");
-    await user.click(screen.getByRole("button", { name: "Check model" }));
-    expect(api.sent.find((request) => request.url.endsWith("/investigations/stream"))?.body).toEqual({ spreadsheet_id: "demo", question: "EBITDA 2027" });
+    const user = await checkDemo();
+    expect(api.sent.find((request) => request.url.endsWith("/investigations/stream"))?.body).toEqual({ spreadsheet_id: "demo", question: "" });
 
     const choice = await screen.findByRole("group", { name: "Which cell do you mean?" });
     await user.click(within(choice).getByRole("button", { name: "Summary!D10" }));
