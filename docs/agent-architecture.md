@@ -320,7 +320,7 @@ Role-to-model mapping lives in one registry in `llm.py` (`ROLE_MODELS`): `invest
 
 ## Evaluation
 
-Every node is measured against its own metric, and the whole agent runs on generated models: X models per error type, X with blended errors, plus override and clean controls. Accuracy and latency per error type and per step form the project's conclusion. Details: `docs/evaluation.md`.
+Every node is measured against its own metric, and the whole agent runs on generated models: 25 variants per error type, 25 with blended errors, plus override and clean controls (174 investigations per full run). The runner in `src/model_x_ray/benchmark/` executes the four set-ups defined in `docs/evaluation.md`; accuracy and latency per error type and per step form the project's conclusion.
 
 ## Not in scope for the hackathon
 
