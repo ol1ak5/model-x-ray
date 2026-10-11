@@ -266,8 +266,34 @@ def _citations(state: InvestigationState, hypothesis: Hypothesis | None) -> list
     return [record["id"] for record in evidence if record["kind"] == "anomaly"][:1]
 
 
+def joined(parts: list[str]) -> str:
+    return parts[0] if len(parts) == 1 else f"{', '.join(parts[:-1])} and {parts[-1]}"
+
+
+def no_error_report(state: InvestigationState) -> str:
+    target = state.get("target")
+    if not target:
+        return "No error found."
+    evidence = state.get("evidence", [])
+    target_ref = f"{target['sheet']}!{target['cell']}"
+    target_id = next((e["id"] for e in evidence if e["cell"] == target_ref and e["kind"] == "anomaly"), None)
+    report = f"No error found. {target['label']} {target['period']} moved from {target['prior_value']:.2f} to {target['value']:.2f}"
+    if target_id:
+        report += f" ({target_id})"
+    drivers = []
+    for contribution in sorted(state.get("contributions", []), key=lambda c: abs(c["delta"]), reverse=True)[:3]:
+        cited = next((e["id"] for e in evidence if e["cell"] == contribution["cell"] and e["kind"] != "verification"), None)
+        detail = f"{contribution['cell']}, {contribution['delta']:+.2f}" + (f", {cited}" if cited else "")
+        drivers.append(f"{contribution['label']} ({detail})")
+    if drivers:
+        report += f"; the change comes from {joined(drivers)}"
+    return report + "."
+
+
 def make_explain_node() -> Callable[[InvestigationState], dict]:
     def explain_node(state: InvestigationState) -> dict:
+        if not state.get("hypotheses"):
+            return {"report": no_error_report(state)}
         verifications = state.get("verifications", [])
         latest = verifications[-1] if verifications else None
         if latest is None or latest["verdict"] != "confirmed":

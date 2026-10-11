@@ -2,7 +2,7 @@ import re
 from pathlib import Path
 
 from langgraph.types import Command
-from test_investigator import ScriptedDiagnosis
+from test_investigator import OutlierScanner, ScriptedDiagnosis
 
 from model_x_ray.graph import run_investigation
 from model_x_ray.spreadsheet.source import XlsxSource
@@ -60,6 +60,26 @@ def test_explain_cites_only_ids_that_resolve_in_state(
     assert "ev-4" in cited, "the sandbox proof backs the fix"
     assert state["evidence"][3]["text"] == "P&L!H8 52.01 -> 44.73 in a sandbox copy after patching P&L!H7"
     assert report.endswith(".")
+
+
+def test_a_clean_answer_says_no_error_found_and_names_the_drivers_with_evidence(
+    demo_workbook_with_override_note: Path, engine_sandbox,
+) -> None:
+    graph = run_investigation(
+        OutlierScanner(), "demo", XlsxSource({"demo": demo_workbook_with_override_note}), engine_sandbox,
+    )
+    config = {"configurable": {"thread_id": "explain-no-error"}}
+
+    graph.invoke({"spreadsheet_id": "demo", "question": QUESTION}, config)
+    state = graph.get_state(config).values
+
+    assert state["report"] == (
+        "No error found. EBITDA 2027E moved from 40.03 to 52.01 (ev-1); the change comes from "
+        "Gross profit (P&L!H6, +7.20, ev-2) and Opex (P&L!H7, +4.78, ev-3)."
+    )
+    known = {e["id"] for e in state["evidence"]}
+    assert set(re.findall(r"ev-\d+", state["report"])) <= known
+    assert "Inconclusive" not in state["report"]
 
 
 def test_explain_reports_inconclusive_without_citing_anything(
