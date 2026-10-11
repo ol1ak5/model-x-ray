@@ -150,7 +150,7 @@ The Investigator ranks hypotheses with a categorical confidence instead of a num
 | `medium` | The cell breaks the pattern, but either its impact on the change is not established or a deliberate override cannot be ruled out |
 | `low` | There is an inconsistency, but no pattern break has been established |
 
-Confidence only ranks suspects before testing; the sandbox and the Verifier decide. A patch is proposed only for the top hypothesis, and only when the neighbouring formulas support a corrected formula. The rules live in the product prompt `src/model_x_ray/prompts/investigator_conclude.md`.
+Confidence only ranks suspects before testing; the sandbox and the Verifier decide. A patch is proposed only for the top hypothesis, and only when the neighbouring formulas support a corrected formula. The rules live in the product prompt `src/model_x_ray/prompts/investigator_conclude.md`. One rule is enforced in code, not left to the model: when the patched cell holds a typed value and all formula neighbours in its row share one pattern, `diagnose` replaces the proposed formula with that neighbour's formula shifted to the cell (`Workbook.shifted_formula`), and `compare_formulas` shows the same suggestion to the Investigator as a tool result, so claim and patch agree; the Investigator's own formula survives only when the row offers no consistent pattern.
 
 Every UPDATE writes to `hypotheses` in the state, so the interface can show a live hypothesis board: candidates appearing, gaining or losing confidence, and being rejected, each linked to the evidence that moved it. When the budget runs out, the Investigator must propose its best hypothesis or declare the case inconclusive.
 

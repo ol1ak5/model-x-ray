@@ -94,6 +94,7 @@ def compare_formulas(book: Workbook, ref: str, reference_cells: list[str]) -> st
         head = f"{ref} uses {book.formula(ref)}, pattern {own_pattern}"
     parts = [head]
     neighbour_patterns = []
+    sources: dict[str, str] = {}
     for neighbour in reference_cells:
         neighbour = normalize_ref(neighbour)
         pattern = book.formula_pattern(neighbour)
@@ -101,10 +102,18 @@ def compare_formulas(book: Workbook, ref: str, reference_cells: list[str]) -> st
             parts.append(f"neighbour {neighbour} is a typed value ({book.value(neighbour)})")
         else:
             neighbour_patterns.append(pattern)
+            sources.setdefault(pattern, neighbour)
             parts.append(f"neighbour {neighbour} uses pattern {pattern}")
     common = Counter(neighbour_patterns).most_common(1)[0][0] if neighbour_patterns else None
     if own_pattern is None:
-        parts.append(f"{ref} breaks the pattern; the row uses {common}" if common else f"{ref} breaks the pattern")
+        if not common:
+            parts.append(f"{ref} breaks the pattern")
+        else:
+            line = f"{ref} breaks the pattern; the row uses {common}"
+            suggestion = book.shifted_formula(sources[common], ref)
+            if suggestion:
+                line += f"; the row's formula at {ref} is {suggestion}"
+            parts.append(line)
     elif common is None:
         parts.append(f"{ref} has no formula neighbours to compare against")
     elif own_pattern == common:
