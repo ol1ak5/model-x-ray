@@ -14,7 +14,7 @@ from model_x_ray.state import RunLog
 ROLE_MODELS: dict[str, str] = {
     "investigator": "nvidia/nemotron-3-super-120b-a12b",
     "verifier": "nvidia/nemotron-3-super-120b-a12b",
-    "mapper": "nvidia/Nemotron-3_5-Lightning",
+    "mapper": "nvidia/nemotron-3-super-120b-a12b",
     "locate": "nvidia/nemotron-3-super-120b-a12b",
     "explain": "nvidia/nemotron-3-super-120b-a12b",
 }

@@ -5,11 +5,11 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
-from model_x_ray.agents.locator import Catalogue, workbook_catalogue
+from model_x_ray.agents.locator import Catalogue
 from model_x_ray.llm import invoke_with_usage, model_name_of
 from model_x_ray.memory import ModelMemory
 from model_x_ray.prompts import load_prompt
-from model_x_ray.spreadsheet.engine import Workbook, split_ref
+from model_x_ray.spreadsheet.engine import FormulaError, Workbook, is_number, split_ref
 from model_x_ray.state import InvestigationState
 
 
@@ -26,6 +26,23 @@ class ColumnAnswer(BaseModel):
 class ModelMapAnswer(BaseModel):
     rows: list[RowAnswer]
     columns: list[ColumnAnswer]
+
+
+def series_catalogue(book: Workbook) -> Catalogue:
+    periods_by_label: dict[str, list[str]] = {}
+    for ref in book.cells():
+        label, period = book.row_label(ref), book.column_header(ref)
+        if label is None or period is None:
+            continue
+        try:
+            value = book.value(ref)
+        except FormulaError:
+            continue
+        if is_number(value) and period not in periods_by_label.setdefault(label, []):
+            periods_by_label[label].append(period)
+    labels = [label for label, periods in periods_by_label.items() if len(periods) >= 2]
+    periods = list(dict.fromkeys(period for label in labels for period in periods_by_label[label]))
+    return Catalogue(sheets=book.sheets, labels=labels, periods=periods)
 
 
 def example_cell(book: Workbook, label: str) -> str:
@@ -51,7 +68,7 @@ def mapper_brief(book: Workbook, catalogue: Catalogue) -> str:
 
 
 def make_map_model_node(llm: BaseChatModel, book: Workbook, memory: ModelMemory | None = None) -> Callable[[InvestigationState], dict]:
-    catalogue = workbook_catalogue(book)
+    catalogue = series_catalogue(book)
     revision = book.revision()
     structured = llm.with_structured_output(ModelMapAnswer, method="function_calling")
     system = SystemMessage(content=load_prompt("map_model"))
@@ -62,6 +79,8 @@ def make_map_model_node(llm: BaseChatModel, book: Workbook, memory: ModelMemory 
             return {"model_map": remembered}
         messages = [system, HumanMessage(content=mapper_brief(book, catalogue))]
         answer, records = invoke_with_usage(structured, messages, role="mapper", model=model_name_of(llm))
+        if answer is None:
+            return {"model_map": None, "run_log": records}
         rows = [row.model_dump() for row in answer.rows if row.label in catalogue.labels]
         columns = [column.model_dump() for column in answer.columns if column.period in catalogue.periods]
         model_map = {"rows": rows, "columns": columns}

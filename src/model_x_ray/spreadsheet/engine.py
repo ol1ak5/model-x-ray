@@ -37,7 +37,10 @@ CELL_PATTERN = re.compile(r"(\$?)([A-Za-z]{1,3})(\$?)([0-9]+)")
 SUPPORTED_FUNCTIONS = (
     "SUM", "AVERAGE", "MIN", "MAX", "IF", "ROUND", "ABS",
     "IFERROR", "AND", "OR", "NOT", "SUMIF", "SUMIFS", "COUNTIF", "COUNTIFS", "SUMPRODUCT", "INDEX", "MATCH", "VLOOKUP", "XLOOKUP", "EOMONTH",
+    "YEAR", "MONTH", "DAY", "DATE", "EDATE", "NPV", "XNPV",
 )
+TIMELINE_ROWS = 30
+YEAR_RANGE = (1900, 2100)
 FUNCTION_PREFIXES = ("_XLFN._XLWS.", "_XLFN.", "_XLWS.")
 EXCEL_EPOCH = date(1899, 12, 30)
 ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
@@ -217,6 +220,16 @@ def end_of_month(start: date, months: int) -> date:
     return first_of_next - timedelta(days=1)
 
 
+def shift_months(start: date, months: int) -> date:
+    year, month = divmod(start.year * 12 + start.month - 1 + months, 12)
+    first = date(year, month + 1, 1)
+    return first.replace(day=min(start.day, end_of_month(first, 0).day))
+
+
+def is_label_text(content: object) -> bool:
+    return isinstance(content, str) and not content.startswith("=") and content.strip() != "" and not ISO_DATE.match(content)
+
+
 def is_number(value: Value) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
@@ -281,6 +294,9 @@ class Workbook:
         self._cache: dict[str, Value] = {}
         self._evaluating: set[str] = set()
         self._dependents: dict[str, list[str]] | None = None
+        self._rows: dict[str, dict[int, list[int]]] = {}
+        self._label_counts: dict[str, dict[tuple[int, str], int]] = {}
+        self._timelines: dict[str, tuple[int, dict[int, str]] | None] = {}
 
     @property
     def sheets(self) -> list[str]:
@@ -381,17 +397,75 @@ class Workbook:
         sheet, address = split_ref(normalize_ref(ref))
         for column in range(1, address.column):
             content = self._cells.get(make_ref(sheet, CellAddress(column, address.row)))
-            if isinstance(content, str) and not content.startswith("="):
-                return content
+            if is_label_text(content):
+                return self._qualified_label(sheet, column, address.row, content)
         return None
 
     def column_header(self, ref: str) -> str | None:
         sheet, address = split_ref(normalize_ref(ref))
         for row in range(address.row - 1, 0, -1):
             content = self._cells.get(make_ref(sheet, CellAddress(address.column, row)))
-            if isinstance(content, str) and not content.startswith("="):
+            if is_label_text(content):
                 return content
+        timeline = self._timeline(sheet)
+        if timeline is not None and address.row > timeline[0]:
+            return timeline[1].get(address.column)
         return None
+
+    def _sheet_rows(self, sheet: str) -> dict[int, list[int]]:
+        if sheet not in self._rows:
+            rows: dict[int, list[int]] = {}
+            for ref in self._cells:
+                cell_sheet, address = split_ref(ref)
+                if cell_sheet == sheet:
+                    rows.setdefault(address.row, []).append(address.column)
+            self._rows[sheet] = {row: sorted(columns) for row, columns in rows.items()}
+        return self._rows[sheet]
+
+    def _number_at(self, ref: str) -> float | None:
+        try:
+            value = self.value(ref)
+        except FormulaError:
+            return None
+        return float(value) if is_number(value) else None
+
+    def _timeline(self, sheet: str) -> tuple[int, dict[int, str]] | None:
+        if sheet not in self._timelines:
+            self._timelines[sheet] = None
+            for row, columns in sorted(self._sheet_rows(sheet).items()):
+                if row > TIMELINE_ROWS:
+                    break
+                years = {}
+                for column in columns:
+                    number = self._number_at(make_ref(sheet, CellAddress(column, row)))
+                    if number is not None and number.is_integer() and YEAR_RANGE[0] <= number <= YEAR_RANGE[1]:
+                        years[column] = int(number)
+                values = list(years.values())
+                if len(values) >= 3 and all(later > earlier for earlier, later in zip(values, values[1:])):
+                    self._timelines[sheet] = (row, {column: str(year) for column, year in years.items()})
+                    break
+        return self._timelines[sheet]
+
+    def _qualified_label(self, sheet: str, column: int, row: int, label: str) -> str:
+        if sheet not in self._label_counts:
+            counts: dict[tuple[int, str], int] = {}
+            for cell_row, columns in self._sheet_rows(sheet).items():
+                for cell_column in columns:
+                    content = self._cells[make_ref(sheet, CellAddress(cell_column, cell_row))]
+                    if is_label_text(content):
+                        counts[(cell_column, content)] = counts.get((cell_column, content), 0) + 1
+            self._label_counts[sheet] = counts
+        if self._label_counts[sheet].get((column, label), 0) < 2:
+            return label
+        rows = self._sheet_rows(sheet)
+        for above in range(row - 1, 0, -1):
+            title = self._cells.get(make_ref(sheet, CellAddress(column, above)))
+            if not is_label_text(title):
+                continue
+            numbers_right = [c for c in rows.get(above, []) if c > column and self._number_at(make_ref(sheet, CellAddress(c, above))) is not None]
+            if not numbers_right:
+                return f"{title} – {label}"
+        return label
 
     @staticmethod
     def _walk(start: str, neighbours: Callable[[str], list[str]]) -> list[str]:
@@ -679,6 +753,35 @@ class FormulaEvaluator:
             if len(values) > 3 and values[3] is not None:
                 return values[3]
             raise
+
+    def call_year(self, values: list) -> Value:
+        return float(from_serial(to_serial(values[0])).year)
+
+    def call_month(self, values: list) -> Value:
+        return float(from_serial(to_serial(values[0])).month)
+
+    def call_day(self, values: list) -> Value:
+        return float(from_serial(to_serial(values[0])).day)
+
+    def call_date(self, values: list) -> Value:
+        year, month, day = (int(self.number(v)) for v in values[:3])
+        first = shift_months(date(year, 1, 1), month - 1)
+        return float((first + timedelta(days=day - 1) - EXCEL_EPOCH).days)
+
+    def call_edate(self, values: list) -> Value:
+        return float((shift_months(from_serial(to_serial(values[0])), int(self.number(values[1]))) - EXCEL_EPOCH).days)
+
+    def call_npv(self, values: list) -> Value:
+        rate = self.number(values[0])
+        return sum(value / (1 + rate) ** period for period, value in enumerate(numbers(values[1:]), start=1))
+
+    def call_xnpv(self, values: list) -> Value:
+        rate = self.number(values[0])
+        flows = self.cells_of(values[1])
+        days = [to_serial(day) for day in self.cells_of(values[2])]
+        if len(flows) != len(days) or not days:
+            raise FormulaError(f"XNPV needs one date per cash flow in {self.ref}")
+        return sum(self.number(flow) / (1 + rate) ** ((day - days[0]) / 365) for flow, day in zip(flows, days))
 
     def call_eomonth(self, values: list) -> Value:
         start = from_serial(to_serial(values[0]))

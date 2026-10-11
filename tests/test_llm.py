@@ -16,7 +16,7 @@ def test_the_role_registry_maps_roles_to_models_and_overrides_from_the_environme
     assert investigator.request_timeout == 120.0
     assert investigator.max_retries == 3
     assert model_for_role("verifier") == "nvidia/nemotron-3-super-120b-a12b"
-    assert model_for_role("mapper") == "nvidia/Nemotron-3_5-Lightning"
+    assert model_for_role("mapper") == "nvidia/nemotron-3-super-120b-a12b"
 
     monkeypatch.setenv("NEBIUS_MODEL_INVESTIGATOR", "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B")
     assert build_chat_model(role="investigator").model_name == "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
