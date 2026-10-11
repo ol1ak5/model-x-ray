@@ -8,7 +8,7 @@ The React app (`frontend/`, Vite + TypeScript, plain CSS) is the face of Model X
 scripts/dev.sh
 ```
 
-One command: installs the npm dependencies if missing, starts the API on `http://localhost:8000` and the app on `http://localhost:5173`, prints both URLs, and stops both on Ctrl+C. Running them separately still works: `scripts/serve.sh`, then `npm --prefix frontend install` once and `npm --prefix frontend run dev`. `VITE_API_URL` points the app at another API, e.g. the deployed one. Tests: `npm --prefix frontend test`; production build: `npm --prefix frontend run build`.
+One command: installs the missing dependencies with bun (npm when bun is not on PATH), starts the API on `http://localhost:8000` and the app on `http://localhost:5173`, prints both URLs and which runner it uses, and stops both on Ctrl+C. Running them separately still works: `scripts/serve.sh`, then `cd frontend && bun install` (or `npm --prefix frontend install`) and `bun run dev`. `VITE_API_URL` points the app at another API, e.g. the deployed one. Tests: `cd frontend && bun run test` or `npm --prefix frontend test`; production build: `cd frontend && bun run build`.
 
 ## Screen flow
 
