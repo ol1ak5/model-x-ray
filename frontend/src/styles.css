@@ -552,3 +552,55 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.dropzone {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 10px;
+  padding: 22px 16px;
+  border: 1.5px dashed var(--line);
+  border-radius: 10px;
+  text-align: center;
+  cursor: pointer;
+  background: var(--bg);
+}
+
+.dropzone:hover,
+.ask input[type="file"]:focus-visible + .dropzone {
+  border-color: var(--accent);
+}
+
+.drop-title {
+  font-weight: 600;
+}
+
+.drop-hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 400;
+}
+
+.link-button {
+  display: block;
+  border: 0;
+  background: none;
+  padding: 4px 0;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.link-button.subtle {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 0.85rem;
+}

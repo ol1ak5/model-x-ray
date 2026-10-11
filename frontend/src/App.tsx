@@ -90,7 +90,7 @@ export default function App() {
 
       <main className="layout">
         <aside className="controls">
-          <QuestionForm spreadsheets={spreadsheets} busy={phase === "running"} onStart={start} />
+          <QuestionForm demos={spreadsheets} busy={phase === "running"} onStart={start} onError={setError} />
           {error && (
             <p className="alert" role="alert">
               {error}
@@ -107,8 +107,8 @@ export default function App() {
             <div className="empty">
               <h2>How it works</h2>
               <ol>
-                <li>Pick a model and ask about a number that surprised you.</li>
-                <li>The agent traces the formulas, tests suspects on a copy and lets a second model try to prove the fix wrong.</li>
+                <li>Upload your model, or try the demo model with three planted errors.</li>
+                <li>The agent scans every formula, traces what each suspect moves, tests a fix on a copy and lets a second model try to prove it wrong.</li>
                 <li>You read the evidence and approve, edit or reject. The original file is never changed.</li>
               </ol>
             </div>

@@ -16,7 +16,7 @@ The API runs on `http://localhost:8000`, the app on `http://localhost:5173` (all
 
 One page follows the investigation. The left column holds what the user does; the right column holds what the agent found.
 
-1. **Ask.** Pick a model (`GET /spreadsheets`) and type a question; example questions fill the box. Investigate starts `POST /investigations/stream`.
+1. **Check.** Upload a model (`POST /spreadsheets`, drag or browse) or press "Try the demo model" (`GET /spreadsheets`), then Check model, which starts `POST /investigations/stream` without a question: the agent finds what to look at. "Ask about a specific number instead" reveals an optional box.
 2. **Progress.** Each `step` event adds a line with Olya's labels ("Reading the workbook", ..., "Writing the explanation"); a spinner shows while the stream is open. A retry shows the diagnose, test and verify steps again.
 3. **Which cell?** When the view is `needs_cell`, the question and candidate cells appear as buttons, with a box for typing any cell (needed when nothing matched). The choice resumes the stream with `{"ref": ...}`.
 4. **Review.** When the view is `needs_review`:

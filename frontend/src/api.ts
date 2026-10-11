@@ -91,6 +91,18 @@ async function failure(response: Response): Promise<ApiError> {
   }
 }
 
+export type Uploaded = { id: string; name: string; sheets: string[] };
+
+export async function uploadSpreadsheet(file: File): Promise<Uploaded> {
+  const response = await fetch(`${API_URL}/spreadsheets?name=${encodeURIComponent(file.name)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/octet-stream" },
+    body: file,
+  });
+  if (!response.ok) throw await failure(response);
+  return response.json();
+}
+
 export async function listSpreadsheets(): Promise<Spreadsheet[]> {
   const response = await fetch(`${API_URL}/spreadsheets`);
   if (!response.ok) throw await failure(response);

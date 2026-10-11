@@ -97,14 +97,10 @@ export function fakeApi(start: Event[], resumes: Event[][] = []) {
   const sent: { url: string; body: unknown }[] = [];
   const queue = [...resumes];
   const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
-    const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+    const body = init?.body && typeof init.body === "string" ? JSON.parse(init.body) : init?.body;
     sent.push({ url, body });
-    if (url.endsWith("/spreadsheets")) {
-      return Response.json([
-        { id: "demo", sheets: ["P&L", "Assumptions"] },
-        { id: "type1/variant-000", sheets: ["P&L", "Assumptions", "Summary"] },
-      ]);
-    }
+    if (url.endsWith("/spreadsheets")) return Response.json([{ id: "demo", sheets: ["P&L", "Assumptions", "Summary"] }]);
+    if (url.includes("/spreadsheets?name=")) return Response.json({ id: "upload-1", name: decodeURIComponent(url.split("name=")[1]), sheets: ["P&L"] }, { status: 201 });
     if (url.endsWith("/investigations/stream")) return streamed(sse(start));
     if (url.includes("/resume/stream")) return streamed(sse(queue.shift() ?? []));
     return Response.json({ detail: "unknown" }, { status: 404 });

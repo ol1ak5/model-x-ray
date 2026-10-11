@@ -7,23 +7,28 @@ import { APPROVED, CELL_CHOICE, REJECTED, REVIEW, STEPS, fakeApi, steps } from "
 
 afterEach(() => vi.unstubAllGlobals());
 
-async function ask(question: string) {
+async function checkDemo() {
   const user = userEvent.setup();
   render(<App />);
-  await user.selectOptions(await screen.findByLabelText("Model"), "demo");
-  await user.type(screen.getByLabelText("Question"), question);
-  await user.click(screen.getByRole("button", { name: "Investigate" }));
+  await user.click(await screen.findByRole("button", { name: "Try the demo model" }));
+  await user.click(screen.getByRole("button", { name: "Check model" }));
   return user;
 }
 
 describe("an investigation in the browser", () => {
-  test("streams every step, shows the evidence, and offers the corrected file after approval", async () => {
+  test("checks an uploaded model, streams every step, shows the evidence, and offers the corrected file after approval", async () => {
     const api = fakeApi(
       [...steps(...STEPS.map(([name]) => name)), ["view", REVIEW]],
       [[...steps("human_review", "apply_fix"), ["view", APPROVED]]],
     );
     vi.stubGlobal("fetch", api.fetch);
-    const user = await ask("Why did EBITDA 2027 jump?");
+    const user = userEvent.setup();
+    render(<App />);
+    expect(screen.queryByRole("button", { name: /Why did/ })).not.toBeInTheDocument();
+    await user.upload(screen.getByLabelText(/Upload your model/), new File(["xlsx bytes"], "My model.xlsx"));
+    expect(await screen.findByText("My model.xlsx")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Check model" }));
+    expect(api.sent.find((request) => request.url.endsWith("/investigations/stream"))?.body).toEqual({ spreadsheet_id: "upload-1", question: "" });
 
     const progress = await screen.findByRole("list", { name: "Progress" });
     for (const [, label] of STEPS) expect(await within(progress).findByText(label)).toBeInTheDocument();
@@ -63,7 +68,13 @@ describe("an investigation in the browser", () => {
       ],
     );
     vi.stubGlobal("fetch", api.fetch);
-    const user = await ask("Why did EBITDA 2027 jump?");
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole("button", { name: "Try the demo model" }));
+    await user.click(screen.getByRole("button", { name: "Ask about a specific number instead" }));
+    await user.type(screen.getByLabelText("Number to explain (optional)"), "EBITDA 2027");
+    await user.click(screen.getByRole("button", { name: "Check model" }));
+    expect(api.sent.find((request) => request.url.endsWith("/investigations/stream"))?.body).toEqual({ spreadsheet_id: "demo", question: "EBITDA 2027" });
 
     const choice = await screen.findByRole("group", { name: "Which cell do you mean?" });
     await user.click(within(choice).getByRole("button", { name: "Summary!D10" }));
@@ -82,7 +93,7 @@ describe("an investigation in the browser", () => {
   test("lets the reviewer edit the fix, which is tested again", async () => {
     const api = fakeApi([...steps("explain"), ["view", REVIEW]], [[...steps("human_review", "test", "verify", "explain"), ["view", REVIEW]]]);
     vi.stubGlobal("fetch", api.fetch);
-    const user = await ask("Why did EBITDA 2027 jump?");
+    const user = await checkDemo();
 
     await user.click(await screen.findByRole("button", { name: "Edit fix" }));
     const formula = screen.getByLabelText("New formula for P&L!H7");
@@ -103,9 +114,9 @@ describe("an investigation in the browser", () => {
   test("shows a short message when the investigation fails", async () => {
     const api = fakeApi([...steps("load_sheet", "map_model"), ["error", 503, "The AI service took too long to answer. Please try again in a minute."]]);
     vi.stubGlobal("fetch", api.fetch);
-    await ask("Why did EBITDA 2027 jump?");
+    await checkDemo();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("The AI service took too long to answer. Please try again in a minute.");
-    expect(screen.getByRole("button", { name: "Investigate" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Check model" })).toBeEnabled();
   });
 });

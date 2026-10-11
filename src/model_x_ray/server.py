@@ -17,7 +17,7 @@ def setting(name: str, default: str) -> str:
 
 def app_from_env() -> FastAPI:
     load_dotenv()
-    models_dir = Path(setting("MODEL_X_RAY_MODELS_DIR", "models"))
+    models_dir = Path(setting("MODEL_X_RAY_MODELS_DIR", "demo_models"))
     if not models_dir.is_dir():
         raise ValueError(f"The models folder {models_dir} does not exist; create it and put .xlsx models in it, or set MODEL_X_RAY_MODELS_DIR")
     files = {path.relative_to(models_dir).with_suffix("").as_posix(): path for path in sorted(models_dir.rglob("*.xlsx"))}
@@ -33,4 +33,5 @@ def app_from_env() -> FastAPI:
     cap = UsageCap(per_visitor=int(setting("DEMO_MAX_PER_VISITOR", "5")), total=int(setting("DEMO_MAX_PER_DAY", "100")))
     origins = [origin.strip() for origin in setting("MODEL_X_RAY_ALLOWED_ORIGINS", "http://localhost:5173").split(",") if origin.strip()]
     store = sqlite_store(setting("MODEL_X_RAY_MEMORY", "memory.db"))
-    return create_app(source, sandbox, models, checkpointer, cap, origins, store)
+    uploads = Path(setting("MODEL_X_RAY_UPLOAD_DIR", "uploads"))
+    return create_app(source, sandbox, models, checkpointer, cap, origins, store, uploads)
