@@ -76,6 +76,7 @@ h3 {
   flex-direction: column;
   justify-content: center;
   min-height: calc(100vh - var(--nav-height, 63px));
+  padding-bottom: clamp(0px, 7vh, 96px);
 }
 
 .nav {
@@ -196,7 +197,7 @@ input:not([type="checkbox"]):not([type="file"]) {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
   gap: clamp(32px, 4vw, 64px);
   align-items: center;
-  padding: clamp(24px, 5vh, 64px) 0 clamp(12px, 2vh, 28px);
+  padding: clamp(14px, 2.5vh, 32px) 0 clamp(12px, 2vh, 28px);
 }
 
 .eyebrow {
@@ -457,7 +458,7 @@ input:not([type="checkbox"]):not([type="file"]) {
   column-gap: 14px;
   row-gap: 12px;
   align-items: center;
-  align-content: center;
+  align-content: start;
   box-shadow: 0 10px 30px rgba(13, 27, 20, 0.05);
 }
 
