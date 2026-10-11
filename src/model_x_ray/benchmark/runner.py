@@ -363,11 +363,16 @@ def is_error_row(row: dict) -> bool:
     return "error" in row
 
 
-def guarded(task: Callable[[], dict]) -> dict:
+def guarded(task: Callable[[], dict], label: dict) -> dict:
     try:
         return task()
     except Exception as error:
-        return {"error": f"{type(error).__name__}: {error}"}
+        return {**label, "error": f"{type(error).__name__}: {error}"}
+
+
+def run_job(job: tuple[Callable[[], dict], dict]) -> dict:
+    task, label = job
+    return guarded(task, label)
 
 
 def run_benchmark(
@@ -380,19 +385,21 @@ def run_benchmark(
     manifest = json.loads((root / "manifest.json").read_text())
     base_path = root / "base.xlsx"
     base = load_xlsx(base_path) if base_path.is_file() else None
-    tasks: list[Callable[[], dict]] = []
+    tasks: list[tuple[Callable[[], dict], dict]] = []
     for variant in manifest["variants"]:
         ground_truth = json.loads((root / variant["ground_truth"]).read_text())
         for setup in setups:
             source = XlsxSource({"variant": root / variant["file"]})
             output_dir = root / "corrected" / setup.name / variant["set"]
             sandbox = XlsxSandbox(source, output_dir)
-            tasks.append(partial(run_variant, setup, source, sandbox, "variant", ground_truth, factory, output_dir, base=base))
+            task = partial(run_variant, setup, source, sandbox, "variant", ground_truth, factory, output_dir, base=base)
+            label = {"setup": setup.name, "set": ground_truth["set"], "variant_index": ground_truth["variant_index"]}
+            tasks.append((task, label))
     if workers > 1:
         with ThreadPoolExecutor(max_workers=workers) as pool:
-            rows = list(pool.map(guarded, tasks))
+            rows = list(pool.map(run_job, tasks))
     else:
-        rows = [guarded(task) for task in tasks]
+        rows = [run_job(job) for job in tasks]
     results = {
         "meta": {
             "variants": len(manifest["variants"]),

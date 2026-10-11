@@ -269,6 +269,7 @@ def test_the_runner_captures_failed_investigations_without_losing_the_rest(tmp_p
     errors = [row for row in results["rows"] if "error" in row]
     assert len(errors) == 14
     assert errors[0]["error"] == "RuntimeError: model unavailable"
+    assert all(row["setup"] == "broken" and row["set"] and isinstance(row["variant_index"], int) for row in errors)
     assert results["meta"]["errors"] == 14
     assert results["aggregates"] == []
     report = render_report(results)
