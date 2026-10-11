@@ -60,7 +60,6 @@ export default function App() {
     window.setTimeout(() => {
       const record = document.getElementById(id);
       record?.scrollIntoView?.({ behavior: "smooth", block: "center" });
-      record?.focus();
     }, 50);
   }
 
