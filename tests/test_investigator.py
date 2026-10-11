@@ -465,3 +465,25 @@ def test_graph_run_records_role_usage_for_the_evaluators(demo_workbook_path: Pat
     assert by_role["verifier"]["output_tokens"] == 50
     for entry in run_log:
         assert entry["latency_ms"] >= 0
+
+
+class PlainTextDiagnosis(ScriptedDiagnosis):
+    def bind_tools(self, tools: Sequence[Any], **kwargs: Any) -> "ScriptedDiagnosis":
+        assert tools, "the plain-text investigator must not bind an empty tool list"
+        return super().bind_tools(tools, **kwargs)
+
+
+def test_the_plain_text_investigator_investigates_a_whole_model_without_tools(demo_workbook_path: Path) -> None:
+    model = PlainTextDiagnosis(turns=[(["P&L!H7"], "P&L!H7")])
+    book = load_xlsx(demo_workbook_path)
+    investigator = build_investigator(model, [])
+    graph = build_graph(InMemorySaver(), diagnose=make_diagnose_node(investigator, book, plain_text=True))
+    config = {"configurable": {"thread_id": "no-tools"}}
+
+    graph.invoke({"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump on the P&L sheet?"}, config)
+    state = graph.get_state(config).values
+
+    assert model.briefs and "The whole model, read as text:" in model.briefs[0]
+    assert [(h["id"], h["cell"], h["status"]) for h in state["hypotheses"]] == [("hyp-1", "P&L!H7", "confirmed")]
+    assert state["patch"]["new_formula"] == "=G7*(1+Assumptions!$C$7)"
+    assert graph.get_state(config).next == ("human_review",)
