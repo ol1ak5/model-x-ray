@@ -357,7 +357,7 @@ def test_investigator_leaves_a_deliberate_override_alone(demo_workbook_with_over
 
     assert state["hypotheses"] == []
     assert state["patch"] is None
-    assert "Inconclusive" in state["report"]
+    assert state["report"].startswith("No error found.")
     assert any("Per budget meeting" in e["text"] for e in state["evidence"])
     assert all(evidence_id.startswith("ev-") for evidence_id in [e["id"] for e in state["evidence"]])
 

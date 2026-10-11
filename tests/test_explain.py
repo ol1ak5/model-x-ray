@@ -2,7 +2,7 @@ import re
 from pathlib import Path
 
 from langgraph.types import Command
-from test_investigator import ScriptedDiagnosis
+from test_investigator import OutlierScanner, ScriptedDiagnosis
 
 from model_x_ray.graph import run_investigation
 from model_x_ray.spreadsheet.source import XlsxSource
@@ -62,7 +62,27 @@ def test_explain_cites_only_ids_that_resolve_in_state(
     assert report.endswith(".")
 
 
-def test_explain_reports_inconclusive_without_citing_anything(
+def test_a_clean_answer_says_no_error_found_and_names_the_drivers_with_evidence(
+    demo_workbook_with_override_note: Path, engine_sandbox,
+) -> None:
+    graph = run_investigation(
+        OutlierScanner(), "demo", XlsxSource({"demo": demo_workbook_with_override_note}), engine_sandbox,
+    )
+    config = {"configurable": {"thread_id": "explain-no-error"}}
+
+    graph.invoke({"spreadsheet_id": "demo", "question": QUESTION}, config)
+    state = graph.get_state(config).values
+
+    assert state["report"] == (
+        "No error found. EBITDA 2027E moved from 40.03 to 52.01 (ev-1); the change comes from "
+        "Gross profit (P&L!H6, +7.20, ev-2) and Opex (P&L!H7, +4.78, ev-3)."
+    )
+    known = {e["id"] for e in state["evidence"]}
+    assert set(re.findall(r"ev-\d+", state["report"])) <= known
+    assert "Inconclusive" not in state["report"]
+
+
+def test_an_unproven_suspect_is_explained_not_reported_as_a_failure(
     demo_workbook_path: Path, engine_sandbox, scripted_verdict,
 ) -> None:
     model = ScriptedDiagnosis(turns=[(["P&L!H7"], "P&L!H7")])
@@ -75,8 +95,13 @@ def test_explain_reports_inconclusive_without_citing_anything(
     graph.invoke({"spreadsheet_id": "demo", "question": QUESTION}, config)
     state = graph.get_state(config).values
 
-    assert state["report"] == "Inconclusive: no hypothesis survived verification."
-    assert re.findall(r"ev-\d+", state["report"]) == []
+    assert state["report"] == (
+        "No confirmed error. EBITDA 2027E moved from 40.03 to 52.01 (ev-1); the change comes from "
+        "Gross profit (P&L!H6, +7.20, ev-2) and Opex (P&L!H7, +4.78, ev-3). "
+        "The agent checked 1 suspect but could not prove it: P&L!H7 (typed value), because the independent check rejected the fix: not convinced. "
+        "Nothing was changed; review this cell before relying on the number."
+    )
+    assert set(re.findall(r"ev-\d+", state["report"])) <= {e["id"] for e in state["evidence"]}
     assert state["evidence"], "trace evidence exists even when the run fails"
     assert [e for e in state["evidence"] if e["kind"] == "verification"] == []
 
@@ -101,3 +126,26 @@ def test_a_human_edit_is_proven_again_with_a_new_verification_record(
     assert proofs == ["ev-4", "ev-5"]
     assert "ev-5" in state["report"] and "ev-4" not in state["report"]
     assert graph.get_state(config).next == ("human_review",)
+
+
+def test_a_cell_suspected_twice_is_reported_with_its_tested_attempt(
+    demo_workbook_path: Path, engine_sandbox, scripted_verdict,
+) -> None:
+    model = ScriptedDiagnosis(turns=[
+        (["P&L!H7", "P&L!H5"], "P&L!H7"),
+        (["P&L!H5"], "P&L!H5", "=-H4*Assumptions!$C$6"),
+        (["P&L!H4"], "P&L!H4", "=G4*(1+Assumptions!$C$5)"),
+    ])
+    scripted_verdict.verdicts = [("rejected", "the growth still looks implausible")]
+    graph = run_investigation(
+        model, "demo", XlsxSource({"demo": demo_workbook_path}), engine_sandbox, verifier=scripted_verdict,
+    )
+    config = {"configurable": {"thread_id": "explain-suspected-twice"}}
+
+    graph.invoke({"spreadsheet_id": "demo", "question": QUESTION}, config)
+    report = graph.get_state(config).values["report"]
+
+    assert "The agent checked 3 suspects but could not prove any of them:" in report
+    assert "P&L!H7 (typed value), because the independent check rejected the fix: the growth still looks implausible;" in report
+    assert "P&L!H5 (typed value), because the fix did not remove the unusual change;" in report
+    assert "not tested" not in report

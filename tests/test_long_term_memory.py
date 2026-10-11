@@ -36,7 +36,7 @@ def test_a_cell_marked_intentional_is_never_flagged_again_until_it_changes(demo_
     assert second["known_overrides"] == [{"cell": "P&L!H7", "content": "-45.2", "reason": "Opex frozen per budget meeting"}]
     assert "Marked intentional by a reviewer, do not propose: P&L!H7 (Opex frozen per budget meeting)" in investigator.briefs[-1]
     assert second["hypotheses"] == []
-    assert second["report"].startswith("Inconclusive")
+    assert second["report"].startswith("No error found.")
 
     changed = tmp_path / "changed.xlsx"
     book = openpyxl.load_workbook(demo_workbook_path)

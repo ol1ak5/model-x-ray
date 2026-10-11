@@ -99,7 +99,10 @@ def test_verify_goes_inconclusive_when_every_attempt_is_rejected(
 
     assert graph.get_state(config).next == ("human_review",)
     assert state["attempts"] == 3
-    assert "Inconclusive" in state["report"]
+    assert state["report"].startswith("No confirmed error.")
+    assert "could not prove any of them" in state["report"]
+    assert "it was not tested before the agent's 3 attempts ran out" in state["report"]
+    assert state["report"].endswith("review these cells before relying on the number.")
     assert [(h["id"], h["status"]) for h in state["hypotheses"]] == [
         ("hyp-1", "rejected"),
         ("hyp-2", "open"),
@@ -136,5 +139,5 @@ def test_verify_cannot_confirm_a_patch_that_fails_the_deterministic_checks(
     assert "deterministic checks failed" in record["reason"]
     assert "pattern_restored" in record["reason"]
     assert state["hypotheses"][0]["status"] == "rejected"
-    assert "Inconclusive" in state["report"]
+    assert "P&L!H7 (typed value), because the fix did not remove the unusual change and the fix did not match the formulas next to it." in state["report"]
     assert scripted_verdict.human == []

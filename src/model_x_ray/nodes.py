@@ -8,6 +8,7 @@ from model_x_ray import causal
 from model_x_ray.agents.verifier import build_verifier, deterministic_checks, invoke_verifier
 from model_x_ray.llm import model_name_of
 from model_x_ray.memory import ModelMemory
+from model_x_ray.routing import MAX_ATTEMPTS
 from model_x_ray.spreadsheet.engine import Workbook
 from model_x_ray.spreadsheet.sandbox import Sandbox, SandboxWithWrite, run_sandbox_test
 from model_x_ray.spreadsheet.source import SpreadsheetSource
@@ -266,12 +267,80 @@ def _citations(state: InvestigationState, hypothesis: Hypothesis | None) -> list
     return [record["id"] for record in evidence if record["kind"] == "anomaly"][:1]
 
 
+def joined(parts: list[str]) -> str:
+    return parts[0] if len(parts) == 1 else f"{', '.join(parts[:-1])} and {parts[-1]}"
+
+
+CHECK_FAILURES = {
+    "anomaly_resolved": "the fix did not remove the unusual change",
+    "dependents_consistent": "the fix broke cells that depend on it",
+    "pattern_restored": "the fix did not match the formulas next to it",
+}
+
+
+def no_error_report(state: InvestigationState) -> str:
+    movement = movement_and_drivers(state)
+    return f"No error found. {movement}." if movement else "No error found."
+
+
+def why_unproven(verification: Verification | None) -> str:
+    if verification is None:
+        return f"it was not tested before the agent's {MAX_ATTEMPTS} attempts ran out"
+    failed = [CHECK_FAILURES[name] for name, ok in verification.get("checks", {}).items() if not ok and name in CHECK_FAILURES]
+    if failed:
+        return joined(failed)
+    if verification.get("verdict") == "rejected":
+        return f"the independent check rejected the fix: {verification.get('reason', '').rstrip('.')}"
+    return "it could not be tested on a copy"
+
+
+def unproven_report(state: InvestigationState) -> str:
+    verifications = {v["hypothesis_id"]: v for v in state.get("verifications", [])}
+    suspects: dict[str, str] = {}
+    tested: set[str] = set()
+    for hypothesis in state.get("hypotheses", []):
+        verification = verifications.get(hypothesis["id"])
+        if hypothesis["status"] == "confirmed" or (hypothesis["cell"] in tested and verification is None):
+            continue
+        if verification is not None:
+            tested.add(hypothesis["cell"])
+        kind = hypothesis["error_type"].replace("_", " ")
+        suspects[hypothesis["cell"]] = f"{hypothesis['cell']} ({kind}), because {why_unproven(verification)}"
+    count = len(suspects)
+    movement = movement_and_drivers(state)
+    report = f"No confirmed error. {movement}. " if movement else "No confirmed error. "
+    report += f"The agent checked {count} suspect{'s' if count != 1 else ''} but could not prove {'it' if count == 1 else 'any of them'}: {'; '.join(suspects.values())}. "
+    return report + f"Nothing was changed; review {'this cell' if count == 1 else 'these cells'} before relying on the number."
+
+
+def movement_and_drivers(state: InvestigationState) -> str:
+    target = state.get("target")
+    if not target:
+        return ""
+    evidence = state.get("evidence", [])
+    target_ref = f"{target['sheet']}!{target['cell']}"
+    target_id = next((e["id"] for e in evidence if e["cell"] == target_ref and e["kind"] == "anomaly"), None)
+    report = f"{target['label']} {target['period']} moved from {target['prior_value']:.2f} to {target['value']:.2f}"
+    if target_id:
+        report += f" ({target_id})"
+    drivers = []
+    for contribution in sorted(state.get("contributions", []), key=lambda c: abs(c["delta"]), reverse=True)[:3]:
+        cited = next((e["id"] for e in evidence if e["cell"] == contribution["cell"] and e["kind"] != "verification"), None)
+        detail = f"{contribution['cell']}, {contribution['delta']:+.2f}" + (f", {cited}" if cited else "")
+        drivers.append(f"{contribution['label']} ({detail})")
+    if drivers:
+        report += f"; the change comes from {joined(drivers)}"
+    return report
+
+
 def make_explain_node() -> Callable[[InvestigationState], dict]:
     def explain_node(state: InvestigationState) -> dict:
+        if not state.get("hypotheses"):
+            return {"report": no_error_report(state)}
         verifications = state.get("verifications", [])
         latest = verifications[-1] if verifications else None
         if latest is None or latest["verdict"] != "confirmed":
-            return {"report": "Inconclusive: no hypothesis survived verification."}
+            return {"report": unproven_report(state)}
         hypothesis = next(
             (h for h in state.get("hypotheses", []) if h["id"] == latest["hypothesis_id"]),
             None,
