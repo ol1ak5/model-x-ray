@@ -51,6 +51,7 @@ class AgentModels:
     verifier: BaseChatModel | None = None
     locator: BaseChatModel | None = None
     mapper: BaseChatModel | None = None
+    explainer: BaseChatModel | None = None
 
 
 @dataclass
@@ -150,7 +151,7 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
 
     def build(spreadsheet_id: str) -> CompiledStateGraph:
         try:
-            return run_investigation(models.llm, spreadsheet_id, source, sandbox, checkpointer, verifier=models.verifier, locator=models.locator, mapper=models.mapper, store=store)
+            return run_investigation(models.llm, spreadsheet_id, source, sandbox, checkpointer, verifier=models.verifier, locator=models.locator, mapper=models.mapper, explainer=models.explainer, store=store)
         except ValueError as error:
             raise HTTPException(400, str(error)) from error
 

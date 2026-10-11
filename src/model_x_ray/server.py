@@ -28,6 +28,7 @@ def app_from_env() -> FastAPI:
         verifier=build_chat_model(role="verifier"),
         locator=build_chat_model(role="locate"),
         mapper=build_chat_model(role="mapper"),
+        explainer=build_chat_model(role="explain"),
     )
     checkpointer = sqlite_checkpointer(setting("MODEL_X_RAY_CHECKPOINTS", "checkpoints.db"))
     cap = UsageCap(per_visitor=int(setting("DEMO_MAX_PER_VISITOR", "5")), total=int(setting("DEMO_MAX_PER_DAY", "100")))
