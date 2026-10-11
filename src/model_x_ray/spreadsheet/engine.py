@@ -201,6 +201,14 @@ def relative_part(address: CellAddress, base: CellAddress) -> str:
     return row + column
 
 
+def shifted_part(address: CellAddress, delta_row: int, delta_column: int) -> str:
+    row = address.row if address.absolute_row else address.row + delta_row
+    column = address.column if address.absolute_column else address.column + delta_column
+    column_text = f"${column_letters(column)}" if address.absolute_column else column_letters(column)
+    row_text = f"${row}" if address.absolute_row else str(row)
+    return column_text + row_text
+
+
 def to_serial(value: Value) -> float:
     if isinstance(value, str) and ISO_DATE.match(value):
         return float((datetime.fromisoformat(value).date() - EXCEL_EPOCH).days)
@@ -390,6 +398,27 @@ class Workbook:
             text = relative_part(reference.start, base)
             if reference.end is not None:
                 text += ":" + relative_part(reference.end, base)
+            pieces.append(prefix + text)
+        return "=" + "".join(pieces)
+
+    def shifted_formula(self, source_ref: str, target_ref: str) -> str | None:
+        formula = self.formula(source_ref)
+        if formula is None:
+            return None
+        _, source = split_ref(normalize_ref(source_ref))
+        _, target = split_ref(normalize_ref(target_ref))
+        delta_row = target.row - source.row
+        delta_column = target.column - source.column
+        pieces = []
+        for token in tokenize(formula):
+            if token.kind != "ref":
+                pieces.append(token.text)
+                continue
+            reference = parse_reference(token.text)
+            prefix = f"{reference.sheet_text}!" if reference.sheet_text else ""
+            text = shifted_part(reference.start, delta_row, delta_column)
+            if reference.end is not None:
+                text += ":" + shifted_part(reference.end, delta_row, delta_column)
             pieces.append(prefix + text)
         return "=" + "".join(pieces)
 

@@ -379,6 +379,21 @@ def verify_keep_open_then_confirm(state: InvestigationState) -> dict:
     }
 
 
+def test_a_typed_value_patch_is_corrected_to_the_row_formula_even_when_the_investigator_proposes_another(demo_workbook_path: Path, engine_sandbox, scripted_verdict) -> None:
+    model = ScriptedDiagnosis(turns=[(["P&L!H7"], "P&L!H7", "=G7*1.05")])
+    graph = run_investigation(model, "demo", XlsxSource({"demo": demo_workbook_path}), engine_sandbox, verifier=scripted_verdict)
+    config = {"configurable": {"thread_id": "row-formula"}}
+
+    graph.invoke({"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump on the P&L sheet?"}, config)
+    graph.invoke(Command(resume={"action": "approve", "reason": "", "patch": None}), config)
+    state = graph.get_state(config).values
+
+    assert state["patch"]["new_formula"] == "=G7*(1+Assumptions!$C$7)"
+    assert state["verifications"][-1]["verdict"] == "confirmed"
+    assert state["corrected_copy_id"] == "corrected:demo"
+    assert engine_sandbox.writes[0]["patch"]["new_formula"] == "=G7*(1+Assumptions!$C$7)"
+
+
 def test_approve_writes_a_corrected_copy_with_a_change_log(demo_workbook_path: Path, engine_sandbox, scripted_verdict) -> None:
     model = ScriptedDiagnosis(turns=[(["P&L!H7"], "P&L!H7")])
     graph = run_investigation(model, "demo", XlsxSource({"demo": demo_workbook_path}), engine_sandbox, verifier=scripted_verdict)
