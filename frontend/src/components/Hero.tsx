@@ -28,7 +28,7 @@ const STEPS = [
   { icon: "scan" as const, title: "Scans every formula", text: "Finds hardcodes and broken references, even when several errors are mixed." },
   { icon: "trace" as const, title: "Traces the cause", text: "Follows each number back to the cell that moved it." },
   { icon: "shield" as const, title: "Proves the fix", text: "Every detected error is corrected on a copy and verified before you see it." },
-  { icon: "user" as const, title: "You decide", text: "Approve, edit or reject. Your original file is never changed." },
+  { icon: "user" as const, title: "You decide", text: "Approve, edit or reject the changes. Your original file is never changed." },
 ];
 
 export default function Hero({ demos, error, onStart, onError }: { demos: Spreadsheet[]; error: string | null; onStart: (id: string, question: string, name: string) => void; onError: (message: string) => void }) {
