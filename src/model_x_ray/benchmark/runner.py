@@ -237,6 +237,7 @@ def run_variant(
         probe_log = correct_log + wrong_log
         verdict_events = [(correct, True), (wrong, False)]
     verifications = final.get("verifications", [])
+    inconclusive = has_error and (not verifications or verifications[-1]["verdict"] != "confirmed")
     if has_error and verifications:
         patch = final.get("patch")
         if patch is not None:
@@ -256,7 +257,7 @@ def run_variant(
         "error_type_correct": metrics["error_type_correct"],
         "fix_accuracy": fix_accuracy_of(ground_truth, final, output_dir, has_error),
         "false_alarm": metrics["false_alarm"],
-        "inconclusive": (final.get("report") or "").startswith("Inconclusive"),
+        "inconclusive": inconclusive,
         "probe_correct": probe_correct,
         "probe_wrong": probe_wrong,
         "verdict_precision": verdicts["verdict_precision"],
