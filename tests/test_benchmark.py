@@ -65,7 +65,8 @@ def test_the_rules_setup_finds_the_planted_cell_end_to_end_without_any_llm(tmp_p
     assert [h["cell"] for h in final["hypotheses"][:3]].count(planted["cell"]) == 1
     assert final["hypotheses"][0]["cell"] == planted["cell"]
     assert final["hypotheses"][0]["error_type"] == "typed_value"
-    assert final["report"] == "Inconclusive: no hypothesis survived verification."
+    assert final["report"].startswith("No confirmed error.")
+    assert "Nothing was changed" in final["report"]
     assert final["corrected_copy_id"] is None
     assert events["locate_asked"] is True
     assert {entry["node"] for entry in final["node_log"]} >= {
@@ -163,6 +164,7 @@ def test_the_runner_writes_rows_and_aggregates_with_wilson_intervals(tmp_path: P
     rules_type1 = next(r for r in rows if r["set"] == "type1" and r["variant_index"] == 0)
     assert rules_type1["root_cause_top1"] is True
     assert rules_type1["fix_accuracy"] == 0.0
+    assert rules_type1["inconclusive"] is True
     assert rules_type1["hypothesis_revisions"] >= 0
     assert rules_type1["parse_share"] == 1.0
     assert rules_type1["edge_precision"] == 1.0
@@ -171,6 +173,7 @@ def test_the_runner_writes_rows_and_aggregates_with_wilson_intervals(tmp_path: P
     assert rules_type1["confidence_calibration"] == {"medium": 0.0}
     clean = next(r for r in rows if r["set"] == "clean")
     assert clean["false_alarm"] is True
+    assert clean["inconclusive"] is False
     assert clean["parse_share"] == 1.0
     assert clean["edge_precision"] == 1.0
     assert clean["edge_recall"] == 1.0
@@ -239,7 +242,7 @@ def test_the_evaluators_score_a_fixed_state_against_ground_truth() -> None:
     clean_state = {
         **state,
         "hypotheses": [{"id": "hyp-9", "cell": "P&L!G4", "error_type": "typed_value", "status": "open", "claim": "", "evidence_ids": [], "confidence": "medium"}],
-        "report": "Inconclusive: no hypothesis survived verification.",
+        "report": "No confirmed error. The agent checked 1 suspect but could not prove it.",
     }
     clean_question = {"target": "P&L!H10", "expected_error_cells": [], "expected_verdict": "no_error"}
     assert diagnose_metrics(clean_state, clean_question, [])["false_alarm"] is True
