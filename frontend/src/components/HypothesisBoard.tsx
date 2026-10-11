@@ -9,7 +9,7 @@ const COLUMNS: { status: Hypothesis["status"]; title: string }[] = [
 export default function HypothesisBoard({ hypotheses }: { hypotheses: Hypothesis[] }) {
   return (
     <section className="card" aria-labelledby="hypotheses-title">
-      <h2 id="hypotheses-title">Hypotheses</h2>
+      <h2 id="hypotheses-title">Findings</h2>
       <div className="board">
         {COLUMNS.map((column) => (
           <div key={column.status} role="group" aria-label={column.title} className={`column ${column.status}`}>

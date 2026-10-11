@@ -61,6 +61,19 @@ export const CELL_CHOICE: InvestigationView = {
 export const APPROVED: InvestigationView = { ...REVIEW, status: "done", pause: null, corrected_copy_id: "demo-corrected.xlsx" };
 export const REJECTED: InvestigationView = { ...REVIEW, status: "done", pause: null, corrected_copy_id: null };
 
+export const SHEET = {
+  sheet: "P&L",
+  columns: [
+    { letter: "F", header: "2025A" },
+    { letter: "G", header: "2026E" },
+    { letter: "H", header: "2027E" },
+  ],
+  rows: [
+    { row: 7, label: "Opex", cells: [{ ref: "P&L!F7", value: -47.6, formula: null }, { ref: "P&L!G7", value: -49.98, formula: "=F7*(1+Assumptions!$C$7)" }, { ref: "P&L!H7", value: -45.2, formula: null }] },
+    { row: 8, label: "EBITDA", cells: [{ ref: "P&L!F8", value: 35.7, formula: "=F6+F7" }, { ref: "P&L!G8", value: 40.03, formula: "=G6+G7" }, { ref: "P&L!H8", value: 52.01, formula: "=H6+H7" }] },
+  ],
+};
+
 type Event = ["step", string, string] | ["view", InvestigationView] | ["error", number, string];
 
 function sse(events: Event[]): string {
@@ -101,6 +114,7 @@ export function fakeApi(start: Event[], resumes: Event[][] = []) {
     sent.push({ url, body });
     if (url.endsWith("/spreadsheets")) return Response.json([{ id: "demo", sheets: ["P&L", "Assumptions", "Summary"] }]);
     if (url.includes("/spreadsheets?name=")) return Response.json({ id: "upload-1", name: decodeURIComponent(url.split("name=")[1]), sheets: ["P&L"] }, { status: 201 });
+    if (url.endsWith("/sheet")) return Response.json(SHEET);
     if (url.endsWith("/investigations/stream")) return streamed(sse(start));
     if (url.includes("/resume/stream")) return streamed(sse(queue.shift() ?? []));
     return Response.json({ detail: "unknown" }, { status: 404 });

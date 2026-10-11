@@ -7,6 +7,10 @@ import { APPROVED, CELL_CHOICE, REJECTED, REVIEW, STEPS, fakeApi, steps } from "
 
 afterEach(() => vi.unstubAllGlobals());
 
+function lastResume(api: ReturnType<typeof fakeApi>) {
+  return api.sent.filter((request) => request.url.includes("/resume/")).at(-1);
+}
+
 async function checkDemo() {
   const user = userEvent.setup();
   render(<App />);
@@ -37,7 +41,13 @@ describe("an investigation in the browser", () => {
     expect(within(report).getByText(/Root cause found in P&L!H7/)).toBeInTheDocument();
     expect(within(report).getByRole("link", { name: "ev-3" })).toHaveAttribute("href", "#ev-3");
 
-    const board = screen.getByRole("region", { name: "Hypotheses" });
+    const grid = await screen.findByRole("region", { name: "Sheet" });
+    expect(within(grid).getByRole("button", { name: "P&L!H7, confirmed" })).toHaveTextContent("(45.2)(52.5)");
+    expect(within(grid).getByText("=G7*(1+Assumptions!$C$7)")).toBeInTheDocument();
+    await user.click(within(grid).getByRole("button", { name: "P&L!G7" }));
+    expect(within(grid).getByText("=F7*(1+Assumptions!$C$7)")).toBeInTheDocument();
+
+    const board = screen.getByRole("region", { name: "Findings" });
     expect(within(within(board).getByRole("group", { name: "Confirmed" })).getByText("P&L!H7")).toBeInTheDocument();
     expect(within(within(board).getByRole("group", { name: "Confirmed" })).getByText("high confidence")).toBeInTheDocument();
     expect(within(within(board).getByRole("group", { name: "Rejected" })).getByText("P&L!H5")).toBeInTheDocument();
@@ -55,7 +65,7 @@ describe("an investigation in the browser", () => {
     await user.click(screen.getByRole("button", { name: "Approve fix" }));
 
     expect(await screen.findByRole("link", { name: "Download corrected model" })).toHaveAttribute("href", "http://localhost:8000/investigations/inv-1/corrected");
-    expect(api.sent.at(-1)).toEqual({ url: "http://localhost:8000/investigations/inv-1/resume/stream", body: { action: "approve", reason: "typed opex" } });
+    expect(lastResume(api)).toEqual({ url: "http://localhost:8000/investigations/inv-1/resume/stream", body: { action: "approve", reason: "typed opex" } });
     expect(within(progress).getByText("Saving a new version")).toBeInTheDocument();
   });
 
@@ -78,7 +88,7 @@ describe("an investigation in the browser", () => {
 
     const choice = await screen.findByRole("group", { name: "Which cell do you mean?" });
     await user.click(within(choice).getByRole("button", { name: "Summary!D10" }));
-    expect(api.sent.at(-1)?.body).toEqual({ ref: "Summary!D10" });
+    expect(lastResume(api)?.body).toEqual({ ref: "Summary!D10" });
 
     await screen.findByRole("region", { name: "Report" });
     await user.type(screen.getByLabelText("Reason"), "Opex frozen per budget meeting");
@@ -86,7 +96,7 @@ describe("an investigation in the browser", () => {
     await user.click(screen.getByRole("button", { name: "Reject" }));
 
     expect(await screen.findByText("Closed without changes. Your decision is saved.")).toBeInTheDocument();
-    expect(api.sent.at(-1)?.body).toEqual({ action: "reject", reason: "Opex frozen per budget meeting", intentional: true });
+    expect(lastResume(api)?.body).toEqual({ action: "reject", reason: "Opex frozen per budget meeting", intentional: true });
     expect(screen.queryByRole("link", { name: "Download corrected model" })).not.toBeInTheDocument();
   });
 
@@ -103,7 +113,7 @@ describe("an investigation in the browser", () => {
     await user.type(screen.getByLabelText("Reason"), "use the budget growth");
     await user.click(screen.getByRole("button", { name: "Test my fix" }));
 
-    expect(api.sent.at(-1)?.body).toEqual({
+    expect(lastResume(api)?.body).toEqual({
       action: "edit",
       reason: "use the budget growth",
       patch: { cell: "P&L!H7", old_formula: "-45.2", new_formula: "=G7*1.05" },
@@ -117,6 +127,6 @@ describe("an investigation in the browser", () => {
     await checkDemo();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("The AI service took too long to answer. Please try again in a minute.");
-    expect(screen.getByRole("button", { name: "Check model" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Check another model" })).toBeEnabled();
   });
 });

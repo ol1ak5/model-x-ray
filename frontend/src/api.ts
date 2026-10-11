@@ -153,6 +153,15 @@ export function resumeInvestigation(id: string, answer: { ref: string } | Decisi
   return stream(`/investigations/${id}/resume/stream`, answer, onEvent);
 }
 
+export type SheetCell = { ref: string; value: number | null; formula: string | null };
+export type SheetWindow = { sheet: string; columns: { letter: string; header: string }[]; rows: { row: number; label: string; cells: SheetCell[] }[] };
+
+export async function getSheet(id: string): Promise<SheetWindow> {
+  const response = await fetch(`${API_URL}/investigations/${id}/sheet`);
+  if (!response.ok) throw await failure(response);
+  return response.json();
+}
+
 export function correctedFileUrl(id: string): string {
   return `${API_URL}/investigations/${id}/corrected`;
 }

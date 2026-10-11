@@ -20,7 +20,8 @@ from langgraph.types import Command
 from pydantic import BaseModel
 
 from model_x_ray.graph import run_investigation
-from model_x_ray.spreadsheet.engine import FormulaError, UnsupportedFormulaError
+from model_x_ray.rules import is_period_cell
+from model_x_ray.spreadsheet.engine import FormulaError, UnsupportedFormulaError, Workbook, column_letters, is_number, split_ref
 from model_x_ray.spreadsheet.sandbox import SandboxWithWrite
 from model_x_ray.spreadsheet.source import SpreadsheetSource
 from model_x_ray.spreadsheet.xlsx import load_xlsx
@@ -112,6 +113,38 @@ def friendly_error(error: Exception) -> tuple[int, str]:
         return 400, str(error)
     logger.exception("Investigation failed", exc_info=error)
     return 500, GENERIC_FAILURE
+
+
+MAX_GRID_ROWS = 40
+
+
+def sheet_window(book: Workbook, sheet: str, focus_row: int) -> dict:
+    cells = [ref for ref in book.cells() if ref.startswith(f"{sheet}!") and is_period_cell(book, ref)]
+    by_position = {split_ref(ref)[1].row * 100000 + split_ref(ref)[1].column: ref for ref in cells}
+    columns = sorted({split_ref(ref)[1].column for ref in cells})
+    rows = sorted({split_ref(ref)[1].row for ref in cells})
+    if len(rows) > MAX_GRID_ROWS:
+        start = max(0, min(rows.index(focus_row) if focus_row in rows else 0, len(rows) - MAX_GRID_ROWS) - MAX_GRID_ROWS // 4)
+        rows = rows[start:start + MAX_GRID_ROWS]
+
+    def value_of(ref: str) -> float | None:
+        try:
+            value = book.value(ref)
+        except FormulaError:
+            return None
+        return float(value) if is_number(value) else None
+
+    def header_of(column: int) -> str:
+        first = next(ref for ref in cells if split_ref(ref)[1].column == column)
+        return book.column_header(first) or column_letters(column)
+
+    grid_rows = []
+    for row in rows:
+        refs = [f"{sheet}!{column_letters(column)}{row}" for column in columns]
+        present = [by_position.get(row * 100000 + column) for column in columns]
+        label = next((book.row_label(ref) for ref in present if ref), "")
+        grid_rows.append({"row": row, "label": label, "cells": [{"ref": ref, "value": value_of(ref), "formula": book.formula(ref)} for ref in refs]})
+    return {"sheet": sheet, "columns": [{"letter": column_letters(c), "header": header_of(c)} for c in columns], "rows": grid_rows}
 
 
 def sse(event: str, data: dict) -> str:
@@ -209,6 +242,15 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
         source.add(upload_id, path)
         uploads.add(upload_id)
         return {"id": upload_id, "name": filename, "sheets": sheets}
+
+    @app.get("/investigations/{investigation_id}/sheet")
+    def sheet(investigation_id: str) -> dict:
+        values = graph_of(investigation_id).get_state({"configurable": {"thread_id": investigation_id}}).values
+        target = values.get("target")
+        if not target:
+            raise HTTPException(404, "The investigation has not found its cell yet")
+        book = source.load(values["spreadsheet_id"])
+        return sheet_window(book, target["sheet"], split_ref(f"{target['sheet']}!{target['cell']}")[1].row)
 
     @app.get("/investigations/{investigation_id}/corrected")
     def corrected(investigation_id: str) -> FileResponse:
