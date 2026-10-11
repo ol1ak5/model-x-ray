@@ -1,5 +1,8 @@
 import type { SheetWindow, Spreadsheet } from "../api";
+import { GLOW } from "../theme";
+import AnalysisSummary from "./AnalysisSummary";
 import Icon from "./Icon";
+import Waves from "./Waves";
 import QuestionForm from "./QuestionForm";
 import SheetGrid from "./SheetGrid";
 
@@ -31,6 +34,18 @@ const STEPS = [
   { icon: "user" as const, title: "You decide", text: "Approve, edit or reject the changes. Your original file is never changed." },
 ];
 
+const WIDE_SAMPLE: SheetWindow = {
+  ...SAMPLE,
+  columns: [...SAMPLE.columns, { letter: "I", header: "2028E" }],
+  rows: SAMPLE.rows.map((row, index) => ({
+    ...row,
+    cells: [
+      ...row.cells.map((cell) => ({ ...cell, value: { "P&L!G6": -25.0, "P&L!G8": -75.0, "P&L!H6": 97.2, "P&L!H8": 44.7 }[cell.ref] ?? cell.value })),
+      { ref: `P&L!I${row.row}`, value: [233.3, -128.3, 105.0, -55.1, 49.9][index], formula: null },
+    ],
+  })),
+};
+
 export default function Hero({ demos, error, onStart, onError }: { demos: Spreadsheet[]; error: string | null; onStart: (id: string, question: string, name: string) => void; onError: (message: string) => void }) {
   return (
     <div className="home">
@@ -51,17 +66,22 @@ export default function Hero({ demos, error, onStart, onError }: { demos: Spread
           )}
         </div>
         <div className="hero-visual" aria-hidden="true">
-          <SheetGrid sheet={SAMPLE} title="Example sheet" showFormulaBar={false} marks={{ suspicious: new Set(), confirmed: new Set(["P&L!H6"]), target: null, after: {}, patch: null }} />
-          <div className="issue-card">
-            <span className="issue-icon">!</span>
-            <div>
-              <p className="issue-head">Formula issue detected in cell H6</p>
-              <p className="issue-text">Expected =H4+H5 but found the typed value -25.0</p>
+          <SheetGrid sheet={GLOW ? WIDE_SAMPLE : SAMPLE} title="Example sheet" showFormulaBar={false} marks={{ suspicious: new Set(), confirmed: new Set([GLOW ? "P&L!G6" : "P&L!H6"]), target: null, after: {}, patch: null }} />
+          {GLOW ? (
+            <AnalysisSummary />
+          ) : (
+            <div className="issue-card">
+              <span className="issue-icon">!</span>
+              <div>
+                <p className="issue-head">Formula issue detected in cell H6</p>
+                <p className="issue-text">Expected =H4+H5 but found the typed value -25.0</p>
+              </div>
+              <span className="issue-link">View details →</span>
             </div>
-            <span className="issue-link">View details →</span>
-          </div>
+          )}
         </div>
       </section>
+      {GLOW && <Waves />}
 
       <section className="steps" aria-labelledby="steps-title">
         <p className="eyebrow">How it works</p>
