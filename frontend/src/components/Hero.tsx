@@ -33,7 +33,7 @@ const STEPS = [
 
 export default function Hero({ demos, error, onStart, onError }: { demos: Spreadsheet[]; error: string | null; onStart: (id: string, question: string, name: string) => void; onError: (message: string) => void }) {
   return (
-    <>
+    <div className="home">
       <section className="hero">
         <div className="hero-copy">
           <p className="eyebrow">The financial model debugger</p>
@@ -79,6 +79,6 @@ export default function Hero({ demos, error, onStart, onError }: { demos: Spread
           ))}
         </ol>
       </section>
-    </>
+    </div>
   );
 }
