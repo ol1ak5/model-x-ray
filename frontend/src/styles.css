@@ -197,7 +197,7 @@ input:not([type="checkbox"]):not([type="file"]) {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
   gap: clamp(32px, 4vw, 64px);
   align-items: center;
-  padding: clamp(14px, 2.5vh, 32px) 0 clamp(12px, 2vh, 28px);
+  padding: clamp(30px, 5vh, 56px) 0 clamp(12px, 2vh, 28px);
 }
 
 .eyebrow {
@@ -416,7 +416,7 @@ input:not([type="checkbox"]):not([type="file"]) {
 .steps {
   display: flex;
   flex-direction: column;
-  margin-top: clamp(28px, 7vh, 88px);
+  margin-top: clamp(12px, 4.5vh, 64px);
   padding: clamp(18px, 3.5vh, 40px) 0 clamp(8px, 2vh, 24px);
   border-top: 1px solid var(--line);
   text-align: center;
@@ -1088,8 +1088,12 @@ input:not([type="checkbox"]):not([type="file"]) {
     padding-bottom: 0;
   }
 
+  .hero {
+    padding-top: 30px;
+  }
+
   .steps {
-    margin-top: 22px;
+    margin-top: 12px;
     padding-top: 14px;
     padding-bottom: 8px;
   }
