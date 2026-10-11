@@ -12,7 +12,7 @@ from model_x_ray.spreadsheet.engine import CellAddress, Workbook, make_ref, norm
 from model_x_ray.state import InvestigationState, ModelMap, TargetCell
 from model_x_ray.tools import find_cells
 
-YEAR = re.compile(r"\b(?:19|20)\d{2}\b")
+YEAR = re.compile(r"\b(?:19|20)\d{2}[A-Za-z]?\b")
 
 
 class LocateRequest(BaseModel):
