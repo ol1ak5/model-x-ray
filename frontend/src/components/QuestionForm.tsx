@@ -36,7 +36,7 @@ export default function QuestionForm({ demos, onStart, onError }: { demos: Sprea
           Try demo
         </button>
       )}
-      <p className="ask-note">Excel .xlsx, up to 10 MB. Your file stays private and is never changed.</p>
+      <p className="ask-note">Excel .xlsx, up to 10 MB. Your file stays private; corrections are saved to a new copy.</p>
     </div>
   );
 }
