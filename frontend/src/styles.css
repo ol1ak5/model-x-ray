@@ -1102,3 +1102,19 @@ input:not([type="checkbox"]):not([type="file"]) {
     margin-bottom: 16px;
   }
 }
+
+.ask-row .button-like,
+.ask-row .demo-button {
+  box-sizing: border-box;
+  height: 52px;
+  min-width: 230px;
+  justify-content: center;
+  padding: 0 24px;
+  border-width: 1.5px;
+  border-style: solid;
+  font-size: 0.98rem;
+}
+
+.ask-row .button-like {
+  border-color: var(--green);
+}
