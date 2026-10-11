@@ -68,7 +68,6 @@ export default function Hero({ demos, error, onStart, onError }: { demos: Spread
         <h2 id="steps-title" className="section-title">
           Go beyond the numbers. <span className="green">See the logic.</span>
         </h2>
-        <p className="steps-lead">Four steps, run by AI agents on NVIDIA Nemotron, with evidence for every finding.</p>
         <ol className="step-list">
           {STEPS.map((step, index) => (
             <li key={step.title} className="step">
