@@ -76,6 +76,7 @@ def run_investigation(
     verifier: BaseChatModel | None = None,
     locator: BaseChatModel | None = None,
     mapper: BaseChatModel | None = None,
+    explainer: BaseChatModel | None = None,
     store: BaseStore | None = None,
 ) -> CompiledStateGraph:
     book = source.load(spreadsheet_id)
@@ -93,7 +94,7 @@ def run_investigation(
             "trace": nodes.make_trace_node(book),
             "test": nodes.make_test_node(source, sandbox),
             "verify": nodes.make_verify_node(verifier or llm, source),
-            "explain": nodes.make_explain_node(),
+            "explain": nodes.make_explain_node(explainer),
             "apply_fix": nodes.make_apply_fix_node(sandbox),
         },
     )

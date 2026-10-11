@@ -121,6 +121,20 @@ def scripted_verdict() -> ScriptedVerdict:
     return ScriptedVerdict()
 
 
+class ScriptedNarrative(BaseChatModel):
+    text: str = ""
+    briefs: list[str] = []
+
+    @property
+    def _llm_type(self) -> str:
+        return "scripted-narrative"
+
+    def _generate(self, messages: list[BaseMessage], stop: list[str] | None = None, **kwargs: Any) -> ChatResult:
+        self.briefs.append(messages[-1].content)
+        usage = {"input_tokens": 400, "output_tokens": 80, "total_tokens": 480}
+        return ChatResult(generations=[ChatGeneration(message=AIMessage(content=self.text, usage_metadata=usage))])
+
+
 class ScriptedDiagnosis(BaseChatModel):
     bound: list[str] = []
     briefs: list[str] = []
