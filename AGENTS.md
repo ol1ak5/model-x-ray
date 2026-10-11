@@ -49,6 +49,7 @@ Verified 8 Oct 2026. Do not assume tooling that is not there — re-check the tr
 - Setup after cloning: `uv sync`, then `cp .env.example .env` and fill in your own keys.
 - Tests: `uv run pytest` (offline, no credits), single test `uv run pytest path::test_name -k <pattern>`, live tests `uv run pytest -m live`.
 - Smoke check: `uv run model-x-ray`.
+- Frontend: `npm --prefix frontend install` once, then `npm --prefix frontend run dev` (http://localhost:5173, needs the API running) and `npm --prefix frontend test`. The frontend uses npm, not uv.
 - Run the API locally: `uv run tools/generate_dataset.py --output models --per-set 2` once, then `scripts/serve.sh` (http://localhost:8000/docs).
 - Graph picture: `scripts/export_graph.sh` (writes `docs/investigation-graph.mmd` and `.png`; re-run after any change to nodes or edges — a test fails if the committed diagram is stale).
 - Tool-calling measurement (live, about 3 cents): `scripts/measure_tool_calling.sh`.
