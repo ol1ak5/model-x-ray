@@ -76,6 +76,17 @@ def test_locate_and_the_investigator_both_read_the_model_map(demo_workbook_path:
     assert "Periods: 2025A (actual), 2026E (forecast), 2027E (forecast)" in brief
 
 
+def test_a_mapper_that_gives_no_answer_never_stops_the_investigation(demo_workbook_path: Path) -> None:
+    book = load_xlsx(demo_workbook_path)
+    silent = ScriptedAnswer(tool="")
+    state = investigate(book, silent, ScriptedAnswer(tool="LocateRequest"), "Why did EBITDA jump in 2027?")
+
+    assert state["model_map"] is None
+    assert [entry["role"] for entry in state["run_log"]] == ["mapper"]
+    assert state["target"]["cell"] == "H8"
+    assert state["report"]
+
+
 def test_a_missing_or_unreadable_workbook_fails_with_a_clear_message(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="Unknown spreadsheet 'other'"):
         XlsxSource({"demo": tmp_path / "demo.xlsx"}).load("other")
@@ -91,7 +102,7 @@ def test_a_missing_or_unreadable_workbook_fails_with_a_clear_message(tmp_path: P
 
 
 @pytest.mark.live
-def test_lightning_maps_the_demo_model(demo_workbook_path: Path) -> None:
+def test_the_mapper_model_maps_the_demo_model(demo_workbook_path: Path) -> None:
     book = load_xlsx(demo_workbook_path)
     state = investigate(book, build_chat_model(role="mapper"), ScriptedAnswer(tool="LocateRequest"), "Why did EBITDA jump in 2027?")
 

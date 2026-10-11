@@ -135,5 +135,7 @@ class ScriptedAnswer(BaseChatModel):
 
     def _generate(self, messages: list[BaseMessage], stop: list[str] | None = None, **kwargs: Any) -> ChatResult:
         self.prompts.append(messages[-1].content)
+        if not self.tool:
+            return ChatResult(generations=[ChatGeneration(message=AIMessage(content="1. Revenue -> revenue, 2. COGS -> cost (or other?), 3."))])
         call = {"name": self.tool, "args": self.answer, "id": self.tool}
         return ChatResult(generations=[ChatGeneration(message=AIMessage(content="", tool_calls=[call]))])

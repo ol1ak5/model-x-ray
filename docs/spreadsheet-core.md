@@ -39,6 +39,14 @@ Cells are addressed as `Sheet!A1` (for example `P&L!H8`, `Assumptions!C7`). Cont
 
 `formula_pattern` rewrites references relative to the cell, so formulas dragged across a row have identical patterns. `=F7*(1+Assumptions!$C$7)` in `G7` becomes `=RC[-1]*(1+Assumptions!R7C3)`: `R` means same row, `C[-1]` one column to the left, and `$`-anchored parts stay absolute (`R7C3`). A cell whose pattern differs from its neighbours, or that has no pattern because it is a typed value, breaks the row. This is what `compare_formulas` and `find_formula_outliers` build on.
 
+## Layout conventions
+
+Labels and period headers come from the layout, the way an analyst reads a model:
+
+- **Row label:** the first text to the left of a cell. Blank text (`" "`) and dates are never labels.
+- **Block labels:** when a label repeats within a sheet (one row per market or segment under a block title), it is qualified with the nearest title row above: a row with text in the same column and no numbers to its right. `Spain` under "Annual Net Production" becomes `Annual Net Production – Spain`. Unique labels are unchanged. `locate` matches a block label when every part appears in the question.
+- **Period header:** the nearest text above the cell. If there is none (a timeline built with formulas, such as `BoP` dates, `=EOMONTH(BoP,11)` and `=YEAR(EoP)`), the header comes from the timeline row: the first row in the top 30 whose calculated values are at least three increasing years. Blank text and dates are never headers.
+
 ## Formula support
 
 Deliberately small, matching standard financial models:
@@ -50,7 +58,8 @@ Deliberately small, matching standard financial models:
 - Logic: `IF`, `IFERROR`, `AND`, `OR`, `NOT`
 - Conditional sums and counts: `SUMIF(range, criteria, [sum_range])`, `SUMIFS(sum_range, criteria_range1, criteria1, ...)`, `COUNTIF(range, criteria)`, `COUNTIFS(criteria_range1, criteria1, ...)`. A criteria is a value (`"Data Center"`, `5`) or a comparison in text (`">10"`, `"<>US"`, `"="` for blanks); with several pairs, a row counts only when it meets all of them. Ranges of different sizes raise a formula error.
 - Lookups: `INDEX(range, row, [column])`, `MATCH(value, range, [type])` with type `0` (exact) or `1` (default: largest value not above the target, range sorted ascending), `VLOOKUP(value, table, column, [approximate])` (approximate by default, as in Excel), `XLOOKUP(value, lookup, results, [if_not_found])` (exact match)
-- Dates: `EOMONTH(start, months)`. Dates are Excel serial numbers (days since 30 Dec 1899); a date typed in a cell is loaded as ISO text (so it can still be a column header) and turns into its serial number when a formula uses it as a number.
+- Dates: `EOMONTH(start, months)`, `EDATE(start, months)` (same day, clamped to the month's end), `YEAR`, `MONTH`, `DAY`, `DATE(year, month, day)` (months and days may overflow, as in Excel).
+- Valuation: `NPV(rate, values...)` (first value discounted one period), `XNPV(rate, values, dates)` (365-day year from the first date). Dates are Excel serial numbers (days since 30 Dec 1899); a date typed in a cell is loaded as ISO text (so it can still be a column header) and turns into its serial number when a formula uses it as a number.
 - Excel's `_xlfn.` prefix (how Excel stores newer functions such as `XLOOKUP` in the file) is ignored.
 
 Errors behave like Excel's where it matters for models. `IF` evaluates only the branch it returns, so `=IF(G8=0,0,H8/G8)` works when `G8` is 0. `IFERROR` returns its fallback when the first argument fails with a formula error (division by zero, a lookup that finds nothing, text used as a number). It never hides an unsupported function or a circular reference, because those mean the engine cannot calculate the model, not that the model has an error. A lookup with no match raises `FormulaError("#N/A: ...")`; an `INDEX` outside its range raises `FormulaError("#REF: ...")`.

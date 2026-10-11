@@ -51,7 +51,7 @@ flowchart TD
 | Node | Kind | What it does | Writes to state |
 |---|---|---|---|
 | `load_sheet` | Code | The workbook is loaded once through the `SpreadsheetSource` (an unknown id or a missing file raises a clear `ValueError`); the node stops the run when no cell has both a line label and a period header | (workbook cached outside state) |
-| `map_model` | Nemotron 3.5 Lightning (Nano fallback) | Labels every line (`revenue`, `cost`, `subtotal`, `ratio`, `other`) and every period (`actual`, `forecast`); see Model map below | `model_map` |
+| `map_model` | Nemotron Super | Labels every line (`revenue`, `cost`, `subtotal`, `ratio`, `other`) and every period (`actual`, `forecast`); see Model map below | `model_map` |
 | `locate` | Code first, Nemotron Super when needed, then `find_cells` | Turns the question into a target cell and its prior-period cell (see Locate below); when several cells match or none does, writes the question and candidates instead | `target`, `cell_choice` |
 | `choose_target` | Interrupt | Runs only when `locate` found no single cell: shows `cell_choice` and builds the target from the user's pick | `target`, `cell_choice` |
 | `trace` | Code | Precedents of the target, the contribution of each input to the change, and the causal tree built from them; writes one evidence record per observation (the target anomaly, then each contribution, `anomaly` or `expected_pattern` by the tree's suspicious flag) | `contributions`, `causal_tree`, `evidence` |
@@ -84,7 +84,7 @@ flowchart TD
 
 ## Model map
 
-Implementation: `src/model_x_ray/agents/mapper.py`, prompt `prompts/map_model.md`, wired by `run_investigation` when a `mapper` model is passed (the API passes Lightning; without one the map stays empty and every other step still works).
+Implementation: `src/model_x_ray/agents/mapper.py`, prompt `prompts/map_model.md`, wired by `run_investigation` when a `mapper` model is passed (the API passes the `mapper` role, Super; without one the map stays empty and every other step still works).
 
 1. **Brief.** The mapper sees the periods and one line per catalogue label: the formula of the line's right-most cell (or "typed number") and the labels of the lines it uses, e.g. `EBITDA: =H6+H7; uses Gross profit, Opex`. Formulas plus the names they use are what an analyst reads to tell a subtotal from a cost.
 2. **One structured call.** `with_structured_output(ModelMapAnswer, method="function_calling")` returns a kind per line and per period.
@@ -112,7 +112,7 @@ Three steps need judgment, so three agents. Everything else is a plain Python no
 |---|---|---|---|
 | Investigator | Nemotron 3 Super | Read-only only | Hypothesis-driven loop inside a subgraph with its own private messages. Decides what to investigate next, tells real errors from deliberate overrides, ranks hypotheses, proposes a minimal patch |
 | Verifier | Nemotron 3 Super, adversarial prompt | None (receives a fixed evidence package) | Assumes the diagnosis is wrong and looks for evidence that invalidates it. Never sees the Investigator's reasoning |
-| Model mapper | Nemotron 3.5 Lightning (Nano fallback) | None | One structured-output call per sheet revision to build the semantic map |
+| Model mapper | Nemotron Super | None | One structured-output call per sheet revision to build the semantic map |
 
 Model assignment is provisional until the tool-calling spike (#4) reports results. A separate "hypothesis planner" agent is deliberately not added: planning stays inside the Investigator unless the benchmark shows that splitting it improves accuracy.
 
@@ -297,7 +297,7 @@ Implementation: `ModelMemory` in `src/model_x_ray/memory.py`, a thin layer over 
 
 | Memory | Written when | Read by | Rule |
 |---|---|---|---|
-| Model map (`models`) | `map_model` builds a map | `map_model`, before calling Lightning | Keyed by `Workbook.revision()`, a hash of every cell's content: the same file never pays for a second map; any edit makes a new revision and a fresh map |
+| Model map (`models`) | `map_model` builds a map | `map_model`, before calling the mapper model | Keyed by `Workbook.revision()`, a hash of every cell's content: the same file never pays for a second map; any edit makes a new revision and a fresh map |
 | Overrides (`overrides`) | The reviewer rejects with `"intentional": true` (the patched cell, its content at that moment, and the reason) | `load_sheet` puts the still-valid ones in `state.known_overrides`; the Investigator's brief lists them ("Marked intentional by a reviewer, do not propose: ..."), and `diagnose` drops any hypothesis or patch on those cells | An override only holds while the cell's content is unchanged: if someone edits the cell, it can be flagged again |
 | Findings (`findings`) | The reviewer approves a fix (cell, error type, old and new formula) | `load_sheet` → `state.past_findings`; the brief lists them ("Fixed before on this model: ...") as a hint | A hint only: the original file still holds the error after a fix, because the fix goes into a corrected copy |
 
@@ -308,15 +308,15 @@ A plain rejection (without `intentional`) writes nothing: "not convinced" is not
 | Use | Model ID | Context | Price per 1M tokens (in / out) |
 |---|---|---|---|
 | Investigator, Verifier, `locate` | `nvidia/nemotron-3-super-120b-a12b` | 262K | $0.30 / $0.90 |
-| Model mapper (candidate) | `nvidia/Nemotron-3_5-Lightning` | 1M | $0.06 / $0.24 |
+| Fast small-model candidate (was the mapper until 11 Oct) | `nvidia/Nemotron-3_5-Lightning` | 1M | $0.06 / $0.24 |
 | Model mapper (fallback), small-model comparison | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | 262K | $0.06 / $0.24 |
 | Optional: hardest verification, strongest benchmark attacker | `nvidia/Nemotron-3-Ultra-550b-a55b` | 1M | $1.00 / $3.00 |
 
-IDs, context and prices were confirmed with `GET /v1/models` on 6 Oct 2026; all four list `tools` and `reasoning` in `supported_features`. IDs are case-sensitive. Lightning passed every tool-calling and structured-output check in #4 and was the fastest model, so it is the provisional mapper; the decision is confirmed on the real tool schemas (see `docs/research/nemotron-tool-calling.md`). Structured output uses `with_structured_output(..., method="function_calling")`, because the catalog lists no JSON-schema mode.
+IDs, context and prices were confirmed with `GET /v1/models` on 6 Oct 2026; all four list `tools` and `reasoning` in `supported_features`. IDs are case-sensitive. Lightning passed every tool-calling and structured-output check in #4 and was the fastest model, so it was the provisional mapper. On 11 Oct 2026 a real 63-line project-finance model showed its limit: Lightning wrote its reasoning as text and hit the 8,192-token output limit without calling the tool, even when told to answer only through the tool, while Super returned all 63 lines and 24 periods in 7 seconds with about 1,900 output tokens. The mapper role moved to Super; the map is cached per file revision, so the cost is paid once per file. A failed map never stops an investigation (`model_map` stays empty). Structured output uses `with_structured_output(..., method="function_calling")`, because the catalog lists no JSON-schema mode.
 
 All run on Nebius Token Factory through LangChain's `ChatOpenAI` with `base_url=https://api.tokenfactory.nebius.com/v1/` and `NEBIUS_API_KEY` from `.env`. The regional `https://api.tokenfactory.us-central1.nebius.com/v1/` also works but lists fewer models (18 vs 25).
 
-Role-to-model mapping lives in one registry in `llm.py` (`ROLE_MODELS`): `investigator`, `verifier` and `locate` → Super, `mapper` → Lightning, `explain` → Super. `build_chat_model(role=...)` resolves a role and is overridable from `.env` with `NEBIUS_MODEL_<ROLE>` (empty means the built-in default); `build_chat_model(model=...)` pins an explicit id, which makes the four-way comparison in `docs/evaluation.md` configuration only. The client sets `timeout=120s` and `max_retries=3` (the OpenAI SDK's exponential backoff covers rate limits and transient errors), and raises a `ValueError` naming the missing variable when `NEBIUS_API_KEY` or `NEBIUS_BASE_URL` is unset. Every LLM call goes through `invoke_with_usage`, which attaches a `UsageRecorder` callback and returns the result together with `RunLog` entries — role, model, input, output and reasoning tokens, latency. The Investigator's `think`/`conclude` and the Verifier append them to `state["run_log"]`, so evaluators get token and latency records without LangSmith.
+Role-to-model mapping lives in one registry in `llm.py` (`ROLE_MODELS`): `investigator`, `verifier` and `locate` → Super, `mapper` → Super, `explain` → Super. `build_chat_model(role=...)` resolves a role and is overridable from `.env` with `NEBIUS_MODEL_<ROLE>` (empty means the built-in default); `build_chat_model(model=...)` pins an explicit id, which makes the four-way comparison in `docs/evaluation.md` configuration only. The client sets `timeout=120s` and `max_retries=3` (the OpenAI SDK's exponential backoff covers rate limits and transient errors), and raises a `ValueError` naming the missing variable when `NEBIUS_API_KEY` or `NEBIUS_BASE_URL` is unset. Every LLM call goes through `invoke_with_usage`, which attaches a `UsageRecorder` callback and returns the result together with `RunLog` entries — role, model, input, output and reasoning tokens, latency. The Investigator's `think`/`conclude` and the Verifier append them to `state["run_log"]`, so evaluators get token and latency records without LangSmith.
 
 ## Evaluation
 

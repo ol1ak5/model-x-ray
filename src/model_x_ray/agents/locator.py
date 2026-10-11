@@ -44,7 +44,7 @@ def workbook_catalogue(book: Workbook) -> Catalogue:
 
 def read_question(question: str, catalogue: Catalogue) -> LocateRequest | None:
     text = question.lower()
-    labels = [label for label in catalogue.labels if label.lower() in text]
+    labels = [label for label in catalogue.labels if all(part.lower() in text for part in label.split(" – "))]
     labels = [label for label in labels if not any(label != other and label.lower() in other.lower() for other in labels)]
     years = YEAR.findall(question)
     periods = [period for period in catalogue.periods if any(year in period for year in years)]
