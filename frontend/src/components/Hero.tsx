@@ -66,6 +66,15 @@ export default function Hero({ demos, error, onStart, onError }: { demos: Spread
           )}
         </div>
         <div className="hero-visual" aria-hidden="true">
+          {GLOW && (
+            <>
+              <span className="glass glass-back" />
+              <span className="glass glass-mid" />
+              <span className="circuit circuit-left" />
+              <span className="circuit circuit-top" />
+              <span className="circuit circuit-right" />
+            </>
+          )}
           <SheetGrid sheet={GLOW ? WIDE_SAMPLE : SAMPLE} title="Example sheet" showFormulaBar={false} marks={{ suspicious: new Set(), confirmed: new Set([GLOW ? "P&L!G6" : "P&L!H6"]), target: null, after: {}, patch: null }} />
           {GLOW ? (
             <AnalysisSummary />
