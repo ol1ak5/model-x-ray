@@ -76,7 +76,7 @@ The main use is "check my model": no question needed. `locate` then calls `check
 2. The flagged cell with the most dependents wins; the target is the closest labelled period cell it moves (a typed Opex is investigated through EBITDA), and the question records why: "Check the model: EBITDA 2027E depends on P&L!H7, which is a typed value where the row uses ...".
 3. When nothing breaks a pattern, the target is the model's main output (the calculated line with the most inputs, ratios excluded) in its largest relative move, and a clean model ends with "No error found" and its drivers.
 
-On the planted benchmark models the scan lists exactly the planted cells, including mixed errors. One run investigates one target; the other flagged cells are listed for a follow-up run (see 103).
+On the planted benchmark models the scan lists exactly the planted cells, including mixed errors. One run investigates one target; the other flagged cells are listed for a follow-up run (see #103).
 
 ## The investigation view
 
