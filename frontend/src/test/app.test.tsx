@@ -14,7 +14,7 @@ function lastResume(api: ReturnType<typeof fakeApi>) {
 async function checkDemo() {
   const user = userEvent.setup();
   render(<App />);
-  await user.click(await screen.findByRole("button", { name: "Watch demo" }));
+  await user.click(await screen.findByRole("button", { name: "Try demo" }));
   return user;
 }
 

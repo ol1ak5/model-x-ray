@@ -76,7 +76,7 @@ h3 {
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  padding: 20px 0;
+  padding: 14px 0;
   border-bottom: 1px solid var(--line);
 }
 
@@ -189,7 +189,7 @@ input:not([type="checkbox"]):not([type="file"]) {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
   gap: 48px;
   align-items: center;
-  padding: 56px 0 40px;
+  padding: 30px 0 18px;
 }
 
 .eyebrow {
@@ -202,7 +202,7 @@ input:not([type="checkbox"]):not([type="file"]) {
 }
 
 .hero h1 {
-  font-size: clamp(2.1rem, 4.2vw, 3.2rem);
+  font-size: clamp(2rem, 3.6vw, 2.9rem);
   line-height: 1.08;
   letter-spacing: -0.025em;
   font-weight: 800;
@@ -215,7 +215,7 @@ input:not([type="checkbox"]):not([type="file"]) {
 .lead {
   color: var(--muted);
   font-size: 1.02rem;
-  margin: 18px 0 26px;
+  margin: 14px 0 22px;
   max-width: 520px;
 }
 
@@ -265,10 +265,10 @@ input:not([type="checkbox"]):not([type="file"]) {
 .play-ring {
   display: grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  border: 2px solid currentColor;
+  border: 2.5px solid currentColor;
 }
 
 .ask-note {
@@ -299,7 +299,33 @@ input:not([type="checkbox"]):not([type="file"]) {
 
 .hero-visual {
   position: relative;
-  padding-bottom: 104px;
+  padding-bottom: 96px;
+}
+
+.hero-visual .grid th,
+.hero-visual .grid td {
+  height: 30px;
+}
+
+.period-row td {
+  background: #fafbfa;
+  font-weight: 700;
+  text-align: right;
+  padding: 0 10px;
+  font-size: 0.8rem;
+}
+
+.demo-button {
+  padding: 12px 20px;
+  border: 1.5px solid var(--green);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--green);
+  font-size: 0.98rem;
+}
+
+.demo-button:hover {
+  background: var(--green-soft);
 }
 
 .issue-card {
@@ -380,15 +406,26 @@ input:not([type="checkbox"]):not([type="file"]) {
 }
 
 .steps {
-  padding: 56px 0 24px;
+  padding: 18px 0 0;
+  border-top: 1px solid var(--line);
   text-align: center;
 }
 
+.steps .eyebrow {
+  margin-bottom: 6px;
+}
+
+.steps-lead {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: -8px 0 16px;
+}
+
 .section-title {
-  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  font-size: clamp(1.35rem, 2.4vw, 1.8rem);
   font-weight: 800;
   letter-spacing: -0.02em;
-  margin: 0 0 32px;
+  margin: 0 0 14px;
 }
 
 .step-list {
@@ -406,7 +443,15 @@ input:not([type="checkbox"]):not([type="file"]) {
   background: rgba(255, 255, 255, 0.85);
   border: 1px solid var(--line);
   border-radius: 14px;
-  padding: 20px;
+  padding: 14px 16px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 12px;
+  align-items: center;
+}
+
+.step p {
+  grid-column: 1 / -1;
 }
 
 .step-number {
@@ -424,7 +469,7 @@ input:not([type="checkbox"]):not([type="file"]) {
   text-transform: none;
   letter-spacing: 0;
   color: var(--ink);
-  margin: 14px 0 6px;
+  margin: 0;
 }
 
 .step p {

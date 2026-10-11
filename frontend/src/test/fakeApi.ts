@@ -63,6 +63,7 @@ export const REJECTED: InvestigationView = { ...REVIEW, status: "done", pause: n
 
 export const SHEET = {
   sheet: "P&L",
+  header_row: 3,
   columns: [
     { letter: "F", header: "2025A" },
     { letter: "G", header: "2026E" },

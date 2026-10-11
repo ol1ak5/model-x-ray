@@ -144,7 +144,9 @@ def sheet_window(book: Workbook, sheet: str, focus_row: int) -> dict:
         present = [by_position.get(row * 100000 + column) for column in columns]
         label = next((book.row_label(ref) for ref in present if ref), "")
         grid_rows.append({"row": row, "label": label, "cells": [{"ref": ref, "value": value_of(ref), "formula": book.formula(ref)} for ref in refs]})
-    return {"sheet": sheet, "columns": [{"letter": column_letters(c), "header": header_of(c)} for c in columns], "rows": grid_rows}
+    first = next((ref for ref in cells if split_ref(ref)[1].row == rows[0]), None) if rows else None
+    header_row = book.header_row(first) if first else None
+    return {"sheet": sheet, "header_row": header_row, "columns": [{"letter": column_letters(c), "header": header_of(c)} for c in columns], "rows": grid_rows}
 
 
 def sse(event: str, data: dict) -> str:

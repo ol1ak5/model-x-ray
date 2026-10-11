@@ -69,6 +69,7 @@ def test_the_sheet_around_the_target_is_returned_for_the_grid_view(demo_workbook
     sheet = client.get(f"/investigations/{body['id']}/sheet").json()
 
     assert sheet["sheet"] == "P&L"
+    assert sheet["header_row"] == 3
     assert [c["header"] for c in sheet["columns"]] == ["2025A", "2026E", "2027E"]
     assert [c["letter"] for c in sheet["columns"]] == ["F", "G", "H"]
     opex = next(row for row in sheet["rows"] if row["label"] == "Opex")

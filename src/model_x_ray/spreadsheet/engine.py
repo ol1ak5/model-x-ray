@@ -402,14 +402,22 @@ class Workbook:
         return None
 
     def column_header(self, ref: str) -> str | None:
+        found = self._header(ref)
+        return found[1] if found else None
+
+    def header_row(self, ref: str) -> int | None:
+        found = self._header(ref)
+        return found[0] if found else None
+
+    def _header(self, ref: str) -> tuple[int, str] | None:
         sheet, address = split_ref(normalize_ref(ref))
         for row in range(address.row - 1, 0, -1):
             content = self._cells.get(make_ref(sheet, CellAddress(address.column, row)))
             if is_label_text(content):
-                return content
+                return row, content
         timeline = self._timeline(sheet)
-        if timeline is not None and address.row > timeline[0]:
-            return timeline[1].get(address.column)
+        if timeline is not None and address.row > timeline[0] and address.column in timeline[1]:
+            return timeline[0], timeline[1][address.column]
         return None
 
     def _sheet_rows(self, sheet: str) -> dict[int, list[int]]:

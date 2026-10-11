@@ -42,14 +42,24 @@ export default function SheetGrid({ sheet, marks, title, showFormulaBar = true }
               <th className="corner" />
               <th className="label-col">&nbsp;</th>
               {sheet.columns.map((column) => (
-                <th key={column.letter} scope="col">
-                  <span className="letter">{column.letter}</span>
-                  <span className="period">{column.header}</span>
+                <th key={column.letter} scope="col" aria-label={column.header}>
+                  {column.letter}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
+            <tr className="period-row">
+              <th scope="row" className="row-number">
+                {sheet.header_row ?? ""}
+              </th>
+              <td className="label-col" />
+              {sheet.columns.map((column) => (
+                <td key={column.letter} className="period">
+                  {column.header}
+                </td>
+              ))}
+            </tr>
             {sheet.rows.map((row) => (
               <tr key={row.row} className={/^ebitda$/i.test(row.label.trim()) ? "total-row" : ""}>
                 <th scope="row" className="row-number">

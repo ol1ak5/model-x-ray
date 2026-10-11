@@ -29,11 +29,11 @@ export default function QuestionForm({ demos, onStart, onError }: { demos: Sprea
         {uploading ? "Uploading…" : "Upload your model"}
       </label>
       {demo && (
-        <button type="button" className="ghost" onClick={() => onStart(demo.id, "", "Demo model")}>
+        <button type="button" className="demo-button" onClick={() => onStart(demo.id, "", "Demo model")}>
           <span className="play-ring">
-            <Icon name="play" size={12} />
+            <Icon name="play" size={13} />
           </span>
-          Watch demo
+          Try demo
         </button>
       )}
       <p className="ask-note">Excel .xlsx, up to 10 MB. Your file stays private and is never changed.</p>
