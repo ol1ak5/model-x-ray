@@ -171,9 +171,37 @@ def collect_evidence(messages: list[BaseMessage], sheet: str, existing: list[Evi
     return records
 
 
-def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook) -> Callable[[InvestigationState], dict]:
+def sheet_as_text(book: Workbook) -> str:
+    lines: list[str] = []
+    for sheet in book.sheets:
+        lines.append(f"Sheet {sheet}:")
+        for ref in book.cells():
+            if not ref.startswith(f"{sheet}!"):
+                continue
+            label = book.row_label(ref)
+            header = book.column_header(ref)
+            formula = book.formula(ref)
+            value = book.value(ref)
+            if label is None and header is None and formula is None:
+                continue
+            parts = [ref]
+            if label is not None:
+                parts.append(label)
+            if header is not None:
+                parts.append(header)
+            parts.append(f"value {value}")
+            if formula is not None:
+                parts.append(f"formula {formula}")
+            lines.append("  " + ", ".join(parts))
+    return "\n".join(lines)
+
+
+def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_text: bool = False) -> Callable[[InvestigationState], dict]:
     def diagnose(state: InvestigationState) -> dict:
-        result = investigator.invoke({"messages": [HumanMessage(content=investigation_brief(state))]})
+        brief = investigation_brief(state)
+        if plain_text:
+            brief = f"{brief}\n\nThe whole model, read as text:\n{sheet_as_text(book)}"
+        result = investigator.invoke({"messages": [HumanMessage(content=brief)]})
         diagnosis = result["diagnosis"]
         sheet = state["target"]["sheet"]
         existing = state.get("evidence", [])
@@ -200,6 +228,6 @@ def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook) -> Call
         if diagnosis.patch is not None and full_ref(diagnosis.patch.cell, sheet) not in intentional:
             patch_cell = full_ref(diagnosis.patch.cell, sheet)
             patch = {"cell": patch_cell, "old_formula": old_formula(book, patch_cell), "new_formula": diagnosis.patch.new_formula, "source": "agent"}
-        return {"hypotheses": hypotheses, "evidence": new_evidence, "patch": patch, "run_log": result.get("run_log", [])}
+        return {"hypotheses": hypotheses, "evidence": new_evidence, "patch": patch, "run_log": result.get("run_log", []), "tool_call_counts": [result.get("tool_calls_used", 0)]}
 
     return diagnose

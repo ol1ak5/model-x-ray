@@ -200,13 +200,14 @@ def sandbox_proof(state: InvestigationState, verification: Verification) -> Evid
     }
 
 
-def make_verify_node(llm: BaseChatModel, source: SpreadsheetSource) -> Callable[[InvestigationState], dict]:
-    verifier = build_verifier(llm)
-    model_name = model_name_of(llm)
+def make_verify_node(llm: BaseChatModel | None, source: SpreadsheetSource) -> Callable[[InvestigationState], dict]:
+    verifier = build_verifier(llm) if llm is not None else None
+    model_name = model_name_of(llm) if llm is not None else None
 
     def verify_node(state: InvestigationState) -> dict:
         records: list[RunLog] = []
         attempts = state.get("attempts", 0) + 1
+        patch = state.get("patch")
         hypothesis = verification_target(state)
         verification = None
         if hypothesis is not None:
@@ -214,7 +215,7 @@ def make_verify_node(llm: BaseChatModel, source: SpreadsheetSource) -> Callable[
                 (v for v in state.get("verifications", []) if v["hypothesis_id"] == hypothesis["id"]),
                 None,
             )
-        if hypothesis is None or verification is None or "before" not in verification:
+        if hypothesis is None or patch is None or verification is None or "before" not in verification or not verification["before"]:
             return {
                 "verifications": [{
                     "hypothesis_id": hypothesis["id"] if hypothesis else "",
@@ -229,6 +230,9 @@ def make_verify_node(llm: BaseChatModel, source: SpreadsheetSource) -> Callable[
         if failed:
             final = "rejected"
             reason = f"deterministic checks failed: {', '.join(failed)}; the verifier was not consulted"
+        elif verifier is None:
+            final = "confirmed"
+            reason = "deterministic checks passed; no second opinion configured"
         else:
             verdict, records = invoke_verifier(verifier, state, verification, checks, book, model=model_name)
             final = verdict.verdict

@@ -1,3 +1,4 @@
+import time
 from collections.abc import Callable
 
 from langchain_core.language_models import BaseChatModel
@@ -34,11 +35,21 @@ DEFAULT_NODES: dict[str, NodeFunction] = {
 }
 
 
+def timed(name: str, function: NodeFunction) -> NodeFunction:
+    def timed_node(state: InvestigationState) -> dict:
+        started = time.perf_counter()
+        update = function(state)
+        latency_ms = (time.perf_counter() - started) * 1000
+        return {**update, "node_log": [{"node": name, "latency_ms": latency_ms}]}
+
+    return timed_node
+
+
 def build_graph(checkpointer: BaseCheckpointSaver, diagnose: NodeFunction, overrides: dict[str, NodeFunction] | None = None) -> CompiledStateGraph:
     node_functions = {**DEFAULT_NODES, "diagnose": diagnose, **(overrides or {})}
     builder = StateGraph(InvestigationState, input_schema=InputState, output_schema=OutputState)
     for name, function in node_functions.items():
-        builder.add_node(name, function)
+        builder.add_node(name, timed(name, function))
 
     builder.add_edge(START, "load_sheet")
     builder.add_edge("load_sheet", "map_model")
