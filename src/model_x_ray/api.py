@@ -3,6 +3,7 @@ import logging
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import date
+from pathlib import Path
 from typing import Any, Literal
 from uuid import uuid4
 
@@ -19,9 +20,11 @@ from langgraph.types import Command
 from pydantic import BaseModel
 
 from model_x_ray.graph import run_investigation
-from model_x_ray.spreadsheet.engine import FormulaError, UnsupportedFormulaError
+from model_x_ray.rules import is_period_cell
+from model_x_ray.spreadsheet.engine import FormulaError, UnsupportedFormulaError, Workbook, column_letters, is_number, split_ref
 from model_x_ray.spreadsheet.sandbox import SandboxWithWrite
 from model_x_ray.spreadsheet.source import SpreadsheetSource
+from model_x_ray.spreadsheet.xlsx import load_xlsx
 
 logger = logging.getLogger("model_x_ray.api")
 
@@ -37,6 +40,8 @@ STEP_LABELS = {
     "human_review": "Saving the decision",
     "apply_fix": "Saving a new version",
 }
+
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
 XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -75,7 +80,7 @@ class UsageCap:
 
 class StartRequest(BaseModel):
     spreadsheet_id: str
-    question: str
+    question: str = ""
 
 
 class ResumeRequest(BaseModel):
@@ -111,6 +116,40 @@ def friendly_error(error: Exception) -> tuple[int, str]:
     return 500, GENERIC_FAILURE
 
 
+MAX_GRID_ROWS = 40
+
+
+def sheet_window(book: Workbook, sheet: str, focus_row: int) -> dict:
+    cells = [ref for ref in book.cells() if ref.startswith(f"{sheet}!") and is_period_cell(book, ref)]
+    by_position = {split_ref(ref)[1].row * 100000 + split_ref(ref)[1].column: ref for ref in cells}
+    columns = sorted({split_ref(ref)[1].column for ref in cells})
+    rows = sorted({split_ref(ref)[1].row for ref in cells})
+    if len(rows) > MAX_GRID_ROWS:
+        start = max(0, min(rows.index(focus_row) if focus_row in rows else 0, len(rows) - MAX_GRID_ROWS) - MAX_GRID_ROWS // 4)
+        rows = rows[start:start + MAX_GRID_ROWS]
+
+    def value_of(ref: str) -> float | None:
+        try:
+            value = book.value(ref)
+        except FormulaError:
+            return None
+        return float(value) if is_number(value) else None
+
+    def header_of(column: int) -> str:
+        first = next(ref for ref in cells if split_ref(ref)[1].column == column)
+        return book.column_header(first) or column_letters(column)
+
+    grid_rows = []
+    for row in rows:
+        refs = [f"{sheet}!{column_letters(column)}{row}" for column in columns]
+        present = [by_position.get(row * 100000 + column) for column in columns]
+        label = next((book.row_label(ref) for ref in present if ref), "")
+        grid_rows.append({"row": row, "label": label, "cells": [{"ref": ref, "value": value_of(ref), "formula": book.formula(ref)} for ref in refs]})
+    first = next((ref for ref in cells if split_ref(ref)[1].row == rows[0]), None) if rows else None
+    header_row = book.header_row(first) if first else None
+    return {"sheet": sheet, "header_row": header_row, "columns": [{"letter": column_letters(c), "header": header_of(c)} for c in columns], "rows": grid_rows}
+
+
 def sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
@@ -128,10 +167,11 @@ def investigation_view(graph: CompiledStateGraph, investigation_id: str) -> dict
     return {"id": investigation_id, "status": status, "pause": pauses[0] if pauses else None, **{name: values.get(name) for name in PUBLIC_FIELDS}}
 
 
-def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: AgentModels, checkpointer: BaseCheckpointSaver, cap: UsageCap, allowed_origins: list[str] | None = None, store: BaseStore | None = None) -> FastAPI:
+def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: AgentModels, checkpointer: BaseCheckpointSaver, cap: UsageCap, allowed_origins: list[str] | None = None, store: BaseStore | None = None, upload_dir: Path | None = None) -> FastAPI:
     app = FastAPI(title="Model X-Ray")
     app.add_middleware(CORSMiddleware, allow_origins=allowed_origins or [], allow_methods=["GET", "POST"], allow_headers=["Content-Type"])
     graphs: dict[str, CompiledStateGraph] = {}
+    uploads: set[str] = set()
 
     @app.exception_handler(Exception)
     def explain_failure(request: Request, error: Exception) -> JSONResponse:
@@ -181,7 +221,39 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
 
     @app.get("/spreadsheets")
     def spreadsheets() -> list[dict]:
-        return [{"id": spreadsheet_id, "sheets": source.list_sheets(spreadsheet_id)} for spreadsheet_id in source.ids()]
+        return [{"id": spreadsheet_id, "sheets": source.list_sheets(spreadsheet_id)} for spreadsheet_id in source.ids() if spreadsheet_id not in uploads]
+
+    @app.post("/spreadsheets", status_code=201)
+    async def upload(request: Request, name: str) -> dict:
+        if upload_dir is None:
+            raise HTTPException(404, "Uploading models is not enabled on this server")
+        filename = Path(name).name
+        if not filename.lower().endswith(".xlsx"):
+            raise HTTPException(400, "Upload an Excel .xlsx file")
+        content = await request.body()
+        if len(content) > MAX_UPLOAD_BYTES:
+            raise HTTPException(413, "The file is larger than 10 MB")
+        upload_id = f"upload-{uuid4().hex[:12]}"
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        path = upload_dir / f"{upload_id}.xlsx"
+        path.write_bytes(content)
+        try:
+            sheets = load_xlsx(path).sheets
+        except Exception as error:
+            path.unlink(missing_ok=True)
+            raise HTTPException(400, f"{filename} is not a readable .xlsx file") from error
+        source.add(upload_id, path)
+        uploads.add(upload_id)
+        return {"id": upload_id, "name": filename, "sheets": sheets}
+
+    @app.get("/investigations/{investigation_id}/sheet")
+    def sheet(investigation_id: str) -> dict:
+        values = graph_of(investigation_id).get_state({"configurable": {"thread_id": investigation_id}}).values
+        target = values.get("target")
+        if not target:
+            raise HTTPException(404, "The investigation has not found its cell yet")
+        book = source.load(values["spreadsheet_id"])
+        return sheet_window(book, target["sheet"], split_ref(f"{target['sheet']}!{target['cell']}")[1].row)
 
     @app.get("/investigations/{investigation_id}/corrected")
     def corrected(investigation_id: str) -> FileResponse:

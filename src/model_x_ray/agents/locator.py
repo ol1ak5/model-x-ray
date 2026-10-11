@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from model_x_ray.llm import invoke_with_usage, model_name_of
 from model_x_ray.prompts import load_prompt
+from model_x_ray.rules import is_period_cell, scan_model
 from model_x_ray.spreadsheet.engine import CellAddress, Workbook, make_ref, normalize_ref, split_ref
 from model_x_ray.state import InvestigationState, ModelMap, TargetCell
 from model_x_ray.tools import find_cells
@@ -72,7 +73,7 @@ def prior_cell(book: Workbook, ref: str) -> str | None:
     sheet, address = split_ref(ref)
     for column in range(address.column - 1, 0, -1):
         candidate = make_ref(sheet, CellAddress(column, address.row))
-        if book.column_header(candidate) is not None and book.raw(candidate) is not None:
+        if is_period_cell(book, candidate):
             return candidate
     return None
 
@@ -96,12 +97,42 @@ def target_cell(book: Workbook, ref: str) -> TargetCell:
     }
 
 
+def is_target(book: Workbook, ref: str) -> bool:
+    return is_period_cell(book, ref) and prior_cell(book, ref) is not None
+
+
+def relative_move(book: Workbook, ref: str) -> float:
+    prior = prior_cell(book, ref)
+    now, before = as_number(book.value(ref)), as_number(book.value(prior)) if prior else 0.0
+    return abs(now - before) / abs(before) if before else abs(now - before)
+
+
+def check_target(book: Workbook) -> tuple[str, str]:
+    outliers = sorted(scan_model(book), key=lambda o: len(book.all_dependents(o["cell"])), reverse=True)
+    for outlier in outliers:
+        for ref in [*book.all_dependents(outlier["cell"]), outlier["cell"]]:
+            if is_target(book, ref):
+                finding = f"which is a {outlier['reason']}" if outlier["reason"].startswith("typed value") else f"whose {outlier['reason']}"
+                return ref, f"Check the model: {book.row_label(ref)} {book.column_header(ref)} depends on {outlier['cell']}, {finding}."
+    candidates = [ref for ref in book.cells() if is_target(book, ref) and "/" not in (book.formula(ref) or "/")]
+    if not candidates:
+        raise ValueError("Model X-Ray found no calculated line with periods to check in this model")
+    main = max(candidates, key=lambda ref: len(book.all_precedents(ref)))
+    label = book.row_label(main)
+    row = [ref for ref in candidates if book.row_label(ref) == label and ref.rsplit("!", 1)[0] == main.rsplit("!", 1)[0]]
+    ref = max(row, key=lambda cell: relative_move(book, cell))
+    return ref, f"Check the model: no cell breaks its row's pattern; {label} {book.column_header(ref)} is the model's main output in its largest move."
+
+
 def make_locate_node(llm: BaseChatModel | None, book: Workbook) -> Callable[[InvestigationState], dict]:
     catalogue = workbook_catalogue(book)
     structured = llm.with_structured_output(LocateRequest, method="function_calling") if llm is not None else None
     system = SystemMessage(content=load_prompt("locate"))
 
     def locate(state: InvestigationState) -> dict:
+        if not state.get("question", "").strip():
+            ref, question = check_target(book)
+            return {"target": target_cell(book, ref), "question": question, "cell_choice": None}
         request = read_question(state["question"], catalogue)
         records = []
         if request is None and structured is not None:

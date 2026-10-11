@@ -81,6 +81,7 @@ def test_formula_timelines_block_labels_and_date_and_valuation_functions_are_und
     assert book.value("FM!E31") == pytest.approx(sum(90 / 1.07 ** year for year in (1, 2, 3)))
 
     assert book.column_header("FM!O24") == "2028"
+    assert book.header_row("FM!O24") == 5
     assert book.column_header("FM!M24") == "2026"
     assert book.column_header("FM!N27") != " "
     assert book.row_label("FM!O24") == "Annual Cash Flow – Spain"

@@ -9,3 +9,6 @@ __pycache__/
 models/
 corrected/
 dataset/
+*.db-shm
+*.db-wal
+uploads/
