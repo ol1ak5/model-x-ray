@@ -1,0 +1,79 @@
+.group + .group {
+  margin-top: 1rem;
+}
+
+.groupTitle {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-bottom: 0.5rem;
+}
+
+.finding {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.875rem;
+  animation: fade-up var(--dur) var(--ease) both;
+}
+
+.finding:last-child {
+  border-bottom: 0;
+}
+
+.dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--muted);
+  align-self: center;
+}
+
+.confirmed {
+  background: var(--danger);
+}
+
+.open {
+  background: var(--warn);
+}
+
+.rejected {
+  background: var(--line-strong);
+}
+
+.cell {
+  color: var(--ink);
+}
+
+.kind {
+  color: var(--muted);
+  text-transform: capitalize;
+}
+
+.claim {
+  grid-column: 2 / -1;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.confidence {
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.high {
+  color: var(--danger);
+}
+
+.medium {
+  color: var(--warn);
+}
+
+.low {
+  color: var(--muted);
+}

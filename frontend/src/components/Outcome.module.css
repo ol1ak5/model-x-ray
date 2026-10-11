@@ -1,0 +1,21 @@
+.outcome {
+  display: grid;
+  gap: 0.625rem;
+  justify-items: start;
+  padding: 1rem 1.125rem;
+  border-radius: var(--radius-l);
+  background: var(--accent-soft);
+  animation: fade-up var(--dur-slow) var(--ease) both;
+}
+
+.title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+}
+
+.text {
+  font-size: 0.875rem;
+}

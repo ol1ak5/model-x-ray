@@ -1,0 +1,58 @@
+.evidence {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.record {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.625rem;
+  align-items: baseline;
+  padding: 0.625rem 0.75rem;
+  border-radius: var(--radius-m);
+  background: var(--soft);
+  font-size: 0.86rem;
+  transition: outline-color var(--dur) var(--ease);
+}
+
+.record:target,
+.record:focus {
+  outline: 0.125rem solid var(--accent);
+  outline-offset: 0.0625rem;
+}
+
+.id {
+  font-weight: 700;
+}
+
+.kind {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.anomaly {
+  color: var(--danger);
+}
+
+.expected_pattern {
+  color: var(--muted);
+}
+
+.verification {
+  color: var(--accent);
+}
+
+.cell {
+  color: var(--muted);
+}
+
+.text {
+  flex-basis: 100%;
+  overflow-wrap: anywhere;
+}
