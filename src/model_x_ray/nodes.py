@@ -5,7 +5,7 @@ from langchain_core.language_models import BaseChatModel
 from langgraph.types import interrupt
 
 from model_x_ray import causal
-from model_x_ray.agents.verifier import build_verifier, deterministic_checks, invoke_verifier
+from model_x_ray.agents.verifier import build_verifier, deterministic_checks, invoke_verifier, settle_verdict
 from model_x_ray.llm import model_name_of
 from model_x_ray.memory import ModelMemory
 from model_x_ray.routing import MAX_ATTEMPTS
@@ -236,8 +236,9 @@ def make_verify_node(llm: BaseChatModel | None, source: SpreadsheetSource) -> Ca
             reason = "deterministic checks passed; no second opinion configured"
         else:
             verdict, records = invoke_verifier(verifier, state, verification, checks, book, model=model_name)
-            final = verdict.verdict
-            reason = verdict.reason
+            final, reason, claims_hold = settle_verdict(verdict, book, state["patch"], verification["after"])
+            if claims_hold is not None:
+                checks = {**checks, "verifier_claims_hold": claims_hold}
         return {
             "verifications": [{
                 "hypothesis_id": hypothesis["id"],

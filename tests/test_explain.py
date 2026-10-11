@@ -98,7 +98,7 @@ def test_an_unproven_suspect_is_explained_not_reported_as_a_failure(
     assert state["report"] == (
         "No confirmed error. EBITDA 2027E moved from 40.03 to 52.01 (ev-1); the change comes from "
         "Gross profit (P&L!H6, +7.20, ev-2) and Opex (P&L!H7, +4.78, ev-3). "
-        "The agent checked 1 suspect but could not prove it: P&L!H7 (typed value), because the independent check rejected the fix: not convinced. "
+        "The agent checked 1 suspect but could not prove it: P&L!H7 (typed value), because the independent check rejected the fix: not convinced. Checked by the engine: P&L!H8 is 44.73 after the fix, as stated. "
         "Nothing was changed; review this cell before relying on the number."
     )
     assert set(re.findall(r"ev-\d+", state["report"])) <= {e["id"] for e in state["evidence"]}
@@ -146,6 +146,6 @@ def test_a_cell_suspected_twice_is_reported_with_its_tested_attempt(
     report = graph.get_state(config).values["report"]
 
     assert "The agent checked 3 suspects but could not prove any of them:" in report
-    assert "P&L!H7 (typed value), because the independent check rejected the fix: the growth still looks implausible;" in report
+    assert "P&L!H7 (typed value), because the independent check rejected the fix: the growth still looks implausible. Checked by the engine: P&L!H8 is 44.73 after the fix, as stated;" in report
     assert "P&L!H5 (typed value), because the fix did not remove the unusual change;" in report
     assert "not tested" not in report

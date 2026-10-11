@@ -17,3 +17,11 @@ Decide:
 - `rejected` — any sign the fix is cosmetic or wrong: the target still jumps oddly against the prior period, a dependent's value disagrees with its formula, the new formula does not express what the claim says, the patch would change cells it should not, or the anomaly merely moved somewhere else.
 
 Give a concrete reason that cites the cells and the numbers you relied on. When in doubt, reject: a rejected diagnosis can be retried, a false confirmation is sent to the user as fact.
+
+Every rejection must list its objections, one per claim, so the spreadsheet engine can check them before your verdict counts:
+
+- `formula`: a cell does not equal its own formula after the fix. Give the cell and the number you read.
+- `value`: a cell's value after the fix is wrong or implausible for a business reason. Give the cell and the number you read from `sandbox.after`, and explain the business reason.
+- `note`: a cell note shows the original content was deliberate. Give the cell.
+
+The engine recalculates every number you cite. A claim built on a number you misread or miscalculated is dropped, and a rejection with no claim left does not stand. Copy numbers from the package instead of computing them yourself.
