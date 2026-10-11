@@ -13,7 +13,7 @@ from model_x_ray.spreadsheet.engine import CellAddress, Workbook, make_ref, norm
 from model_x_ray.state import InvestigationState, ModelMap, TargetCell
 from model_x_ray.tools import find_cells
 
-YEAR = re.compile(r"\b(?:19|20)\d{2}\b")
+YEAR = re.compile(r"\b(?:19|20)\d{2}[A-Za-z]?\b")
 
 
 class LocateRequest(BaseModel):
@@ -124,9 +124,9 @@ def check_target(book: Workbook) -> tuple[str, str]:
     return ref, f"Check the model: no cell breaks its row's pattern; {label} {book.column_header(ref)} is the model's main output in its largest move."
 
 
-def make_locate_node(llm: BaseChatModel, book: Workbook) -> Callable[[InvestigationState], dict]:
+def make_locate_node(llm: BaseChatModel | None, book: Workbook) -> Callable[[InvestigationState], dict]:
     catalogue = workbook_catalogue(book)
-    structured = llm.with_structured_output(LocateRequest, method="function_calling")
+    structured = llm.with_structured_output(LocateRequest, method="function_calling") if llm is not None else None
     system = SystemMessage(content=load_prompt("locate"))
 
     def locate(state: InvestigationState) -> dict:
@@ -135,9 +135,13 @@ def make_locate_node(llm: BaseChatModel, book: Workbook) -> Callable[[Investigat
             return {"target": target_cell(book, ref), "question": question, "cell_choice": None}
         request = read_question(state["question"], catalogue)
         records = []
-        if request is None:
+        if request is None and structured is not None:
             messages = [system, HumanMessage(content=locate_brief(state["question"], catalogue, state.get("model_map")))]
             request, records = invoke_with_usage(structured, messages, role="locate", model=model_name_of(llm))
+        if request is None:
+            labels = [label for label in catalogue.labels if label.lower() in state["question"].lower()]
+            candidates = [ref for label in labels for ref in find_cells(book, label, "")]
+            return {"target": None, "cell_choice": {"question": "Which cell do you mean?", "candidates": candidates}, "run_log": records}
         candidates = find_cells(book, request.label, request.period) if request.label in catalogue.labels else []
         if request.sheet:
             candidates = [ref for ref in candidates if ref.startswith(f"{request.sheet}!")] or candidates

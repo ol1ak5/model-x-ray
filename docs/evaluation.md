@@ -47,18 +47,20 @@ With 25 cases per set, an accuracy figure carries roughly ±10 to 20 points of u
 
 ## Metrics per step
 
-| Step | Accuracy metric | Other metrics |
-|---|---|---|
-| `load_sheet` | Share of formulas parsed; dependency edges vs ground truth (precision, recall) | Latency |
-| `map_model` | Row and column labels vs ground truth (accuracy) | Latency, tokens |
-| `locate` | Target cell exact match; clarification asked only when truly ambiguous (precision, recall) | Latency, tokens |
-| `trace` | Planted cell present among precedents (recall, expected 100%); contributions sum to the observed change | Latency |
-| `diagnose` | Planted cell in top 1 and top 3 hypotheses; error type correct; overrides wrongly flagged (false-alarm rate); confidence calibration (share of `high`, `medium` and `low` hypotheses later confirmed, which should fall from high to low) | Latency, tokens, tool calls used out of the budget of 8, hypothesis revisions, runs that hit the budget |
-| `test` | Sandbox runs succeed; recalculated values match the clean base for correct patches | Latency (Google API) |
-| `verify` | Verdict accuracy: confirms correct patches, rejects wrong ones (precision, recall on deliberately wrong patches too) | Latency, tokens |
-| `explain` | Every cited cell exists and every quoted number matches the sheet (automatic check) | Latency, tokens |
+The runner computes these today; the table names the evaluator or the row field that produces each number.
 
-The `verify` step is also fed deliberately wrong patches, so its ability to reject is measured, not assumed.
+| Step | Accuracy metric | Other metrics | Computed by |
+|---|---|---|---|
+| `load_sheet` | Share of formula cells the engine parses and evaluates; dependency edges compared with the clean base model (precision, recall) | Latency | `load_sheet_metrics` (`parse_share`, `edge_precision`, `edge_recall`) |
+| `map_model` | Row and column labels vs ground truth (accuracy) | Latency, tokens | pending: needs label ground truth in the dataset |
+| `locate` | Target cell exact match; clarification asked only when the target is not uniquely resolvable by label and period (precision, recall) | Latency, tokens | `locate_metrics`, `clarification_precision` / `clarification_recall` |
+| `trace` | Planted cell present among the contributions or the causal tree (recall) | Latency | `trace_recall` |
+| `diagnose` | Planted cell in top 1 and top 3 hypotheses; error type correct; overrides and clean wrongly flagged (false-alarm rate); confidence calibration (share of `high`, `medium` and `low` hypotheses later confirmed, which should fall from high to low) | Latency, tokens, tool calls used out of the budget of 8, hypothesis revisions, runs that hit the budget | `diagnose_metrics`, `calibration` |
+| `test` | Sandbox ran and produced before/after values; the value match itself is checked end to end as fix accuracy | Latency | `sandbox_ok`, `fix_accuracy` |
+| `verify` | Verdict accuracy: confirms correct patches, rejects wrong ones (precision, recall on deliberately wrong patches too) | Latency, tokens | `verdict_metrics` |
+| `explain` | Every cited evidence id resolves in state (quoted numbers pending) | Latency, tokens | `explain_metrics` |
+
+The `verify` step is also fed deliberately wrong patches, so its ability to reject is measured, not assumed. Every run row also carries `node_latencies` (per-node latency) and `run_log` (per LLM call: role, model, tokens, latency), so the report can build the per-step table without LangSmith.
 
 ## End-to-end metrics
 
@@ -78,8 +80,8 @@ The same dataset runs through four set-ups. The graph receives its models as par
 
 | Set-up | Diagnose step | What it shows |
 |---|---|---|
-| Rules only | `find_formula_outliers` picks the most suspicious precedent; no LLM | The baseline plain code achieves |
-| Small Nemotron | Investigator on `NVIDIA-Nemotron-3-Nano-30B-A3B` or `Nemotron-3_5-Lightning` (whichever wins #4) | Whether a small model is enough |
+| Rules only | `find_formula_outliers` ranks suspicious cells; no LLM | The baseline plain code achieves |
+| Small Nemotron | Investigator on `NVIDIA-Nemotron-3-Nano-30B-A3B` | Whether a small model is enough |
 | Nemotron Super | Investigator on `nemotron-3-super-120b-a12b` (main system) | The full agent |
 | Super without tools | Nemotron reads the sheet as plain text | What the tools add |
 
@@ -87,13 +89,15 @@ Results are reported per set, because the expected winner differs by set and the
 
 ## How it runs
 
-- Each node records its own timing and token use. LangSmith traces are used when available; the runner does not depend on them.
-- `scripts/benchmark.sh` (zero flags) runs the full set and writes `docs/benchmark.md`.
-- Unit tests for the evaluators use fixed fake outputs; the full benchmark is a separate, opt-in run because it calls Token Factory and the Google APIs.
+- Each node records its latency in `node_log` and each LLM call its role, model, tokens and latency in `run_log`; the runner needs no LangSmith.
+- The benchmark isolates the diagnose step: in every set-up `map_model` is the code stub and `locate` runs without an LLM.
+- `uv run tools/benchmark.py --setups rules` runs the rules baseline offline and for free, generating the dataset first if it is missing.
+- `scripts/benchmark.sh` (zero flags) runs all four set-ups and writes `docs/benchmark-results.json`; the three LLM set-ups spend Token Factory credits.
+- Unit tests for the evaluators use fixed fake outputs; the full four-way run is a separate, opt-in invocation.
 
 ## Report
 
-`docs/benchmark.md` contains, generated by the runner:
+`docs/benchmark.md` is rendered from `docs/benchmark-results.json` by the report step (#17) and contains:
 
 1. A results table per set (type 1 to 4, blended, overrides, clean): root-cause accuracy, fix accuracy, false alarms, latency p50 and p95, cost
 2. A per-step table with the metrics above

@@ -1,13 +1,16 @@
+import re
 from collections.abc import Callable
 from datetime import datetime, timezone
 
 from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.types import interrupt
 
 from model_x_ray import causal
 from model_x_ray.agents.verifier import build_verifier, deterministic_checks, invoke_verifier
-from model_x_ray.llm import model_name_of
+from model_x_ray.llm import invoke_with_usage, model_name_of
 from model_x_ray.memory import ModelMemory
+from model_x_ray.prompts import load_prompt
 from model_x_ray.routing import MAX_ATTEMPTS
 from model_x_ray.spreadsheet.engine import Workbook
 from model_x_ray.spreadsheet.sandbox import Sandbox, SandboxWithWrite, run_sandbox_test
@@ -201,13 +204,14 @@ def sandbox_proof(state: InvestigationState, verification: Verification) -> Evid
     }
 
 
-def make_verify_node(llm: BaseChatModel, source: SpreadsheetSource) -> Callable[[InvestigationState], dict]:
-    verifier = build_verifier(llm)
-    model_name = model_name_of(llm)
+def make_verify_node(llm: BaseChatModel | None, source: SpreadsheetSource) -> Callable[[InvestigationState], dict]:
+    verifier = build_verifier(llm) if llm is not None else None
+    model_name = model_name_of(llm) if llm is not None else None
 
     def verify_node(state: InvestigationState) -> dict:
         records: list[RunLog] = []
         attempts = state.get("attempts", 0) + 1
+        patch = state.get("patch")
         hypothesis = verification_target(state)
         verification = None
         if hypothesis is not None:
@@ -215,7 +219,7 @@ def make_verify_node(llm: BaseChatModel, source: SpreadsheetSource) -> Callable[
                 (v for v in state.get("verifications", []) if v["hypothesis_id"] == hypothesis["id"]),
                 None,
             )
-        if hypothesis is None or verification is None or "before" not in verification:
+        if hypothesis is None or patch is None or verification is None or "before" not in verification or not verification["before"]:
             return {
                 "verifications": [{
                     "hypothesis_id": hypothesis["id"] if hypothesis else "",
@@ -230,6 +234,9 @@ def make_verify_node(llm: BaseChatModel, source: SpreadsheetSource) -> Callable[
         if failed:
             final = "rejected"
             reason = f"deterministic checks failed: {', '.join(failed)}; the verifier was not consulted"
+        elif verifier is None:
+            final = "confirmed"
+            reason = "deterministic checks passed; no second opinion configured"
         else:
             verdict, records = invoke_verifier(verifier, state, verification, checks, book, model=model_name)
             final = verdict.verdict
@@ -333,7 +340,33 @@ def movement_and_drivers(state: InvestigationState) -> str:
     return report
 
 
-def make_explain_node() -> Callable[[InvestigationState], dict]:
+def narrative_brief(state: InvestigationState, hypothesis: Hypothesis | None, verification: Verification) -> str:
+    lines = [f"Question: {state.get('question', '')}"]
+    target = state.get("target")
+    if target:
+        lines.append(
+            f"Target: {target['label']} {target['period']} moved from {target['prior_value']} to {target['value']} ({target['sheet']}!{target['cell']})"
+        )
+    if hypothesis:
+        lines.append(f"Hypothesis: {hypothesis['cell']} ({hypothesis['error_type']}): {hypothesis['claim']}")
+    patch = state.get("patch")
+    if patch:
+        lines.append(f"Patch: {patch['cell']}: {patch['old_formula']} -> {patch['new_formula']}")
+    checks = verification.get("checks", {})
+    check_text = ", ".join(f"{name}={str(value).lower()}" for name, value in checks.items())
+    line = f"Verification: {verification['verdict']}"
+    if verification.get("reason"):
+        line += f": {verification['reason']}"
+    if check_text:
+        line += f"; checks: {check_text}"
+    lines.append(line)
+    lines.append("Evidence records you may cite as (ev-N):")
+    for record in state.get("evidence", []):
+        lines.append(f"{record['id']} | {record['cell']} | {record['kind']} | {record['text']}")
+    return "\n".join(lines)
+
+
+def make_explain_node(llm: BaseChatModel | None = None) -> Callable[[InvestigationState], dict]:
     def explain_node(state: InvestigationState) -> dict:
         if not state.get("hypotheses"):
             return {"report": no_error_report(state)}
@@ -368,7 +401,24 @@ def make_explain_node() -> Callable[[InvestigationState], dict]:
         proofs = [e for e in state.get("evidence", []) if e["kind"] == "verification" and e["cell"] == cell]
         if proofs:
             parts.append(f"The fix was tested: {proofs[-1]['text']} ({proofs[-1]['id']}).")
-        return {"report": " ".join(parts)}
+        report = " ".join(parts)
+        if llm is None:
+            return {"report": report}
+        narrative, records = invoke_with_usage(
+            llm,
+            [
+                SystemMessage(content=load_prompt("explain")),
+                HumanMessage(content=narrative_brief(state, hypothesis, latest)),
+            ],
+            role="explain",
+            model=model_name_of(llm),
+        )
+        text = narrative.content if isinstance(narrative.content, str) else ""
+        cited = re.findall(r"ev-\d+", text)
+        known = {record["id"] for record in state.get("evidence", [])}
+        if cited and set(cited) <= known:
+            return {"report": text, "run_log": records}
+        return {"report": report, "run_log": records}
 
     return explain_node
 

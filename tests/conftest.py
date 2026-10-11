@@ -121,6 +121,61 @@ def scripted_verdict() -> ScriptedVerdict:
     return ScriptedVerdict()
 
 
+class ScriptedNarrative(BaseChatModel):
+    text: str = ""
+    briefs: list[str] = []
+
+    @property
+    def _llm_type(self) -> str:
+        return "scripted-narrative"
+
+    def _generate(self, messages: list[BaseMessage], stop: list[str] | None = None, **kwargs: Any) -> ChatResult:
+        self.briefs.append(messages[-1].content)
+        usage = {"input_tokens": 400, "output_tokens": 80, "total_tokens": 480}
+        return ChatResult(generations=[ChatGeneration(message=AIMessage(content=self.text, usage_metadata=usage))])
+
+
+class ScriptedDiagnosis(BaseChatModel):
+    bound: list[str] = []
+    briefs: list[str] = []
+    turns: list[
+        tuple[list[str], str] | tuple[list[str], str, str] | tuple[list[str], str, str, str]
+    ] = [(["P&L!H7"], "P&L!H7")]
+
+    @property
+    def _llm_type(self) -> str:
+        return "scripted-diagnosis"
+
+    def bind_tools(self, tools: Sequence[Any], **kwargs: Any) -> "ScriptedDiagnosis":
+        names = [getattr(t, "name", None) or getattr(t, "__name__", "") for t in tools]
+        return self.model_copy(update={"bound": names, "briefs": self.briefs})
+
+    def _generate(self, messages: list[BaseMessage], stop: list[str] | None = None, **kwargs: Any) -> ChatResult:
+        if "Diagnosis" not in self.bound:
+            self.briefs.append(messages[1].content)
+            usage = {"input_tokens": 1200, "output_tokens": 150, "total_tokens": 1350}
+            return ChatResult(generations=[ChatGeneration(message=AIMessage(content="Enough evidence.", usage_metadata=usage))])
+        turn = self.turns[min(len(self.briefs), len(self.turns)) - 1]
+        cells, patch_cell = turn[0], turn[1]
+        new_formula = turn[2] if len(turn) > 2 else "=G7*(1+Assumptions!$C$7)"
+        error_type = turn[3] if len(turn) > 3 else "typed_value"
+        claim_text = (
+            "uses a formula that does not fit the row"
+            if error_type == "wrong_reference"
+            else "is a typed number, not a formula"
+        )
+        args = {
+            "hypotheses": [
+                {"cell": cell, "error_type": error_type, "claim": f"{cell} {claim_text}", "confidence": "high"}
+                for cell in cells
+            ],
+            "patch": {"cell": patch_cell, "new_formula": new_formula},
+        }
+        call = {"name": "Diagnosis", "args": args, "id": "conclude"}
+        usage = {"input_tokens": 1200, "output_tokens": 150, "total_tokens": 1350}
+        return ChatResult(generations=[ChatGeneration(message=AIMessage(content="", tool_calls=[call], usage_metadata=usage))])
+
+
 class ScriptedAnswer(BaseChatModel):
     tool: str = ""
     answer: dict = {}

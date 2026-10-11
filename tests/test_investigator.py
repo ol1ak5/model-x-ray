@@ -10,6 +10,7 @@ from langchain_core.tools import tool
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
 
+from conftest import ScriptedDiagnosis
 from model_x_ray.agents.investigator import build_investigator, make_diagnose_node
 from model_x_ray.graph import build_graph, run_investigation
 from model_x_ray.llm import build_chat_model
@@ -154,39 +155,6 @@ def test_investigator_diagnoses_a_typed_value_with_nemotron() -> None:
     assert diagnosis.hypotheses[0].cell.endswith("H7")
     assert diagnosis.hypotheses[0].error_type == "typed_value"
     assert diagnosis.patch is not None and diagnosis.patch.cell.endswith("H7")
-
-
-class ScriptedDiagnosis(BaseChatModel):
-    bound: list[str] = []
-    briefs: list[str] = []
-    turns: list[tuple[list[str], str] | tuple[list[str], str, str]] = [(["P&L!H7"], "P&L!H7")]
-
-    @property
-    def _llm_type(self) -> str:
-        return "scripted-diagnosis"
-
-    def bind_tools(self, tools: Sequence[Any], **kwargs: Any) -> "ScriptedDiagnosis":
-        names = [getattr(t, "name", None) or getattr(t, "__name__", "") for t in tools]
-        return self.model_copy(update={"bound": names, "briefs": self.briefs})
-
-    def _generate(self, messages: list[BaseMessage], stop: list[str] | None = None, **kwargs: Any) -> ChatResult:
-        if "Diagnosis" not in self.bound:
-            self.briefs.append(messages[1].content)
-            usage = {"input_tokens": 1200, "output_tokens": 150, "total_tokens": 1350}
-            return ChatResult(generations=[ChatGeneration(message=AIMessage(content="Enough evidence.", usage_metadata=usage))])
-        turn = self.turns[min(len(self.briefs), len(self.turns)) - 1]
-        cells, patch_cell = turn[0], turn[1]
-        new_formula = turn[2] if len(turn) > 2 else "=G7*(1+Assumptions!$C$7)"
-        args = {
-            "hypotheses": [
-                {"cell": cell, "error_type": "typed_value", "claim": f"{cell} is a typed number, not a formula", "confidence": "high"}
-                for cell in cells
-            ],
-            "patch": {"cell": patch_cell, "new_formula": new_formula},
-        }
-        call = {"name": "Diagnosis", "args": args, "id": "conclude"}
-        usage = {"input_tokens": 1200, "output_tokens": 150, "total_tokens": 1350}
-        return ChatResult(generations=[ChatGeneration(message=AIMessage(content="", tool_calls=[call], usage_metadata=usage))])
 
 
 def test_investigator_runs_as_the_diagnose_node_of_the_main_graph(demo_workbook_path: Path) -> None:
@@ -409,6 +377,21 @@ def verify_keep_open_then_confirm(state: InvestigationState) -> dict:
         "hypotheses": [{"id": hypothesis["id"], "status": "confirmed"}],
         "attempts": 2,
     }
+
+
+def test_a_typed_value_patch_is_corrected_to_the_row_formula_even_when_the_investigator_proposes_another(demo_workbook_path: Path, engine_sandbox, scripted_verdict) -> None:
+    model = ScriptedDiagnosis(turns=[(["P&L!H7"], "P&L!H7", "=G7*1.05")])
+    graph = run_investigation(model, "demo", XlsxSource({"demo": demo_workbook_path}), engine_sandbox, verifier=scripted_verdict)
+    config = {"configurable": {"thread_id": "row-formula"}}
+
+    graph.invoke({"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump on the P&L sheet?"}, config)
+    graph.invoke(Command(resume={"action": "approve", "reason": "", "patch": None}), config)
+    state = graph.get_state(config).values
+
+    assert state["patch"]["new_formula"] == "=G7*(1+Assumptions!$C$7)"
+    assert state["verifications"][-1]["verdict"] == "confirmed"
+    assert state["corrected_copy_id"] == "corrected:demo"
+    assert engine_sandbox.writes[0]["patch"]["new_formula"] == "=G7*(1+Assumptions!$C$7)"
 
 
 def test_approve_writes_a_corrected_copy_with_a_change_log(demo_workbook_path: Path, engine_sandbox, scripted_verdict) -> None:

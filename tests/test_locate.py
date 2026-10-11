@@ -49,6 +49,24 @@ def test_a_question_naming_a_line_and_year_is_located_without_calling_nemotron(d
     assert graph.get_state(config).next == ("human_review",)
 
 
+def test_a_question_naming_an_a_or_e_suffixed_period_resolves_without_nemotron(demo_workbook_path: Path) -> None:
+    book = load_xlsx(demo_workbook_path)
+    model = ScriptedLocator()
+    graph, config, _ = run(model, book, "Why did EBITDA jump in 2026E?", "suffixed", nodes.make_trace_node(book))
+
+    assert model.prompts == []
+    target = graph.get_state(config).values["target"]
+    assert (target["sheet"], target["cell"], target["label"], target["period"]) == ("P&L", "G8", "EBITDA", "2026E")
+    assert (target["prior_cell"], target["value"]) == ("F8", pytest.approx(40.03, abs=0.01))
+
+
+def test_a_suffixed_period_naming_a_line_on_two_sheets_still_pauses() -> None:
+    graph, config, paused = run(ScriptedLocator(), TWO_SHEETS, "Why did EBITDA jump in 2026E?", "suffixed-ambiguous")
+
+    assert graph.get_state(config).next == ("choose_target",)
+    assert paused["__interrupt__"][0].value["candidates"] == ["P&L!G8", "Summary!C10"]
+
+
 def test_other_wording_asks_nemotron_using_only_lines_and_periods_that_exist(demo_workbook_path: Path) -> None:
     book = load_xlsx(demo_workbook_path)
     model = ScriptedLocator(answer={"label": "EBITDA", "period": "2027E", "sheet": None})

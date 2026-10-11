@@ -113,6 +113,11 @@ class RunLog(TypedDict):
     latency_ms: float
 
 
+class NodeLog(TypedDict):
+    node: str
+    latency_ms: float
+
+
 def merge_by_id(left: list[Hypothesis], right: list[Hypothesis]) -> list[Hypothesis]:
     merged = {h["id"]: h for h in left}
     for update in right:
@@ -143,6 +148,8 @@ class InvestigationState(TypedDict):
     verifications: Annotated[list[Verification], merge_verifications]
     evidence: Annotated[list[Evidence], operator.add]
     run_log: Annotated[list[RunLog], operator.add]
+    node_log: Annotated[list[NodeLog], operator.add]
+    tool_call_counts: Annotated[list[int], operator.add]
     attempts: int
     report: str | None
     human_decision: HumanDecision | None
