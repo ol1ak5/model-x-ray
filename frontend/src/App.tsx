@@ -13,12 +13,10 @@ import {
   resumeInvestigation,
   startInvestigation,
 } from "./api";
-import CauseTree from "./components/CauseTree";
 import CellChoice from "./components/CellChoice";
-import EvidencePanel from "./components/EvidencePanel";
+import DetailTabs, { type Tab } from "./components/DetailTabs";
 import Hero from "./components/Hero";
 import Logo from "./components/Logo";
-import HypothesisBoard from "./components/HypothesisBoard";
 import Outcome from "./components/Outcome";
 import Progress, { type Step } from "./components/Progress";
 import Report from "./components/Report";
@@ -55,6 +53,16 @@ export default function App() {
   const [sheet, setSheet] = useState<SheetWindow | null>(null);
   const [modelName, setModelName] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>("tree");
+
+  function showEvidence(id: string) {
+    setTab("evidence");
+    window.setTimeout(() => {
+      const record = document.getElementById(id);
+      record?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+      record?.focus();
+    }, 50);
+  }
 
   useEffect(() => {
     listSpreadsheets()
@@ -134,20 +142,33 @@ export default function App() {
       {started && (
         <main className="workspace">
           <div className="topbar">
-            <p>
-              Checking <strong>{modelName}</strong>
-            </p>
+            <div>
+              <p className="eyebrow">Model check</p>
+              <h1 className="ws-title">
+                {modelName}
+                <span className={`status ${phase}`}>{phase === "running" ? "Checking…" : phase === "paused" && view?.status === "needs_cell" ? "Needs your input" : phase === "paused" ? "Review needed" : phase === "done" ? "Done" : "Stopped"}</span>
+              </h1>
+            </div>
             <button type="button" className="secondary" onClick={reset} disabled={phase === "running"}>
               Check another model
             </button>
           </div>
           <div className="ws-main">
             <div className="ws-left">
-              {sheet && view && <SheetGrid key={view.id + sheet.sheet} sheet={sheet} marks={marksOf(view)} title="Sheet" />}
-              {view?.report && <Report text={view.report} target={view.target} />}
-              {view?.hypotheses && view.hypotheses.length > 0 && <HypothesisBoard hypotheses={view.hypotheses} />}
-              {view?.causal_tree && <CauseTree root={view.causal_tree} after={view.verifications?.at(-1)?.after ?? {}} />}
-              {view?.evidence && view.evidence.length > 0 && <EvidencePanel evidence={view.evidence} />}
+              {view?.report && <Report view={view} onEvidence={showEvidence} />}
+              {sheet && view ? (
+                <SheetGrid key={view.id + sheet.sheet} sheet={sheet} marks={marksOf(view)} title="Sheet" />
+              ) : (
+                phase === "running" && (
+                  <div className="card scanning" aria-hidden="true">
+                    <p className="scanning-title">Scanning your model…</p>
+                    {Array.from({ length: 7 }, (_, index) => (
+                      <span key={index} className="skeleton-row" style={{ animationDelay: `${index * 0.12}s` }} />
+                    ))}
+                  </div>
+                )
+              )}
+              {view && <DetailTabs view={view} tab={tab} onTab={setTab} />}
             </div>
             <aside className="ws-side">
               <Progress steps={steps} running={phase === "running"} />

@@ -37,7 +37,7 @@ describe("an investigation in the browser", () => {
     for (const [, label] of STEPS) expect(await within(progress).findByText(label)).toBeInTheDocument();
 
     const report = await screen.findByRole("region", { name: "Report" });
-    expect(within(report).getByText(/Root cause found in P&L!H7/)).toBeInTheDocument();
+    expect(within(report).getByText(/Root cause found in P&L!H7: P&L!H7 is a typed number/)).toBeInTheDocument();
     expect(within(report).getByRole("link", { name: "ev-3" })).toHaveAttribute("href", "#ev-3");
 
     const grid = await screen.findByRole("region", { name: "Sheet" });
@@ -46,19 +46,23 @@ describe("an investigation in the browser", () => {
     await user.click(within(grid).getByRole("button", { name: "P&L!G7" }));
     expect(within(grid).getByText("=F7*(1+Assumptions!$C$7)")).toBeInTheDocument();
 
-    const board = screen.getByRole("region", { name: "Findings" });
-    expect(within(within(board).getByRole("group", { name: "Confirmed" })).getByText("P&L!H7")).toBeInTheDocument();
-    expect(within(within(board).getByRole("group", { name: "Confirmed" })).getByText("high confidence")).toBeInTheDocument();
-    expect(within(within(board).getByRole("group", { name: "Rejected" })).getByText("P&L!H5")).toBeInTheDocument();
-
     const tree = screen.getByRole("region", { name: "Cause tree" });
     expect(within(tree).getByText("Opex")).toBeInTheDocument();
     expect(within(tree).getByText("Suspicious")).toBeInTheDocument();
     expect(within(tree).getByText("after fix -52.48")).toBeInTheDocument();
 
-    const evidence = screen.getByRole("region", { name: "Evidence" });
+    await user.click(screen.getByRole("tab", { name: /Findings/ }));
+    const board = screen.getByRole("region", { name: "Findings" });
+    expect(within(within(board).getByRole("group", { name: "Confirmed" })).getByText("P&L!H7")).toBeInTheDocument();
+    expect(within(within(board).getByRole("group", { name: "Confirmed" })).getByText("high confidence")).toBeInTheDocument();
+    expect(within(within(board).getByRole("group", { name: "Rejected" })).getByText("P&L!H5")).toBeInTheDocument();
+
+    await user.click(within(report).getByRole("link", { name: "ev-3" }));
+    const evidence = await screen.findByRole("region", { name: "Evidence" });
     expect(within(evidence).getByText(/52.01 -> 44.73 in a sandbox copy/)).toBeInTheDocument();
     expect(document.getElementById("ev-3")).not.toBeNull();
+    expect(within(report).getByText("Root cause found in P&L!H7")).toBeInTheDocument();
+    expect(within(report).getByText("44.7")).toBeInTheDocument();
 
     await user.type(screen.getByLabelText("Reason"), "typed opex");
     await user.click(screen.getByRole("button", { name: "Approve fix" }));

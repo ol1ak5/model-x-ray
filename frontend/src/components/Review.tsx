@@ -12,12 +12,21 @@ export default function Review({ patch, onDecide }: { patch: Patch | null; onDec
     <div className="card review">
       <h2>Your decision</h2>
       {patch ? (
-        <p className="fix">
-          Proposed fix for <span className="mono">{patch.cell}</span>: <span className="mono old">{patch.old_formula}</span> →{" "}
-          <span className="mono new">{patch.new_formula}</span>
-        </p>
+        <div className="fix">
+          <p className="fix-cell">
+            Proposed change for <span className="mono">{patch.cell}</span>
+          </p>
+          <p className="fix-row">
+            <span className="fix-label">Current</span>
+            <span className="mono old">{patch.old_formula}</span>
+          </p>
+          <p className="fix-row">
+            <span className="fix-label">Proposed</span>
+            <span className="mono new">{patch.new_formula}</span>
+          </p>
+        </div>
       ) : (
-        <p className="fix">No fix to apply.</p>
+        <p className="fix">No change to apply.</p>
       )}
       <label htmlFor="reason">Reason</label>
       <textarea id="reason" rows={2} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Why you approve, edit or reject" />
