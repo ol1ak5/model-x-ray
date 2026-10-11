@@ -46,7 +46,7 @@ class InvestigatorState(TypedDict):
 
 
 def build_investigator(llm: BaseChatModel, tools: list[BaseTool], max_tool_calls: int = MAX_TOOL_CALLS) -> CompiledStateGraph:
-    model = llm.bind_tools(tools)
+    model = llm.bind_tools(tools) if tools else llm
     structured = llm.with_structured_output(Diagnosis, method="function_calling")
     tool_node = ToolNode(tools)
     system = SystemMessage(content=load_prompt("investigator"))
