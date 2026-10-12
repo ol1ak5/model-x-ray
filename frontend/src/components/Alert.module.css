@@ -1,8 +1,0 @@
-.alert {
-  padding: 0.625rem 0.875rem;
-  border-radius: var(--radius-m);
-  background: var(--danger-soft);
-  color: var(--danger);
-  font-weight: 500;
-  animation: fade-up var(--dur-slow) var(--ease) both;
-}

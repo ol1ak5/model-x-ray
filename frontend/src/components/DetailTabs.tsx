@@ -2,7 +2,6 @@ import type { InvestigationView } from "../api";
 import CauseTree from "./CauseTree";
 import EvidencePanel from "./EvidencePanel";
 import HypothesisBoard from "./HypothesisBoard";
-import styles from "./DetailTabs.module.css";
 
 export type Tab = "tree" | "findings" | "evidence";
 
@@ -18,16 +17,16 @@ export default function DetailTabs({ view, tab, onTab }: { view: InvestigationVi
   const after = view.verifications?.at(-1)?.after ?? {};
 
   return (
-    <div className={styles.details}>
-      <div className={styles.tabs} role="tablist" aria-label="Details">
+    <div className="card details">
+      <div className="tabs" role="tablist" aria-label="Details">
         {visible.map((item) => (
-          <button key={item.id} type="button" role="tab" id={`tab-${item.id}`} aria-selected={current === item.id} aria-controls={`panel-${item.id}`} className={`${styles.tab} ${current === item.id ? styles.active : ""}`} onClick={() => onTab(item.id)}>
+          <button key={item.id} type="button" role="tab" id={`tab-${item.id}`} aria-selected={current === item.id} aria-controls={`panel-${item.id}`} className={current === item.id ? "active" : ""} onClick={() => onTab(item.id)}>
             {item.label}
-            {item.count !== undefined && <span className={`${styles.count} ${current === item.id ? styles.countActive : ""}`}>{item.count}</span>}
+            {item.count !== undefined && <span className="count">{item.count}</span>}
           </button>
         ))}
       </div>
-      <div role="tabpanel" id={`panel-${current}`} aria-labelledby={`tab-${current}`} className={styles.panel} key={current}>
+      <div role="tabpanel" id={`panel-${current}`} aria-labelledby={`tab-${current}`} className="tab-panel">
         {current === "tree" && view.causal_tree && <CauseTree root={view.causal_tree} after={after} />}
         {current === "findings" && <HypothesisBoard hypotheses={view.hypotheses ?? []} />}
         {current === "evidence" && <EvidencePanel evidence={view.evidence ?? []} />}
