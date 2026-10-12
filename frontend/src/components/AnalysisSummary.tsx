@@ -1,5 +1,3 @@
-import styles from "./AnalysisSummary.module.css";
-
 const ROWS = [
   { tone: "red", count: 1, label: "Hardcoded value", where: "Gross profit 2026E" },
   { tone: "amber", count: 1, label: "Calculation mismatch", where: "EBITDA 2026E" },
@@ -9,15 +7,15 @@ const ROWS = [
 
 export default function AnalysisSummary() {
   return (
-    <div className={styles.panel}>
-      <p className={styles.title}>Analysis summary</p>
+    <div className="summary-panel">
+      <p className="summary-title">Analysis summary</p>
       {ROWS.map((row) => (
-        <p key={row.label} className={styles.row}>
-          <span className={`${styles.icon} ${styles[row.tone]}`}>{row.tone === "green" ? "✓" : "!"}</span>
-          <span className={`${styles.count} ${styles[row.tone]}`}>{row.count}</span>
-          <span className={styles.label}>
+        <p key={row.label} className="summary-row">
+          <span className={`summary-icon ${row.tone}`}>{row.tone === "green" ? "✓" : "!"}</span>
+          <span className={`summary-count ${row.tone}`}>{row.count}</span>
+          <span className="summary-label">
             {row.label}
-            {row.where && <span className={styles.where}>{row.where}</span>}
+            {row.where && <span className="summary-where">{row.where}</span>}
           </span>
         </p>
       ))}

@@ -2,10 +2,9 @@ import type { SheetWindow, Spreadsheet } from "../api";
 import { GLOW } from "../theme";
 import AnalysisSummary from "./AnalysisSummary";
 import Icon from "./Icon";
+import Waves from "./Waves";
 import QuestionForm from "./QuestionForm";
 import SheetGrid from "./SheetGrid";
-import Waves from "./Waves";
-import styles from "./Hero.module.css";
 
 const SAMPLE: SheetWindow = {
   sheet: "P&L",
@@ -28,6 +27,13 @@ const SAMPLE: SheetWindow = {
   })),
 };
 
+const STEPS = [
+  { icon: "scan" as const, title: "Scans every formula", text: "Finds hardcodes and broken references, even when several errors are mixed." },
+  { icon: "trace" as const, title: "Traces the cause", text: "Follows each number back to the cell that moved it." },
+  { icon: "shield" as const, title: "Proves the fix", text: "Every detected error is corrected on a copy and verified before you see it." },
+  { icon: "user" as const, title: "You decide", text: "Approve, edit or reject the changes. Your original file is never changed." },
+];
+
 const WIDE_SAMPLE: SheetWindow = {
   ...SAMPLE,
   columns: [...SAMPLE.columns, { letter: "I", header: "2028E" }],
@@ -40,69 +46,64 @@ const WIDE_SAMPLE: SheetWindow = {
   })),
 };
 
-const STEPS = [
-  { icon: "scan" as const, title: "Scans every formula", text: "Finds hardcodes and broken references, even when several errors are mixed." },
-  { icon: "trace" as const, title: "Traces the cause", text: "Follows each number back to the cell that moved it." },
-  { icon: "shield" as const, title: "Proves the fix", text: "Every detected error is corrected on a copy and verified before you see it." },
-  { icon: "user" as const, title: "You decide", text: "Approve, edit or reject the changes. Your original file is never changed." },
-];
-
 export default function Hero({ demos, error, onStart, onError }: { demos: Spreadsheet[]; error: string | null; onStart: (id: string, question: string, name: string) => void; onError: (message: string) => void }) {
   return (
-    <div className={styles.home}>
-      <section className={styles.hero}>
-        <div className={styles.copy}>
-          <p className={styles.eyebrow}>The financial model debugger</p>
-          <h1 className={styles.headline}>
+    <div className="home">
+      <section className="hero">
+        <div className="hero-copy">
+          <p className="eyebrow">The financial model debugger</p>
+          <h1>
             Your Excel models{" "}
             <br />
-            under the <span className={styles.accent}>X-Ray.</span>
+            under the <span className="green">X-Ray.</span>
           </h1>
-          <p className={styles.lead}>Model X-Ray checks every formula in your model, finds the cells that break the logic, proves each fix on a copy and lets you approve it before anything changes.</p>
+          <p className="lead">Model X-Ray checks every formula in your model, finds the cells that break the logic, proves each fix on a copy and lets you approve it before anything changes.</p>
           <QuestionForm demos={demos} onStart={onStart} onError={onError} />
-          {error && <p className={styles.alert} role="alert">{error}</p>}
+          {error && (
+            <p className="alert" role="alert">
+              {error}
+            </p>
+          )}
         </div>
-        <div className={styles.visual} aria-hidden="true">
+        <div className="hero-visual" aria-hidden="true">
           {GLOW && (
             <>
-              <span className={styles.glassBack} />
-              <span className={styles.glassMid} />
-              <span className={styles.circuitLeft} />
-              <span className={styles.circuitTop} />
-              <span className={styles.circuitRight} />
+              <span className="glass glass-back" />
+              <span className="glass glass-mid" />
+              <span className="circuit circuit-left" />
+              <span className="circuit circuit-top" />
+              <span className="circuit circuit-right" />
             </>
           )}
-          <SheetGrid sheet={GLOW ? WIDE_SAMPLE : SAMPLE} title="Example sheet" showFormulaBar={false} light marks={{ suspicious: new Set(), confirmed: new Set([GLOW ? "P&L!G6" : "P&L!H6"]), target: null, after: {}, patch: null }} />
+          <SheetGrid sheet={GLOW ? WIDE_SAMPLE : SAMPLE} title="Example sheet" showFormulaBar={false} marks={{ suspicious: new Set(), confirmed: new Set([GLOW ? "P&L!G6" : "P&L!H6"]), target: null, after: {}, patch: null }} />
           {GLOW ? (
             <AnalysisSummary />
           ) : (
-            <div className={styles.issue}>
-              <span className={styles.issueIcon}>!</span>
+            <div className="issue-card">
+              <span className="issue-icon">!</span>
               <div>
-                <p className={styles.issueHead}>Formula issue detected in cell H6</p>
-                <p className={styles.issueText}>Expected =H4+H5 but found the typed value -25.0</p>
+                <p className="issue-head">Formula issue detected in cell H6</p>
+                <p className="issue-text">Expected =H4+H5 but found the typed value -25.0</p>
               </div>
-              <span className={styles.issueLink}>View details →</span>
+              <span className="issue-link">View details →</span>
             </div>
           )}
         </div>
       </section>
       {GLOW && <Waves />}
 
-      <section className={styles.steps} aria-labelledby="steps-title">
-        <p className={styles.eyebrow}>How it works</p>
-        <h2 id="steps-title" className={styles.sectionTitle}>
-          Go beyond the numbers. <span className={styles.accent}>See the logic.</span>
+      <section className="steps" aria-labelledby="steps-title">
+        <p className="eyebrow">How it works</p>
+        <h2 id="steps-title" className="section-title">
+          Go beyond the numbers. <span className="green">See the logic.</span>
         </h2>
-        <ol className={styles.stepList}>
+        <ol className="step-list">
           {STEPS.map((step, index) => (
-            <li key={step.title} className={styles.step} style={{ animationDelay: `${0.15 + index * 0.07}s` }}>
-              <span className={styles.stepNumber}>{String(index + 1).padStart(2, "0")}</span>
-              <span className={styles.stepIcon}>
-                <Icon name={step.icon} />
-              </span>
-              <h3 className={styles.stepTitle}>{step.title}</h3>
-              <p className={styles.stepText}>{step.text}</p>
+            <li key={step.title} className="step">
+              <span className="step-number">{index + 1}</span>
+              <span className="feature-icon"><Icon name={step.icon} /></span>
+              <h3 className="step-title">{step.title}</h3>
+              <p>{step.text}</p>
             </li>
           ))}
         </ol>
