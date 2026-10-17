@@ -1,5 +1,7 @@
+import time
 from pathlib import Path
 
+import openpyxl
 import pytest
 
 from model_x_ray.spreadsheet.engine import CircularReferenceError, UnsupportedFormulaError, Workbook
@@ -94,3 +96,20 @@ def test_quoted_sheet_names_link_sheets_like_excel_and_google_sheets_write_them(
     assert book.value("Summary!D11") == "above plan"
     assert book.dependents("P&L!H8") == ["Summary!D10", "Summary!D11"]
     assert book.formula_pattern("Summary!D10") == "='P&L'!R[-2]C[4]"
+
+
+def test_a_sheet_formatted_out_to_the_last_column_loads_only_the_cells_it_uses(tmp_path: Path) -> None:
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.title = "Inputs"
+    sheet["B2"] = 100
+    sheet["C2"] = "=B2*2"
+    sheet["XFD3000"].number_format = "0.0%"
+    workbook.save(tmp_path / "wide.xlsx")
+
+    started = time.perf_counter()
+    book = load_xlsx(tmp_path / "wide.xlsx")
+
+    assert time.perf_counter() - started < 5
+    assert book.value("Inputs!C2") == 200.0
+    assert book.metadata_of("Inputs!XFD3000")["number_format"] == "0.0%"
