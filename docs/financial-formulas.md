@@ -333,7 +333,7 @@ Generated from `src/model_x_ray/finance.py` by `tools/export_formulas.py`.
 - **Inputs:** `final_year_cash_flow` (cash flow of the last forecast year, normalised (capex in line with D&A, working capital consistent with g)); `discount_rate` (WACC (or cost of equity for FCFE)); `stable_growth` (growth rate in perpetuity)
 - **Convention:** The last forecast year is a normal year, so it is grown by (1 + g) to get the first year of the perpetuity.
 - **Convention:** Discounted with the factor of the last forecast year.
-- **Convention:** Usually cross-checked against an exit multiple.
+- **Convention:** Often cross-checked against the value from trading or transaction multiples.
 - **Typical error:** The (1 + g) factor left out when the last year is a normal forecast year.
 - **Typical error:** The last year not normalised (capex below D&A, or working capital release carried into perpetuity).
 - **Typical error:** Growth at or above the discount rate.
@@ -367,16 +367,6 @@ Generated from `src/model_x_ray/finance.py` by `tools/export_formulas.py`.
 - **Accepted form of:** terminal value (academic practice)
 - **Source:** Damodaran, Valuation lecture slides (NYU Stern, spring 2023): building blocks of valuation, stable growth
 
-### Terminal value (exit multiple)
-
-`final_year_metric * exit_multiple`
-
-- **Usual names:** exit multiple, exit value
-- **Inputs:** `final_year_metric` (EBITDA (or other metric) in the last forecast year); `exit_multiple` (multiple applied at exit)
-- **Typical error:** Multiple applied to next year's metric when it was quoted on trailing figures.
-- **Accepted form of:** terminal value (banking practice)
-- **Source:** European investment banking and M&A practice (reviewed by Olga Aksenova)
-
 ### Value of equity from the value of operating assets
 
 `operating_assets - debt - minority_interests + cash + non_operating_assets - options`
@@ -405,6 +395,55 @@ Generated from `src/model_x_ray/finance.py` by `tools/export_formulas.py`.
 - **Inputs:** `next_dividend` (expected dividend per share next year); `cost_of_equity` (cost of equity); `stable_growth` (growth rate in perpetuity)
 - **Typical error:** Current dividend used instead of next year's.
 - **Source:** Damodaran, Valuation lecture slides (NYU Stern, spring 2023): building blocks of valuation, stable growth
+
+## Multiples
+
+### Enterprise value from a trading or transaction multiple
+
+`ebitda * ev_to_ebitda_multiple`
+
+- **Usual names:** ev from multiple, multiples valuation, trading comparables, comparable companies, precedent transactions, transaction multiples, comps
+- **Inputs:** `ebitda` (EBITDA of the current year, or at most of next year (n+1)); `ev_to_ebitda_multiple` (EV / EBITDA multiple of listed peers (trading comparables) or of precedent transactions, on the same year basis as the EBITDA)
+- **Convention:** A quick, preliminary valuation: useful for a number fast or as a cross-check of the DCF, not as the main value.
+- **Convention:** The EBITDA is the current year's or, at most, next year's (n+1), never a far forecast year.
+- **Convention:** The multiple and the EBITDA share the same basis: a current-year multiple on current-year EBITDA, a next-year multiple on next-year EBITDA.
+- **Convention:** Transaction multiples include a control premium; trading multiples do not.
+- **Typical error:** Multiple applied to a far forecast year's EBITDA (for example 2050).
+- **Typical error:** Bases mixed: a next-year multiple applied to current-year EBITDA, or the reverse.
+- **Typical error:** Transaction multiples, with their control premium, used to value a minority stake.
+- **Typical error:** Peers that are not comparable in sector, size or growth.
+- **Accepted form of:** multiples valuation (banking practice)
+- **Source:** European investment banking and M&A practice (reviewed by Olga Aksenova)
+
+### Enterprise value
+
+`equity_value + debt + minority_interests - cash`
+
+- **Usual names:** enterprise value, ev, firm value
+- **Inputs:** `equity_value` (market value of equity); `debt` (debt); `minority_interests` (minority interests); `cash` (cash and equivalents)
+- **Typical error:** Cash added instead of subtracted.
+- **Typical error:** Minority interests left out while EBITDA consolidates the subsidiary.
+- **Source:** Standard corporate finance practice
+
+### EV / EBITDA
+
+`enterprise_value / ebitda`
+
+- **Usual names:** ev/ebitda, ebitda multiple
+- **Inputs:** `enterprise_value` (enterprise value); `ebitda` (EBITDA)
+- **Typical error:** Equity value divided by EBITDA (numerator and denominator inconsistent).
+- **Plausible range:** 0 to 50
+- **Source:** Standard corporate finance practice
+
+### Price to earnings
+
+`price_per_share / earnings_per_share`
+
+- **Usual names:** p/e, pe ratio, price earnings
+- **Inputs:** `price_per_share` (share price); `earnings_per_share` (earnings per share)
+- **Typical error:** Trailing and forward EPS mixed across comparables.
+- **Plausible range:** 0 to 100
+- **Source:** Standard corporate finance practice
 
 ## Income statement
 
@@ -502,37 +541,5 @@ Generated from `src/model_x_ray/finance.py` by `tools/export_formulas.py`.
 - **Usual names:** depreciation, straight-line depreciation
 - **Inputs:** `asset_cost` (cost of the asset); `salvage_value` (value at the end of its life); `useful_life` (useful life in periods)
 - **Typical error:** Depreciation continuing after the asset is fully depreciated.
-- **Source:** Standard corporate finance practice
-
-## Multiples
-
-### Enterprise value
-
-`equity_value + debt + minority_interests - cash`
-
-- **Usual names:** enterprise value, ev, firm value
-- **Inputs:** `equity_value` (market value of equity); `debt` (debt); `minority_interests` (minority interests); `cash` (cash and equivalents)
-- **Typical error:** Cash added instead of subtracted.
-- **Typical error:** Minority interests left out while EBITDA consolidates the subsidiary.
-- **Source:** Standard corporate finance practice
-
-### EV / EBITDA
-
-`enterprise_value / ebitda`
-
-- **Usual names:** ev/ebitda, ebitda multiple
-- **Inputs:** `enterprise_value` (enterprise value); `ebitda` (EBITDA)
-- **Typical error:** Equity value divided by EBITDA (numerator and denominator inconsistent).
-- **Plausible range:** 0 to 50
-- **Source:** Standard corporate finance practice
-
-### Price to earnings
-
-`price_per_share / earnings_per_share`
-
-- **Usual names:** p/e, pe ratio, price earnings
-- **Inputs:** `price_per_share` (share price); `earnings_per_share` (earnings per share)
-- **Typical error:** Trailing and forward EPS mixed across comparables.
-- **Plausible range:** 0 to 100
 - **Source:** Standard corporate finance practice
 

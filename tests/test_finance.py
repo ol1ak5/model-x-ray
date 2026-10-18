@@ -49,7 +49,9 @@ def test_banking_and_academic_forms_of_fcff_and_terminal_value_agree_where_they_
     grown = compute("terminal_value_final_year_grown", final_year_cash_flow=100, discount_rate=0.08, stable_growth=0.02)
     next_year = compute("terminal_value_gordon", next_cash_flow=102, discount_rate=0.08, stable_growth=0.02)
     assert grown == pytest.approx(next_year) == pytest.approx(1700)
-    assert {f.key for f in accepted_forms("terminal value")} == {"terminal_value_final_year_grown", "terminal_value_gordon", "terminal_value_fundamental", "terminal_value_exit_multiple"}
+    assert {f.key for f in accepted_forms("terminal value")} == {"terminal_value_final_year_grown", "terminal_value_gordon", "terminal_value_fundamental"}
+    assert compute("ev_from_multiple", ebitda=120, ev_to_ebitda_multiple=8.5) == pytest.approx(1020)
+    assert "never a far forecast year" in " ".join(BY_KEY["ev_from_multiple"].conventions)
     assert {f.practice for f in accepted_forms("fcff")} == {"banking", "academic"}
     assert "unlevered taxes" in " ".join(BY_KEY["fcff_from_ebitda"].conventions).lower()
     assert "not of the terminal column" in " ".join(BY_KEY["terminal_value_gordon"].conventions)
