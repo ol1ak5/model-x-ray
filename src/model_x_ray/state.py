@@ -93,6 +93,7 @@ class Verification(TypedDict):
     checks: dict[str, bool]
     verdict: Literal["confirmed", "rejected", "inconclusive"]
     reason: str
+    error: NotRequired[str]
 
 
 class Evidence(TypedDict):

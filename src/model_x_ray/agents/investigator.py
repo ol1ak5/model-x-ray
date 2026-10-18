@@ -1,4 +1,5 @@
 import operator
+import re
 from collections.abc import Callable
 from typing import Annotated, Literal, TypedDict
 
@@ -169,6 +170,12 @@ def row_formula_suggestion(book: Workbook, cell: str) -> str | None:
     return book.shifted_formula(source, cell)
 
 
+def as_formula(content: object) -> object:
+    if isinstance(content, str) and not content.startswith("=") and re.search(r"[A-Za-z]{1,3}\$?[0-9]+|[A-Za-z_]+\(", content):
+        return "=" + content.lstrip()
+    return content
+
+
 def column_formula_suggestion(book: Workbook, cell: str) -> str | None:
     sheet, address = split_ref(normalize_ref(cell))
     for offset in (1, -1, 2, -2):
@@ -270,7 +277,7 @@ def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_t
         patch = None
         if diagnosis.patch is not None and full_ref(diagnosis.patch.cell, sheet) not in intentional:
             patch_cell = full_ref(diagnosis.patch.cell, sheet)
-            new_formula = diagnosis.patch.new_formula
+            new_formula = as_formula(diagnosis.patch.new_formula)
             if book.formula(patch_cell) is None:
                 new_formula = row_formula_suggestion(book, patch_cell) or column_formula_suggestion(book, patch_cell) or new_formula
             patch = {"cell": patch_cell, "old_formula": old_formula(book, patch_cell), "new_formula": new_formula, "source": "agent"}

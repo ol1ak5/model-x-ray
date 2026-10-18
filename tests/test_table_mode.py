@@ -116,3 +116,13 @@ def test_a_calculation_with_no_broken_pattern_is_handed_to_the_investigator_for_
     assert update["target"]["mode"] == "review"
     assert update["target"]["cell"] == "B4"
     assert "main result" in update["question"]
+
+
+def test_a_proposed_formula_without_the_equals_sign_is_read_as_a_formula() -> None:
+    from model_x_ray.agents.investigator import as_formula
+
+    assert as_formula("+E13") == "=+E13"
+    assert as_formula("SUM(B2:B6)") == "=SUM(B2:B6)"
+    assert as_formula("=B5*C5") == "=B5*C5"
+    assert as_formula("45.2") == "45.2"
+    assert as_formula(45.2) == 45.2

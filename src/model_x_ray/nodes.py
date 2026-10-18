@@ -184,7 +184,10 @@ def make_test_node(source: SpreadsheetSource, sandbox: Sandbox) -> Callable[[Inv
         hypothesis = verification_target(state)
         if patch is None or hypothesis is None:
             return {}
-        result = run_sandbox_test(source, sandbox, state["spreadsheet_id"], patch)
+        try:
+            result = run_sandbox_test(source, sandbox, state["spreadsheet_id"], patch)
+        except FormulaError as error:
+            return {"verifications": [{"hypothesis_id": hypothesis["id"], "before": {}, "after": {}, "error": str(error)}]}
         return {
             "verifications": [{
                 "hypothesis_id": hypothesis["id"],
@@ -225,6 +228,15 @@ def make_verify_node(llm: BaseChatModel | None, source: SpreadsheetSource) -> Ca
                 (v for v in state.get("verifications", []) if v["hypothesis_id"] == hypothesis["id"]),
                 None,
             )
+        if verification is not None and verification.get("error"):
+            return {
+                "verifications": [{
+                    "hypothesis_id": hypothesis["id"], "before": {}, "after": {}, "checks": {},
+                    "verdict": "rejected", "reason": f"the fix could not be calculated on the copy: {verification['error']}",
+                }],
+                "hypotheses": [{"id": hypothesis["id"], "status": "rejected"}],
+                "attempts": attempts,
+            }
         if hypothesis is None or patch is None or verification is None or "before" not in verification or not verification["before"]:
             return {
                 "verifications": [{
