@@ -43,6 +43,9 @@ SUPPORTED_FUNCTIONS = (
 )
 TIMELINE_ROWS = 30
 YEAR_RANGE = (1900, 2100)
+PERIOD_INDEX_RANGE = (-50, 200)
+SERIAL_RANGE = (1, 2958465)
+DATE_FORMAT = re.compile(r"(?i)(yy|mmm|dd?[/.-]|[/.-]dd?|m/)")
 FUNCTION_PREFIXES = ("_XLFN._XLWS.", "_XLFN.", "_XLWS.")
 EXCEL_EPOCH = date(1899, 12, 30)
 ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
@@ -529,22 +532,66 @@ class Workbook:
             return None
         return float(value) if is_number(value) else None
 
+    def _period_mark(self, ref: str) -> tuple[str, float, str] | None:
+        raw = self._cells.get(ref)
+        if isinstance(raw, str) and ISO_DATE.match(raw):
+            return "date", to_serial(raw), raw[:10]
+        number = self._number_at(ref)
+        if number is None:
+            return None
+        number_format = (self._metadata.get(ref) or {}).get("number_format") or ""
+        if DATE_FORMAT.search(number_format) and SERIAL_RANGE[0] <= number <= SERIAL_RANGE[1]:
+            return "date", number, from_serial(number).isoformat()
+        if not number.is_integer():
+            return None
+        if YEAR_RANGE[0] <= number <= YEAR_RANGE[1]:
+            return "year", number, str(int(number))
+        if PERIOD_INDEX_RANGE[0] <= number <= PERIOD_INDEX_RANGE[1]:
+            return "index", number, f"Year {int(number)}"
+        return None
+
+    def _period_run(self, sheet: str, row: int, columns: list[int]) -> dict[int, str] | None:
+        marks = [(column, self._period_mark(make_ref(sheet, CellAddress(column, row)))) for column in columns]
+        best: list[tuple[int, tuple[str, float, str]]] = []
+        current: list[tuple[int, tuple[str, float, str]]] = []
+        for column, mark in marks:
+            follows = bool(current) and mark is not None and mark[0] == current[-1][1][0] and mark[1] > current[-1][1][1]
+            if follows and mark[0] == "index" and mark[1] != current[-1][1][1] + 1:
+                follows = False
+            current = [*current, (column, mark)] if follows else ([(column, mark)] if mark is not None else [])
+            if len(current) > len(best):
+                best = current
+        if len(best) < 3:
+            return None
+        periods = {column: mark[2] for column, mark in best}
+        if best[0][1][0] == "index":
+            position = columns.index(best[0][0])
+            for neighbour in (columns[position - 1] if position > 0 else None, ):
+                if neighbour is not None and is_label_text(self._cells.get(make_ref(sheet, CellAddress(neighbour, row)))):
+                    periods[neighbour] = str(self._cells[make_ref(sheet, CellAddress(neighbour, row))]).strip()
+            position = columns.index(best[-1][0])
+            if position + 1 < len(columns):
+                neighbour = columns[position + 1]
+                if is_label_text(self._cells.get(make_ref(sheet, CellAddress(neighbour, row)))):
+                    periods[neighbour] = str(self._cells[make_ref(sheet, CellAddress(neighbour, row))]).strip()
+        return periods
+
     def _timeline(self, sheet: str) -> tuple[int, dict[int, str]] | None:
         if sheet not in self._timelines:
             self._timelines[sheet] = None
             for row, columns in sorted(self._sheet_rows(sheet).items()):
                 if row > TIMELINE_ROWS:
                     break
-                years = {}
-                for column in columns:
-                    number = self._number_at(make_ref(sheet, CellAddress(column, row)))
-                    if number is not None and number.is_integer() and YEAR_RANGE[0] <= number <= YEAR_RANGE[1]:
-                        years[column] = int(number)
-                values = list(years.values())
-                if len(values) >= 3 and all(later > earlier for earlier, later in zip(values, values[1:])):
-                    self._timelines[sheet] = (row, {column: str(year) for column, year in years.items()})
+                periods = self._period_run(sheet, row, columns)
+                if periods is not None:
+                    self._timelines[sheet] = (row, periods)
                     break
         return self._timelines[sheet]
+
+    def in_timeline(self, ref: str) -> bool:
+        sheet, address = split_ref(normalize_ref(ref))
+        timeline = self._timeline(sheet)
+        return timeline is not None and address.row > timeline[0] and address.column in timeline[1]
 
     def _qualified_label(self, sheet: str, column: int, row: int, label: str) -> str:
         if sheet not in self._label_counts:

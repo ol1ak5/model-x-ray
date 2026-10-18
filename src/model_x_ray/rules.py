@@ -14,11 +14,11 @@ def find_formula_outliers(book: Workbook, range_ref: str) -> list[dict[str, str]
 def is_period_cell(book: Workbook, ref: str) -> bool:
     header = book.column_header(ref)
     raw = book.raw(ref)
-    return bool(header and PERIOD_LIKE.search(header) and book.row_label(ref)) and (is_number(raw) or book.formula(ref) is not None)
+    return bool(header and (PERIOD_LIKE.search(header) or book.in_timeline(ref)) and book.row_label(ref)) and (is_number(raw) or book.formula(ref) is not None)
 
 
 def scan_model(book: Workbook) -> list[dict[str, str]]:
-    cells = [ref for ref in book.cells() if is_period_cell(book, ref)]
+    cells = [ref for ref in book.cells() if is_period_cell(book, ref) and PERIOD_LIKE.search(book.column_header(ref) or "")]
     found = []
     for outlier in row_outliers(book, cells):
         sheet, address = split_ref(outlier["cell"])
