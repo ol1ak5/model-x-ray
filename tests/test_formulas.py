@@ -219,3 +219,72 @@ def test_a_project_finance_layout_with_whole_rows_names_and_dates_calculates_lik
     assert {"Acc!P70", "Acc!R70", "Acc!H74", "Acc!R8"} <= set(book.precedents("Acc!Q114"))
     assert "Acc!B3" in book.dependents("Inputs!B2")
     assert "Acc!B4" in book.dependents("Inputs!B4")
+
+
+COMMON_FORMULAS = {
+    "A1": "=PMT(8%/12,10,10000)",
+    "A2": "=PMT(6%/12,18*12,0,50000)",
+    "A3": "=IRR(Data!A1:A6)",
+    "A4": "=IRR(Data!A1:A3,-10%)",
+    "A5": '=HLOOKUP("Axles",Data!C1:E4,2,TRUE)',
+    "A6": '=HLOOKUP("Bearings",Data!C1:E4,3,FALSE)',
+    "A7": '=HLOOKUP("B",Data!C1:E4,3,TRUE)',
+    "A8": "=COUNT(Data!G1:G5)",
+    "A9": "=COUNTA(Data!G1:G5)",
+    "A10": "=ISERROR(1/0)",
+    "A11": "=ISERROR(Data!G1)",
+    "A12": "=ISNUMBER(Data!G1)",
+    "A13": "=ISNUMBER(1/0)",
+    "A14": "=ISTEXT(Data!G2)",
+    "A15": "=ISBLANK(Data!G3)",
+    "A16": "=LARGE(Data!H1:H5,3)",
+    "A17": "=SMALL(Data!H1:H5,2)",
+    "A18": '=CHOOSE(2,"a","b","c")',
+    "A19": "=CHOOSE(1,5,1/0)",
+    "A20": "=EXP(1)",
+    "A21": "=LN(86)",
+    "A22": "=NORMSDIST(1.333333)",
+    "A23": "=_xlfn.NORM.S.DIST(1.333333,TRUE)",
+    "A24": "=NORM.S.DIST(1.333333,FALSE)",
+    "B1": "=LARGE(Data!H1:H5,9)",
+    "B2": '=CHOOSE(4,"a","b","c")',
+    "B3": "=LN(0)",
+    "B4": "=IRR(Data!H1:H5)",
+    "B5": '=HLOOKUP("Nuts",Data!C1:E4,2,FALSE)',
+}
+
+COMMON_EXPECTED = {
+    "A1": -1037.032089, "A2": -129.081161, "A3": 0.086630948, "A4": -0.443506941, "A5": 4.0, "A6": 7.0, "A7": 5.0,
+    "A8": 2.0, "A9": 4.0, "A10": True, "A11": False, "A12": True, "A13": False, "A14": True, "A15": True,
+    "A16": 4.0, "A17": 3.0, "A18": "b", "A19": 5.0, "A20": 2.718281828, "A21": 4.454347296, "A22": 0.908788726,
+    "A23": 0.908788726, "A24": 0.164010148,
+}
+
+COMMON_ERRORS = {"B1": "#NUM!", "B2": "#VALUE!", "B3": "#NUM!", "B4": "#NUM!", "B5": "not found"}
+
+
+def test_common_functions_from_public_valuation_and_trading_models_calculate_like_excel(tmp_path: Path) -> None:
+    workbook = openpyxl.Workbook()
+    data = workbook.active
+    data.title = "Data"
+    for row, flow in enumerate([-70000, 12000, 15000, 18000, 21000, 26000], start=1):
+        data[f"A{row}"] = flow
+    for row, items in enumerate([("Axles", "Bearings", "Bolts"), (4, 4, 9), (5, 7, 10), (6, 8, 11)], start=1):
+        for column, item in zip("CDE", items):
+            data[f"{column}{row}"] = item
+    data["G1"], data["G2"], data["G4"], data["G5"] = 10, "text", datetime(2026, 1, 31), True
+    for row, number in enumerate([3, 5, 3, 5, 4], start=1):
+        data[f"H{row}"] = number
+    calc = workbook.create_sheet("Calc")
+    for ref, formula in COMMON_FORMULAS.items():
+        calc[ref] = formula
+    workbook.save(tmp_path / "common.xlsx")
+    book = load_xlsx(tmp_path / "common.xlsx")
+
+    for ref, expected in COMMON_EXPECTED.items():
+        value = book.value(f"Calc!{ref}")
+        assert value == (pytest.approx(expected, abs=1e-6) if isinstance(expected, float) else expected), ref
+    for ref, message in COMMON_ERRORS.items():
+        with pytest.raises(FormulaError, match=re.escape(message)):
+            book.value(f"Calc!{ref}")
+    assert set(book.precedents("Calc!A6")) == {f"Data!{c}{r}" for c in "CDE" for r in range(1, 5)}

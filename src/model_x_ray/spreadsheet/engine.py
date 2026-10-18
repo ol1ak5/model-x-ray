@@ -36,6 +36,7 @@ TOKEN_PATTERN = re.compile(
     re.VERBOSE,
 )
 
+INFORMATION_FUNCTIONS = ("ISERROR", "ISNUMBER", "ISTEXT", "ISBLANK")
 SPAN_PATTERN = re.compile(r"(\$?)([0-9]+|[A-Za-z]{1,3})")
 MAX_ROWS = 1048576
 MAX_COLUMNS = 16384
@@ -46,6 +47,8 @@ SUPPORTED_FUNCTIONS = (
     "IFERROR", "AND", "OR", "NOT", "SUMIF", "SUMIFS", "COUNTIF", "COUNTIFS", "SUMPRODUCT", "INDEX", "MATCH", "VLOOKUP", "XLOOKUP", "EOMONTH",
     "YEAR", "MONTH", "DAY", "DATE", "EDATE", "NPV", "XNPV",
     "POWER", "ROUNDDOWN", "INT", "MOD", "PPMT", "XIRR",
+    "PMT", "IRR", "HLOOKUP", "COUNT", "COUNTA", "ISERROR", "ISTEXT", "ISNUMBER", "ISBLANK", "LARGE", "SMALL", "CHOOSE",
+    "EXP", "LN", "NORMSDIST", "NORM.S.DIST",
 )
 TIMELINE_ROWS = 30
 YEAR_RANGE = (1900, 2100)
@@ -81,6 +84,9 @@ class Grid(list):
 
     def column(self, column: int) -> list["Value"]:
         return [self.at(row, column) for row in range(1, self.height + 1)]
+
+    def row(self, row: int) -> list["Value"]:
+        return [self.at(row, column) for column in range(1, self.width + 1)]
 
 
 @dataclass
@@ -811,13 +817,33 @@ class FormulaEvaluator:
         self.expect("rparen")
         if name == "IFERROR":
             return self.settled(arguments[1]) if isinstance(arguments[0], Failure) else arguments[0]
+        if name in INFORMATION_FUNCTIONS:
+            return self.information(name, arguments[0] if arguments else None)
+        if name == "CHOOSE":
+            index = int(self.number(self.settled(arguments[0])))
+            if not 1 <= index < len(arguments):
+                raise FormulaError(f"#VALUE! CHOOSE index {index} has no value in {self.ref}")
+            return self.settled(arguments[index])
         if name == "IF":
             condition = self.settled(arguments[0])
             if condition:
                 return self.settled(arguments[1]) if len(arguments) > 1 else True
             return self.settled(arguments[2]) if len(arguments) > 2 else False
         values = [self.settled(argument) for argument in arguments]
-        return getattr(self, f"call_{name.lower()}")(values)
+        return getattr(self, f"call_{name.lower().replace('.', '_')}")(values)
+
+    def information(self, name: str, argument: Value | list[Value] | Failure) -> Value:
+        if isinstance(argument, Failure):
+            return name == "ISERROR"
+        if isinstance(argument, list):
+            argument = argument[0] if argument else None
+        if name == "ISERROR":
+            return False
+        if name == "ISNUMBER":
+            return is_number(argument)
+        if name == "ISTEXT":
+            return isinstance(argument, str) and not ISO_DATE.match(argument)
+        return argument is None
 
     def argument(self) -> Value | list[Value] | Failure:
         if self.peek() is not None and self.peek().kind in ("comma", "rparen"):
@@ -1025,6 +1051,71 @@ class FormulaEvaluator:
         if rate is None:
             raise FormulaError(f"#NUM! XIRR found no rate that sets the cash flows to zero in {self.ref}")
         return rate
+
+    def call_pmt(self, values: list) -> Value:
+        rate, periods, present = (self.number(v) for v in values[:3])
+        future = self.number(values[3]) if len(values) > 3 and values[3] is not None else 0.0
+        due = 1 if len(values) > 4 and values[4] is not None and self.number(values[4]) else 0
+        return payment(rate, periods, present, future, due)
+
+    def call_irr(self, values: list) -> Value:
+        flows = numbers(values[:1])
+        if not (any(flow > 0 for flow in flows) and any(flow < 0 for flow in flows)):
+            raise FormulaError(f"#NUM! IRR needs at least one positive and one negative cash flow in {self.ref}")
+        guess = self.number(values[1]) if len(values) > 1 and values[1] is not None else 0.1
+        rate = dated_irr(flows, [float(period) for period in range(len(flows))], guess)
+        if rate is None:
+            raise FormulaError(f"#NUM! IRR found no rate that sets the cash flows to zero in {self.ref}")
+        return rate
+
+    def call_hlookup(self, values: list) -> Value:
+        table = self.grid_of(values[1])
+        row = int(self.number(values[2]))
+        approximate = bool(values[3]) if len(values) > 3 and values[3] is not None else True
+        if not 1 <= row <= table.height:
+            raise FormulaError(f"#REF: HLOOKUP row {row} is outside the table in {self.ref}")
+        column = self.position_of(values[0], table.row(1), 1 if approximate else 0)
+        return table.at(row, column)
+
+    def call_count(self, values: list) -> Value:
+        return float(sum(1 for v in flatten(values) if is_number(v) or (isinstance(v, str) and ISO_DATE.match(v))))
+
+    def call_counta(self, values: list) -> Value:
+        return float(sum(1 for v in flatten(values) if v is not None and v != ""))
+
+    def call_large(self, values: list) -> Value:
+        return self.ranked(values, reverse=True)
+
+    def call_small(self, values: list) -> Value:
+        return self.ranked(values, reverse=False)
+
+    def ranked(self, values: list, reverse: bool) -> Value:
+        found = sorted(numbers(values[:1]), reverse=reverse)
+        position = int(self.number(values[1]))
+        if not 1 <= position <= len(found):
+            raise FormulaError(f"#NUM! position {position} is outside the {len(found)} numbers in {self.ref}")
+        return found[position - 1]
+
+    def call_exp(self, values: list) -> Value:
+        try:
+            return math.exp(self.number(values[0]))
+        except OverflowError as error:
+            raise FormulaError(f"#NUM! EXP too large in {self.ref}") from error
+
+    def call_ln(self, values: list) -> Value:
+        number = self.number(values[0])
+        if number <= 0:
+            raise FormulaError(f"#NUM! LN of a number that is not positive in {self.ref}")
+        return math.log(number)
+
+    def call_normsdist(self, values: list) -> Value:
+        return 0.5 * (1 + math.erf(self.number(values[0]) / math.sqrt(2)))
+
+    def call_norm_s_dist(self, values: list) -> Value:
+        z = self.number(values[0])
+        if len(values) > 1 and values[1] is not None and not values[1]:
+            return math.exp(-z * z / 2) / math.sqrt(2 * math.pi)
+        return self.call_normsdist(values[:1])
 
     def call_eomonth(self, values: list) -> Value:
         start = from_serial(to_serial(values[0]))
