@@ -123,7 +123,7 @@ def run_case(
     started = time.perf_counter()
     try:
         graph = build_setup_graph(setup, source, sandbox, spreadsheet_id, factory)
-        final, _ = drive_graph(graph, {"spreadsheet_id": spreadsheet_id, "question": ""}, {"configurable": {"thread_id": f"{spreadsheet_id}-{uuid4().hex[:6]}"}})
+        final = drive_graph(graph, {"spreadsheet_id": spreadsheet_id, "question": ""}, {"configurable": {"thread_id": f"{spreadsheet_id}-{uuid4().hex[:6]}"}})
     except Exception as error:
         return {**row, "error": f"{type(error).__name__}: {str(error)[:160]}", "latency_ms": (time.perf_counter() - started) * 1000}
     latency_ms = (time.perf_counter() - started) * 1000

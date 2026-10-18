@@ -45,18 +45,15 @@ def test_a_full_investigation_pauses_for_review_and_writes_the_corrected_copy_on
     assert engine_sandbox.writes[0]["patch"]["cell"] == "P&L!H7"
 
 
-def test_an_unknown_line_pauses_for_a_cell_and_continues_after_the_choice(demo_workbook_path: Path, engine_sandbox, scripted_verdict) -> None:
+def test_an_unknown_line_is_checked_instead_and_the_only_pause_is_the_review(demo_workbook_path: Path, engine_sandbox, scripted_verdict) -> None:
     locator = ScriptedAnswer(tool="LocateRequest", answer={"label": "Net income", "period": "2027E", "sheet": None})
     client = client_for(demo_workbook_path, engine_sandbox, scripted_verdict, locator=locator)
 
     body = client.post("/investigations", json={"spreadsheet_id": "demo", "question": "Why did net income fall next year?"}).json()
-    assert body["status"] == "needs_cell"
-    assert body["pause"]["candidates"] == []
-    assert "Net income" in body["pause"]["question"]
-
-    chosen = client.post(f"/investigations/{body['id']}/resume", json={"ref": "P&L!H8"}).json()
-    assert chosen["status"] == "needs_review"
-    assert chosen["target"]["cell"] == "H8"
+    assert body["status"] == "needs_review"
+    assert body["target"]["cell"] == "H8"
+    assert "Net income" in body["target_choice"]["why"]
+    assert body["report"].startswith("I could not find Net income")
 
     rejected = client.post(f"/investigations/{body['id']}/resume", json={"action": "reject", "reason": "not convinced"}).json()
     assert rejected["status"] == "done"

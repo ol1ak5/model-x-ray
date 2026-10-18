@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import App from "../App";
-import { APPROVED, CELL_CHOICE, REJECTED, REVIEW, STEPS, fakeApi, steps } from "./fakeApi";
+import { APPROVED, REJECTED, REVIEW, STEPS, fakeApi, steps } from "./fakeApi";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -72,21 +72,15 @@ describe("an investigation in the browser", () => {
     expect(within(progress).getByText("Saving a new version")).toBeInTheDocument();
   });
 
-  test("asks which cell is meant, then remembers a rejection marked intentional", async () => {
+  test("goes straight to the review, then remembers a rejection marked intentional", async () => {
     const api = fakeApi(
-      [...steps("load_sheet", "map_model", "locate"), ["view", CELL_CHOICE]],
-      [
-        [...steps("trace", "diagnose", "test", "verify", "explain"), ["view", REVIEW]],
-        [...steps("human_review"), ["view", REJECTED]],
-      ],
+      [...steps("load_sheet", "map_model", "locate", "trace", "diagnose", "test", "verify", "explain"), ["view", REVIEW]],
+      [[...steps("human_review"), ["view", REJECTED]]],
     );
     vi.stubGlobal("fetch", api.fetch);
     const user = await checkDemo();
     expect(api.sent.find((request) => request.url.endsWith("/investigations/stream"))?.body).toEqual({ spreadsheet_id: "demo", question: "" });
-
-    const choice = await screen.findByRole("group", { name: "Which cell do you mean?" });
-    await user.click(within(choice).getByRole("button", { name: "Summary!D10" }));
-    expect(lastResume(api)?.body).toEqual({ ref: "Summary!D10" });
+    expect(screen.queryByRole("group", { name: "Which cell do you mean?" })).not.toBeInTheDocument();
 
     await screen.findByRole("region", { name: "Report" });
     await user.type(screen.getByLabelText("Reason"), "Opex frozen per budget meeting");

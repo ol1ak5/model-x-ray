@@ -53,7 +53,7 @@ The runner computes these today; the table names the evaluator or the row field 
 |---|---|---|---|
 | `load_sheet` | Share of formula cells the engine parses and evaluates; dependency edges compared with the clean base model (precision, recall) | Latency | `load_sheet_metrics` (`parse_share`, `edge_precision`, `edge_recall`) |
 | `map_model` | Row and column labels vs ground truth (accuracy) | Latency, tokens | pending: needs label ground truth in the dataset |
-| `locate` | Target cell exact match; clarification asked only when the target is not uniquely resolvable by label and period (precision, recall) | Latency, tokens | `locate_metrics`, `clarification_precision` / `clarification_recall` |
+| `locate` | Target cell exact match; on questions that match several cells, auto-pick accuracy (the cell the agent chose is the intended one) | Latency, tokens | `locate_metrics`, `auto_pick_accuracy` |
 | `trace` | Planted cell present among the contributions or the causal tree (recall) | Latency | `trace_recall` |
 | `diagnose` | Planted cell in top 1 and top 3 hypotheses; error type correct; overrides and clean wrongly flagged (false-alarm rate); confidence calibration (share of `high`, `medium` and `low` hypotheses later confirmed, which should fall from high to low) | Latency, tokens, tool calls used out of the budget of 8, hypothesis revisions, runs that hit the budget | `diagnose_metrics`, `calibration` |
 | `test` | Sandbox ran and produced before/after values; the value match itself is checked end to end as fix accuracy | Latency | `sandbox_ok`, `fix_accuracy` |

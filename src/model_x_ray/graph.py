@@ -10,10 +10,10 @@ from langgraph.store.base import BaseStore
 
 from model_x_ray import nodes
 from model_x_ray.agents.investigator import build_investigator, make_diagnose_node
-from model_x_ray.agents.locator import make_choose_target_node, make_locate_node
+from model_x_ray.agents.locator import make_locate_node
 from model_x_ray.agents.mapper import make_map_model_node
 from model_x_ray.memory import ModelMemory
-from model_x_ray.routing import route_after_locate, route_after_review, route_after_verify
+from model_x_ray.routing import route_after_review, route_after_verify
 from model_x_ray.spreadsheet.sandbox import SandboxWithWrite
 from model_x_ray.spreadsheet.source import SpreadsheetSource
 from model_x_ray.state import InputState, InvestigationState, OutputState
@@ -25,7 +25,6 @@ DEFAULT_NODES: dict[str, NodeFunction] = {
     "load_sheet": nodes.load_sheet,
     "map_model": nodes.map_model,
     "locate": nodes.locate,
-    "choose_target": nodes.choose_target,
     "trace": nodes.trace,
     "test": nodes.test,
     "verify": nodes.verify,
@@ -54,8 +53,7 @@ def build_graph(checkpointer: BaseCheckpointSaver, diagnose: NodeFunction, overr
     builder.add_edge(START, "load_sheet")
     builder.add_edge("load_sheet", "map_model")
     builder.add_edge("map_model", "locate")
-    builder.add_conditional_edges("locate", route_after_locate, {"found": "trace", "ask": "choose_target"})
-    builder.add_edge("choose_target", "trace")
+    builder.add_edge("locate", "trace")
     builder.add_edge("trace", "diagnose")
     builder.add_edge("diagnose", "test")
     builder.add_edge("test", "verify")
@@ -90,7 +88,6 @@ def run_investigation(
             "map_model": make_map_model_node(mapper, book, memory) if mapper else nodes.map_model,
             "human_review": nodes.make_human_review_node(book, memory),
             "locate": make_locate_node(locator or llm, book),
-            "choose_target": make_choose_target_node(book),
             "trace": nodes.make_trace_node(book),
             "test": nodes.make_test_node(source, sandbox),
             "verify": nodes.make_verify_node(verifier or llm, source),

@@ -2,7 +2,7 @@
 
 Implementation: `src/model_x_ray/api.py`. Tests: `tests/test_api.py`. Issue: #73.
 
-The API wraps the investigation graph so the React app (#74) can start an investigation, show its two pauses (which cell, approve the fix) and resume them.
+The API wraps the investigation graph so the React app (#74) can start an investigation, show its one pause (approve, edit or reject the fix) and resume it.
 
 ## Running it locally
 
@@ -83,9 +83,9 @@ On the planted benchmark models the scan lists exactly the planted cells, includ
 Every endpoint answers with the same JSON, built by `investigation_view` from the graph's checkpoint:
 
 - `id`: also the LangGraph `thread_id`, so one investigation is one thread.
-- `status`: `needs_cell` (paused in `choose_target`), `needs_review` (paused in `human_review`) or `done`.
-- `pause`: the value the graph passed to `interrupt()`: the question and candidate cells, or the report and patch to approve. `null` when not paused.
-- The public state fields: `question`, `model_map`, `known_overrides`, `past_findings`, `target`, `causal_tree`, `hypotheses`, `evidence`, `verifications`, `patch`, `report`, `corrected_copy_id`, `run_log`. LangChain messages are never sent.
+- `status`: `needs_review` (paused in `human_review`) or `done`.
+- `pause`: the value the graph passed to `interrupt()`: the report and patch to approve. `null` when not paused.
+- The public state fields: `question`, `target_choice` (set when the question matched several cells or none: the candidates, the chosen cell and why), `model_map`, `known_overrides`, `past_findings`, `target`, `causal_tree`, `hypotheses`, `evidence`, `verifications`, `patch`, `report`, `corrected_copy_id`, `run_log`. LangChain messages are never sent.
 
 ## Errors
 

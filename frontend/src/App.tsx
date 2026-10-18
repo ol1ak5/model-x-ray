@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 
 import {
   ApiError,
-  type CellChoicePause,
   type Decision,
   type InvestigationView,
   type ProgressEvent,
@@ -13,7 +12,6 @@ import {
   resumeInvestigation,
   startInvestigation,
 } from "./api";
-import CellChoice from "./components/CellChoice";
 import DetailTabs, { type Tab } from "./components/DetailTabs";
 import Hero from "./components/Hero";
 import Logo from "./components/Logo";
@@ -108,7 +106,7 @@ export default function App() {
     void run(startInvestigation(spreadsheetId, question, onEvent));
   }
 
-  function resume(answer: { ref: string } | Decision) {
+  function resume(answer: Decision) {
     if (!view) return;
     setError(null);
     setPhase("running");
@@ -124,7 +122,6 @@ export default function App() {
   }
 
   const started = phase === "running" || steps.length > 0 || view !== null;
-  const choice = view?.status === "needs_cell" ? (view.pause as CellChoicePause) : null;
 
   return (
     <div className="page">
@@ -145,7 +142,7 @@ export default function App() {
               <p className="eyebrow">Model check</p>
               <h1 className="ws-title">
                 {modelName}
-                <span className={`status ${phase}`}>{phase === "running" ? "Checking…" : phase === "paused" && view?.status === "needs_cell" ? "Needs your input" : phase === "paused" ? "Review needed" : phase === "done" ? "Done" : "Stopped"}</span>
+                <span className={`status ${phase}`}>{phase === "running" ? "Checking…" : phase === "paused" ? "Review needed" : phase === "done" ? "Done" : "Stopped"}</span>
               </h1>
             </div>
             <button type="button" className="secondary" onClick={reset} disabled={phase === "running"}>
@@ -176,7 +173,6 @@ export default function App() {
                   {error}
                 </p>
               )}
-              {choice && phase === "paused" && <CellChoice pause={choice} onChoose={(ref) => resume({ ref })} />}
               {view?.status === "needs_review" && phase === "paused" && <Review patch={view.patch} onDecide={resume} />}
               {phase === "done" && view && <Outcome view={view} />}
             </aside>

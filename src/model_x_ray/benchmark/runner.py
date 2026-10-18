@@ -11,7 +11,7 @@ from langgraph.types import Command
 
 from model_x_ray import nodes
 from model_x_ray.agents.investigator import MAX_TOOL_CALLS, build_investigator, make_diagnose_node
-from model_x_ray.agents.locator import make_choose_target_node, make_locate_node
+from model_x_ray.agents.locator import make_locate_node
 from model_x_ray.benchmark.evaluators import (
     calibration,
     diagnose_metrics,
@@ -77,7 +77,6 @@ def setup_functions(
         "load_sheet": nodes.make_load_sheet_node(book),
         "map_model": nodes.map_model,
         "locate": make_locate_node(None, book),
-        "choose_target": make_choose_target_node(book),
         "trace": nodes.make_trace_node(book),
         "test": nodes.make_test_node(source, sandbox),
         "verify": nodes.make_verify_node(verifier_llm, source),
@@ -99,25 +98,14 @@ def build_setup_graph(
     return build_graph(InMemorySaver(), diagnose=diagnose, overrides=functions)
 
 
-def drive_graph(
-    graph,
-    inputs: dict,
-    config: dict,
-    target_ref: str | None = None,
-) -> tuple[dict, dict]:
-    events = {"locate_asked": False}
+def drive_graph(graph, inputs: dict, config: dict) -> dict:
     outcome = graph.invoke(inputs, config)
     while "__interrupt__" in outcome:
-        payload = outcome["__interrupt__"][0].value
-        if "candidates" in payload:
-            events["locate_asked"] = True
-            outcome = graph.invoke(Command(resume={"ref": target_ref}), config)
-        else:
-            outcome = graph.invoke(
-                Command(resume={"action": "approve", "reason": "benchmark auto-approval", "patch": None}),
-                config,
-            )
-    return graph.get_state(config).values, events
+        outcome = graph.invoke(
+            Command(resume={"action": "approve", "reason": "benchmark auto-approval", "patch": None}),
+            config,
+        )
+    return graph.get_state(config).values
 
 
 def run_probe(
@@ -213,12 +201,7 @@ def run_variant(
     graph = build_graph(InMemorySaver(), diagnose=diagnose, overrides=functions)
     config = {"configurable": {"thread_id": f"{setup.name}-{ground_truth['set']}-{ground_truth['variant_index']}-{uuid4().hex[:6]}"}}
     started = time.perf_counter()
-    final, events = drive_graph(
-        graph,
-        {"spreadsheet_id": spreadsheet_id, "question": question["text"]},
-        config,
-        target_ref=question["target"],
-    )
+    final = drive_graph(graph, {"spreadsheet_id": spreadsheet_id, "question": question["text"]}, config)
     latency_ms = (time.perf_counter() - started) * 1000
     probe_correct = probe_wrong = None
     verdict_events: list[tuple[str, bool]] = []
@@ -262,8 +245,8 @@ def run_variant(
         "probe_wrong": probe_wrong,
         "verdict_precision": verdicts["verdict_precision"],
         "verdict_recall": verdicts["verdict_recall"],
-        "locate_exact": locate_metrics(final, question, events["locate_asked"])["exact"],
-        "locate_asked": events["locate_asked"],
+        "locate_exact": locate_metrics(final, question)["exact"],
+        "locate_auto_picked": locate_metrics(final, question)["auto_picked"],
         "locate_ambiguous": is_ambiguous(book, question["target"]),
         "trace_recall": trace_recall(final, question),
         "sandbox_ok": bool(verifications and verifications[-1].get("before")),
@@ -308,9 +291,7 @@ def aggregate(rows: list[dict]) -> list[dict]:
             return sum(1 for row in group if row[key])
 
         latencies = sorted(row["latency_ms"] for row in group)
-        asked_rows = [row for row in group if row["locate_asked"]]
         ambiguous_rows = [row for row in group if row["locate_ambiguous"]]
-        clarified = [row for row in group if row["locate_asked"] and row["locate_ambiguous"]]
         entries.append(
             {
                 "setup": setup,
@@ -334,8 +315,7 @@ def aggregate(rows: list[dict]) -> list[dict]:
                 "verdict_precision_mean": mean_of([row["verdict_precision"] for row in group if row["verdict_precision"] is not None]),
                 "verdict_recall_mean": mean_of([row["verdict_recall"] for row in group if row["verdict_recall"] is not None]),
                 "locate_exact_rate": count("locate_exact") / n,
-                "clarification_precision": len(clarified) / len(asked_rows) if asked_rows else None,
-                "clarification_recall": len(clarified) / len(ambiguous_rows) if ambiguous_rows else None,
+                "auto_pick_accuracy": sum(1 for row in ambiguous_rows if row["locate_exact"]) / len(ambiguous_rows) if ambiguous_rows else None,
                 "trace_recall_mean": mean_of([row["trace_recall"] for row in group if row["trace_recall"] is not None]),
                 "parse_share_mean": mean_of([row["parse_share"] for row in group if row["parse_share"] is not None]),
                 "edge_precision_mean": mean_of([row["edge_precision"] for row in group if row["edge_precision"] is not None]),

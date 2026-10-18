@@ -48,14 +48,15 @@ export type Patch = { cell: string; old_formula: string; new_formula: string; so
 
 export type Override = { cell: string; content: string; reason: string };
 
-export type CellChoicePause = { question: string; candidates: string[] };
+export type TargetChoice = { candidates: string[]; chosen: string; why: string };
 export type ReviewPause = { report: string; patch: Patch | null };
 
 export type InvestigationView = {
   id: string;
-  status: "needs_cell" | "needs_review" | "done";
-  pause: CellChoicePause | ReviewPause | null;
+  status: "needs_review" | "done";
+  pause: ReviewPause | null;
   question: string | null;
+  target_choice?: TargetChoice | null;
   target: TargetCell | null;
   causal_tree: CausalNode | null;
   hypotheses: Hypothesis[] | null;
@@ -149,7 +150,7 @@ export function startInvestigation(spreadsheetId: string, question: string, onEv
   return stream("/investigations/stream", { spreadsheet_id: spreadsheetId, question }, onEvent);
 }
 
-export function resumeInvestigation(id: string, answer: { ref: string } | Decision, onEvent: (event: ProgressEvent) => void): Promise<void> {
+export function resumeInvestigation(id: string, answer: Decision, onEvent: (event: ProgressEvent) => void): Promise<void> {
   return stream(`/investigations/${id}/resume/stream`, answer, onEvent);
 }
 

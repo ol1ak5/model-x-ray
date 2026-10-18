@@ -30,9 +30,10 @@ class ModelMap(TypedDict):
     columns: list[ColumnRole]
 
 
-class CellChoice(TypedDict):
-    question: str
+class TargetChoice(TypedDict):
     candidates: list[str]
+    chosen: str
+    why: str
 
 
 class Override(TypedDict):
@@ -140,7 +141,7 @@ class InvestigationState(TypedDict):
     known_overrides: list[Override]
     past_findings: list[Finding]
     target: TargetCell | None
-    cell_choice: CellChoice | None
+    target_choice: TargetChoice | None
     contributions: list[Contribution]
     causal_tree: CausalNode | None
     hypotheses: Annotated[list[Hypothesis], merge_by_id]

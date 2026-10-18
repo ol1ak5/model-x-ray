@@ -54,12 +54,7 @@ def test_the_rules_setup_finds_the_planted_cell_end_to_end_without_any_llm(tmp_p
     graph = build_setup_graph(SETUP_RULES, source, sandbox, "variant")
     config = {"configurable": {"thread_id": "rules-type1"}}
 
-    final, events = drive_graph(
-        graph,
-        {"spreadsheet_id": "variant", "question": question["text"]},
-        config,
-        target_ref=question["target"],
-    )
+    final = drive_graph(graph, {"spreadsheet_id": "variant", "question": question["text"]}, config)
 
     assert final["target"]["cell"] == question["target"].split("!", 1)[1]
     assert [h["cell"] for h in final["hypotheses"][:3]].count(planted["cell"]) == 1
@@ -68,7 +63,6 @@ def test_the_rules_setup_finds_the_planted_cell_end_to_end_without_any_llm(tmp_p
     assert final["report"].startswith("No confirmed error.")
     assert "Nothing was changed" in final["report"]
     assert final["corrected_copy_id"] is None
-    assert events["locate_asked"] is False
     assert {entry["node"] for entry in final["node_log"]} >= {
         "load_sheet", "map_model", "locate", "trace", "diagnose",
         "test", "verify", "explain", "human_review", "apply_fix",
@@ -87,12 +81,7 @@ def test_the_rules_setup_reports_a_false_alarm_on_the_clean_set(tmp_path: Path) 
     graph = build_setup_graph(SETUP_RULES, source, sandbox, "variant")
     config = {"configurable": {"thread_id": "rules-clean"}}
 
-    final, _ = drive_graph(
-        graph,
-        {"spreadsheet_id": "variant", "question": question["text"]},
-        config,
-        target_ref=question["target"],
-    )
+    final = drive_graph(graph, {"spreadsheet_id": "variant", "question": question["text"]}, config)
 
     assert gt["planted"] == []
     assert final["hypotheses"] != []
@@ -126,7 +115,7 @@ def test_the_scripted_investigator_fixes_a_planted_variant_and_scores_full_metri
     assert row["verdict_precision"] == 1.0
     assert row["verdict_recall"] == 1.0
     assert row["locate_exact"] is True
-    assert row["locate_asked"] is False
+    assert row["locate_exact"] is True
     assert row["trace_recall"] == 1.0
     assert row["sandbox_ok"] is True
     assert row["citations_valid"] is True
@@ -185,11 +174,9 @@ def test_the_runner_writes_rows_and_aggregates_with_wilson_intervals(tmp_path: P
     assert entry["cost_usd_mean"] == 0.0
     assert entry["hypothesis_revisions_mean"] >= 0
     assert entry["parse_share_mean"] == 1.0
-    assert entry["clarification_precision"] == 1.0
-    assert entry["clarification_recall"] == 1.0
+    assert entry["auto_pick_accuracy"] == 1.0
     type2 = next(a for a in results["aggregates"] if a["setup"] == "rules" and a["set"] == "type2")
-    assert type2["clarification_precision"] == 1.0
-    assert type2["clarification_recall"] == 1.0
+    assert type2["auto_pick_accuracy"] == 1.0
     assert "typed_value|typed_value" in results["confusion"]["rules"]
 
 
@@ -219,9 +206,9 @@ def test_the_evaluators_score_a_fixed_state_against_ground_truth() -> None:
 
     assert explain_metrics(state)["citations_valid"] is False
     assert explain_metrics({**state, "report": "Root cause found in P&L!H7 (evidence: ev-1)."})["citations_valid"] is True
-    assert locate_metrics(state, question, asked=True)["exact"] is True
-    assert locate_metrics(state, question, asked=True)["exact_unassisted"] is False
-    assert locate_metrics(state, question, asked=False)["exact_unassisted"] is True
+    assert locate_metrics(state, question) == {"exact": True, "auto_picked": False}
+    picked = {**state, "target_choice": {"candidates": ["P&L!H10", "Summary!D10"], "chosen": "P&L!H10", "why": "source"}}
+    assert locate_metrics(picked, question) == {"exact": True, "auto_picked": True}
     assert calibration(state) == {"high": 0.5}
 
     base = Workbook(

@@ -982,27 +982,6 @@ input:not([type="checkbox"]):not([type="file"]) {
   color: var(--green);
 }
 
-.choice legend {
-  font-weight: 700;
-  padding: 0 4px;
-}
-
-.candidates {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 8px 0;
-}
-
-.cell-button {
-  font-family: var(--mono);
-}
-
-.inline {
-  display: flex;
-  gap: 8px;
-}
-
 .review .fix {
   overflow-wrap: anywhere;
   font-size: 0.9rem;
