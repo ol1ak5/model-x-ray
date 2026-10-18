@@ -133,7 +133,7 @@ export default function App() {
     if (!view) return;
     setError(null);
     setPhase("running");
-    void run(resumeInvestigation(view.id, answer, onEvent));
+    void run(resumeInvestigation(view.id, answer, onEvent, view));
   }
 
   function reset() {

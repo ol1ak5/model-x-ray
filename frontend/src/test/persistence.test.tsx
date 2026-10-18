@@ -49,7 +49,9 @@ describe("a run kept in the browser", () => {
     await user.click(screen.getByRole("button", { name: "Approve fix" }));
 
     expect(await screen.findByRole("link", { name: "Download corrected model" })).toBeInTheDocument();
-    expect(sentTo(api, "/resume/stream")).toEqual({ url: "http://localhost:8000/investigations/inv-1/resume/stream", body: { action: "approve", reason: "typed opex" } });
+    const resumed = sentTo(api, "/resume/stream");
+    expect(resumed?.url).toBe("http://localhost:8000/investigations/inv-1/resume/stream");
+    expect(resumed?.body).toMatchObject({ action: "approve", reason: "typed opex", state: { id: "inv-1", status: "needs_review" } });
   });
 
   test("the finished check, its sheet and its corrected file come back even when the service is gone", async () => {

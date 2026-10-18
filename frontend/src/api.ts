@@ -149,8 +149,8 @@ export function startInvestigation(spreadsheetId: string, question: string, onEv
   return stream("/investigations/stream", { spreadsheet_id: spreadsheetId, question }, onEvent);
 }
 
-export function resumeInvestigation(id: string, answer: { ref: string } | Decision, onEvent: (event: ProgressEvent) => void): Promise<void> {
-  return stream(`/investigations/${id}/resume/stream`, answer, onEvent);
+export function resumeInvestigation(id: string, answer: { ref: string } | Decision, onEvent: (event: ProgressEvent) => void, state?: InvestigationView | null): Promise<void> {
+  return stream(`/investigations/${id}/resume/stream`, state ? { ...answer, state } : answer, onEvent);
 }
 
 export type SheetCell = { ref: string; value: number | null; formula: string | null };

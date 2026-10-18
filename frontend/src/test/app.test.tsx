@@ -68,7 +68,7 @@ describe("an investigation in the browser", () => {
     await user.click(screen.getByRole("button", { name: "Approve fix" }));
 
     expect(await screen.findByRole("link", { name: "Download corrected model" })).toHaveAttribute("href", "http://localhost:8000/investigations/inv-1/corrected");
-    expect(lastResume(api)).toEqual({ url: "http://localhost:8000/investigations/inv-1/resume/stream", body: { action: "approve", reason: "typed opex" } });
+    expect(lastResume(api)).toMatchObject({ url: "http://localhost:8000/investigations/inv-1/resume/stream", body: { action: "approve", reason: "typed opex" } });
     expect(within(progress).getByText("Saving a new version")).toBeInTheDocument();
   });
 
@@ -86,7 +86,7 @@ describe("an investigation in the browser", () => {
 
     const choice = await screen.findByRole("group", { name: "Which cell do you mean?" });
     await user.click(within(choice).getByRole("button", { name: "Summary!D10" }));
-    expect(lastResume(api)?.body).toEqual({ ref: "Summary!D10" });
+    expect(lastResume(api)?.body).toMatchObject({ ref: "Summary!D10" });
 
     await screen.findByRole("region", { name: "Report" });
     await user.type(screen.getByLabelText("Reason"), "Opex frozen per budget meeting");
@@ -94,7 +94,7 @@ describe("an investigation in the browser", () => {
     await user.click(screen.getByRole("button", { name: "Reject" }));
 
     expect(await screen.findByText("Closed without changes. Your decision is saved.")).toBeInTheDocument();
-    expect(lastResume(api)?.body).toEqual({ action: "reject", reason: "Opex frozen per budget meeting", intentional: true });
+    expect(lastResume(api)?.body).toMatchObject({ action: "reject", reason: "Opex frozen per budget meeting", intentional: true });
     expect(screen.queryByRole("link", { name: "Download corrected model" })).not.toBeInTheDocument();
   });
 
@@ -111,7 +111,7 @@ describe("an investigation in the browser", () => {
     await user.type(screen.getByLabelText("Reason"), "use the budget growth");
     await user.click(screen.getByRole("button", { name: "Test my fix" }));
 
-    expect(lastResume(api)?.body).toEqual({
+    expect(lastResume(api)?.body).toMatchObject({
       action: "edit",
       reason: "use the budget growth",
       patch: { cell: "P&L!H7", old_formula: "-45.2", new_formula: "=G7*1.05" },

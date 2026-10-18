@@ -19,7 +19,7 @@ from langgraph.store.base import BaseStore
 from langgraph.types import Command
 from pydantic import BaseModel
 
-from model_x_ray.graph import run_investigation
+from model_x_ray.graph import run_continuation, run_investigation
 from model_x_ray.rules import is_period_cell
 from model_x_ray.spreadsheet.engine import FormulaError, UnsupportedFormulaError, Workbook, column_letters, is_number, split_ref
 from model_x_ray.spreadsheet.sandbox import SandboxWithWrite
@@ -47,7 +47,11 @@ XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.s
 
 GENERIC_FAILURE = "Something went wrong during the investigation. The team has the details; please try again."
 
-PUBLIC_FIELDS = ("question", "model_map", "known_overrides", "past_findings", "target", "causal_tree", "hypotheses", "evidence", "verifications", "patch", "report", "corrected_copy_id", "run_log")
+PUBLIC_FIELDS = ("spreadsheet_id", "question", "model_map", "known_overrides", "past_findings", "target", "causal_tree", "contributions", "hypotheses", "evidence", "verifications", "patch", "report", "corrected_copy_id", "run_log", "attempts")
+
+CARRIED_LISTS = ("known_overrides", "past_findings", "contributions", "hypotheses", "evidence", "verifications", "run_log")
+
+CARRIED_RECORDS = ("model_map", "target", "causal_tree", "patch")
 
 
 @dataclass
@@ -89,6 +93,36 @@ class ResumeRequest(BaseModel):
     reason: str = ""
     patch: dict[str, Any] | None = None
     intentional: bool = False
+    state: dict[str, Any] | None = None
+
+
+def decision_of(request: ResumeRequest) -> dict[str, Any]:
+    if request.action is None:
+        raise HTTPException(400, "Send an action to continue the investigation")
+    decision: dict[str, Any] = {"action": request.action, "reason": request.reason, "intentional": request.intentional}
+    if request.patch is not None:
+        decision["patch"] = request.patch
+    return decision
+
+
+def carried_state(raw: dict[str, Any]) -> dict[str, Any]:
+    spreadsheet_id = raw.get("spreadsheet_id")
+    if not isinstance(spreadsheet_id, str) or not spreadsheet_id:
+        raise HTTPException(400, "The state does not say which spreadsheet it belongs to, so the investigation cannot be continued")
+    if not isinstance(raw.get("question"), str):
+        raise HTTPException(400, "The state does not carry the question, so the investigation cannot be continued")
+    carried = {name: raw.get(name) for name in PUBLIC_FIELDS}
+    for name in CARRIED_LISTS:
+        if carried[name] is None:
+            carried[name] = []
+        elif not isinstance(carried[name], list):
+            raise HTTPException(400, f"The state's {name} is not a list")
+    for name in CARRIED_RECORDS:
+        if carried[name] is not None and not isinstance(carried[name], dict):
+            raise HTTPException(400, f"The state's {name} is not an object")
+    if not isinstance(carried["attempts"], int):
+        carried["attempts"] = 0
+    return carried
 
 
 def friendly_error(error: Exception) -> tuple[int, str]:
@@ -215,6 +249,23 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
             raise HTTPException(409, "This investigation is finished and cannot be resumed")
         return graph
 
+    def continue_graph(spreadsheet_id: str) -> CompiledStateGraph:
+        try:
+            return run_continuation(models.llm, spreadsheet_id, source, sandbox, checkpointer, verifier=models.verifier, locator=models.locator, mapper=models.mapper, explainer=models.explainer, store=store)
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from error
+
+    def resumable(investigation_id: str, request: ResumeRequest) -> tuple[CompiledStateGraph, Any]:
+        if investigation_id in graphs:
+            return paused_graph(investigation_id), Command(resume=request.model_dump(exclude_none=True, exclude={"state"}))
+        if request.state is None:
+            raise HTTPException(404, f"No investigation {investigation_id!r}")
+        decision = decision_of(request)
+        carried = carried_state(request.state)
+        graph = continue_graph(carried["spreadsheet_id"])
+        graphs[investigation_id] = graph
+        return graph, {**carried, "human_decision": decision}
+
     @app.get("/health")
     def health() -> dict:
         return {"status": "ok"}
@@ -282,14 +333,13 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
 
     @app.post("/investigations/{investigation_id}/resume")
     def resume(investigation_id: str, request: ResumeRequest) -> dict:
-        graph = paused_graph(investigation_id)
-        graph.invoke(Command(resume=request.model_dump(exclude_none=True)), {"configurable": {"thread_id": investigation_id}})
+        graph, graph_input = resumable(investigation_id, request)
+        graph.invoke(graph_input, {"configurable": {"thread_id": investigation_id}})
         return investigation_view(graph, investigation_id)
 
     @app.post("/investigations/{investigation_id}/resume/stream")
     def resume_stream(investigation_id: str, request: ResumeRequest) -> StreamingResponse:
-        graph = paused_graph(investigation_id)
-        graph_input = Command(resume=request.model_dump(exclude_none=True))
+        graph, graph_input = resumable(investigation_id, request)
         return StreamingResponse(progress(graph, graph_input, investigation_id), media_type="text/event-stream")
 
     return app

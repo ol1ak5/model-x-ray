@@ -46,7 +46,7 @@ Models come from the role registry: Super for the Investigator, Verifier and loc
 | `POST /spreadsheets?name=My%20model.xlsx` | The raw `.xlsx` bytes | `201` and `{"id", "name", "sheets"}`; `.xlsx` only, up to 10 MB, checked by opening it; the saved name is generated, so a name like `../x.xlsx` cannot escape the folder |
 | `GET /investigations/{id}` | | The investigation view |
 | `GET /investigations/{id}/corrected` | | The corrected `.xlsx` after approval (404 before) |
-| `POST /investigations/{id}/resume` | A cell choice `{"ref": "P&L!H8"}` or a decision `{"action": "approve" \| "edit" \| "reject", "reason", "patch", "intentional"}` (`intentional: true` with `reject` remembers the cell as deliberate, see `docs/agent-architecture.md` §Memory) | The investigation view after the graph continued |
+| `POST /investigations/{id}/resume` | A cell choice `{"ref": "P&L!H8"}` or a decision `{"action": "approve" \| "edit" \| "reject", "reason", "patch", "intentional"}` (`intentional: true` with `reject` remembers the cell as deliberate, see `docs/agent-architecture.md` §Memory). `state` carries the investigation view the browser kept, so a server that never saw this id can still continue it (see below) | The investigation view after the graph continued |
 | `POST /investigations/stream` | Same as `POST /investigations` | A live stream of progress events, then the view |
 | `POST /investigations/{id}/resume/stream` | Same as `resume` | A live stream of progress events, then the view |
 
@@ -87,7 +87,13 @@ Every endpoint answers with the same JSON, built by `investigation_view` from th
 - `id`: also the LangGraph `thread_id`, so one investigation is one thread.
 - `status`: `needs_cell` (paused in `choose_target`), `needs_review` (paused in `human_review`) or `done`.
 - `pause`: the value the graph passed to `interrupt()`: the question and candidate cells, or the report and patch to approve. `null` when not paused.
-- The public state fields: `question`, `model_map`, `known_overrides`, `past_findings`, `target`, `causal_tree`, `hypotheses`, `evidence`, `verifications`, `patch`, `report`, `corrected_copy_id`, `run_log`. LangChain messages are never sent.
+- The public state fields: `spreadsheet_id`, `question`, `model_map`, `known_overrides`, `past_findings`, `target`, `causal_tree`, `contributions`, `hypotheses`, `evidence`, `verifications`, `patch`, `report`, `corrected_copy_id`, `run_log`, `attempts`. LangChain messages are never sent. These are also the fields a browser can hand back as `state` to continue an investigation the server has forgotten.
+
+## Continuing without a thread
+
+`resume` looks the id up in the process that started the investigation. When the request also carries the `state` the browser kept, that lookup is not needed: the server builds a small continuation graph over the carried state and the decision, with the same nodes and the same checks, and runs only the nodes after the review. `approve` runs `apply_fix` alone, `reject` runs no model at all, `edit` runs `test → verify → explain` and pauses for review again. `/{id}/sheet` and `/{id}/corrected` still resolve through the process, which is why the browser keeps its own sheet window (`docs/persistence.md`).
+
+The state is untrusted input. `carried_state` keeps only the fields an investigation carries, requires the spreadsheet id and the question, and answers `400` for a list or an object of the wrong shape. The workbook is never taken from the state but loaded from the spreadsheet id, so an uploaded model has to still be on the server. A cell choice (`{"ref": ...}`) is the one pause a carried state cannot redo, because it carries no decision: it needs the process that asked the question, and #138 removes that pause.
 
 ## Errors
 
@@ -106,4 +112,4 @@ Users never see a traceback. `friendly_error(error)` turns any exception into a 
 
 ## Not yet
 
-- Investigation ids live in this process, so a restart or a second instance forgets them even with the checkpoint on disk: the checkpointer is written but never looked up, and a shared database alone would not fix it. `docs/persistence.md` measures the gap and lists the options.
+- An investigation id belongs to the process that started it, so `GET /investigations/{id}` and `/{id}/sheet` answer `404` for an id this process never saw, even with the checkpoint on disk: the checkpointer is written but never looked up. A browser that kept its state can still finish the review, because `resume` continues from that state when the id is unknown. `docs/persistence.md` records the decision.
