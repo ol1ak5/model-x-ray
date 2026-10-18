@@ -4,7 +4,7 @@ from pathlib import Path
 import openpyxl
 import pytest
 
-from model_x_ray.spreadsheet.engine import CircularReferenceError, UnsupportedFormulaError, Workbook
+from model_x_ray.spreadsheet.engine import CircularReferenceError, FormulaError, UnsupportedFormulaError, Workbook
 from model_x_ray.spreadsheet.xlsx import load_xlsx
 
 
@@ -115,3 +115,28 @@ def test_a_sheet_formatted_out_to_the_last_column_loads_only_the_cells_it_uses(t
     assert book.value("Inputs!C2") == 200.0
     assert book.metadata_of("Inputs!C2")["number_format"] == "0.0%"
     assert book.raw("Inputs!XFD3000") is None
+
+
+def test_a_chain_longer_than_the_recursion_limit_still_calculates() -> None:
+    cells = {"Calc!A1": 1.0}
+    for row in range(2, 4001):
+        cells[f"Calc!A{row}"] = f"=A{row - 1}+1"
+    book = Workbook(cells)
+
+    assert book.value("Calc!A4000") == 4000.0
+    assert book.value("Calc!A2000") == 2000.0
+
+
+def test_a_link_to_another_workbook_has_no_precedents_instead_of_failing() -> None:
+    book = Workbook({"Sheet!A1": "=[1]May!$J$10", "Sheet!A2": "=A1+1"})
+
+    assert book.precedents("Sheet!A1") == []
+    assert book.dependents("Sheet!A1") == ["Sheet!A2"]
+
+
+def test_a_function_with_missing_arguments_is_a_formula_error_not_a_crash() -> None:
+    book = Workbook({"Sheet!A1": "=EOMONTH(A2)", "Sheet!A2": 45000, "Sheet!A3": "=IFERROR(EOMONTH(A2),0)"})
+
+    with pytest.raises(FormulaError, match="EOMONTH"):
+        book.value("Sheet!A1")
+    assert book.value("Sheet!A3") == 0
