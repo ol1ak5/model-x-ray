@@ -25,6 +25,8 @@ The first command fills `models/` with the clean base model and planted-error va
 | `MODEL_X_RAY_MEMORY` | `memory.db` | SQLite long-term memory: model maps, intentional overrides, past fixes (Postgres on Supabase in the deployed app, #72) |
 | `DEMO_MAX_PER_VISITOR` / `DEMO_MAX_PER_DAY` | `5` / `100` | The usage cap |
 
+Which of these actually survive a restart, and which deployment needs a database, is recorded in `docs/persistence.md`.
+
 Models come from the role registry: Super for the Investigator, Verifier and locate, Lightning for the mapper.
 
 ## Building the app
@@ -104,4 +106,4 @@ Users never see a traceback. `friendly_error(error)` turns any exception into a 
 
 ## Not yet
 
-- Investigation ids live in memory, so a restart forgets them; the Postgres checkpointer and store (#72) fix this.
+- Investigation ids live in this process, so a restart or a second instance forgets them even with the checkpoint on disk: the checkpointer is written but never looked up, and a shared database alone would not fix it. `docs/persistence.md` measures the gap and lists the options.
