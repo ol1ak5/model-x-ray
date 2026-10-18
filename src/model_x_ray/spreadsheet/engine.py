@@ -41,10 +41,12 @@ SUPPORTED_FUNCTIONS = (
     "YEAR", "MONTH", "DAY", "DATE", "EDATE", "NPV", "XNPV",
     "POWER", "ROUNDDOWN", "INT", "MOD", "PPMT", "XIRR",
 )
-TIMELINE_ROWS = 30
 YEAR_RANGE = (1900, 2100)
 PERIOD_INDEX_RANGE = (-50, 200)
 SERIAL_RANGE = (1, 2958465)
+PERIOD_PRIORITY = {"year": 0, "date": 1, "index": 2}
+STACKED_HEADER_ROWS = 3
+PERIOD_WORDS = re.compile(r"(?i)\b(base|current|terminal|actual|ltm|ntm|today|stable|steady|normali[sz]ed|year 0|beyond|after)\b")
 DATE_FORMAT = re.compile(r"(?i)(yy|mmm|dd?[/.-]|[/.-]dd?|m/)")
 FUNCTION_PREFIXES = ("_XLFN._XLWS.", "_XLFN.", "_XLWS.")
 EXCEL_EPOCH = date(1899, 12, 30)
@@ -370,7 +372,7 @@ class Workbook:
         self._dependents: dict[str, list[str]] | None = None
         self._rows: dict[str, dict[int, list[int]]] = {}
         self._label_counts: dict[str, dict[tuple[int, str], int]] = {}
-        self._timelines: dict[str, tuple[int, dict[int, str]] | None] = {}
+        self._timelines: dict[str, list[tuple[int, dict[int, str]]]] = {}
 
     @property
     def sheets(self) -> list[str]:
@@ -510,10 +512,8 @@ class Workbook:
             content = self._cells.get(make_ref(sheet, CellAddress(address.column, row)))
             if is_label_text(content):
                 return row, content
-        timeline = self._timeline(sheet)
-        if timeline is not None and address.row > timeline[0] and address.column in timeline[1]:
-            return timeline[0], timeline[1][address.column]
-        return None
+        block = self._timeline_above(sheet, address)
+        return (block[0], block[1][address.column]) if block else None
 
     def _sheet_rows(self, sheet: str) -> dict[int, list[int]]:
         if sheet not in self._rows:
@@ -550,13 +550,13 @@ class Workbook:
             return "index", number, f"Year {int(number)}"
         return None
 
-    def _period_run(self, sheet: str, row: int, columns: list[int]) -> dict[int, str] | None:
+    def _period_run(self, sheet: str, row: int, columns: list[int]) -> tuple[str, dict[int, str]] | None:
         marks = [(column, self._period_mark(make_ref(sheet, CellAddress(column, row)))) for column in columns]
         best: list[tuple[int, tuple[str, float, str]]] = []
         current: list[tuple[int, tuple[str, float, str]]] = []
         for column, mark in marks:
             follows = bool(current) and mark is not None and mark[0] == current[-1][1][0] and mark[1] > current[-1][1][1]
-            if follows and mark[0] == "index" and mark[1] != current[-1][1][1] + 1:
+            if follows and mark[0] in ("index", "year") and mark[1] != current[-1][1][1] + 1:
                 follows = False
             current = [*current, (column, mark)] if follows else ([(column, mark)] if mark is not None else [])
             if len(current) > len(best):
@@ -564,34 +564,39 @@ class Workbook:
         if len(best) < 3:
             return None
         periods = {column: mark[2] for column, mark in best}
-        if best[0][1][0] == "index":
-            position = columns.index(best[0][0])
-            for neighbour in (columns[position - 1] if position > 0 else None, ):
-                if neighbour is not None and is_label_text(self._cells.get(make_ref(sheet, CellAddress(neighbour, row)))):
-                    periods[neighbour] = str(self._cells[make_ref(sheet, CellAddress(neighbour, row))]).strip()
-            position = columns.index(best[-1][0])
-            if position + 1 < len(columns):
-                neighbour = columns[position + 1]
-                if is_label_text(self._cells.get(make_ref(sheet, CellAddress(neighbour, row)))):
-                    periods[neighbour] = str(self._cells[make_ref(sheet, CellAddress(neighbour, row))]).strip()
-        return periods
+        first, last = columns.index(best[0][0]), columns.index(best[-1][0])
+        for position in (first - 1, last + 1):
+            if 0 <= position < len(columns):
+                content = self._cells.get(make_ref(sheet, CellAddress(columns[position], row)))
+                if is_label_text(content) and PERIOD_WORDS.search(str(content)):
+                    periods[columns[position]] = str(content).strip()
+        return best[0][1][0], periods
 
-    def _timeline(self, sheet: str) -> tuple[int, dict[int, str]] | None:
+    def _timeline(self, sheet: str) -> list[tuple[int, dict[int, str]]]:
         if sheet not in self._timelines:
-            self._timelines[sheet] = None
+            blocks: list[tuple[int, str, dict[int, str]]] = []
             for row, columns in sorted(self._sheet_rows(sheet).items()):
-                if row > TIMELINE_ROWS:
-                    break
-                periods = self._period_run(sheet, row, columns)
-                if periods is not None:
-                    self._timelines[sheet] = (row, periods)
-                    break
+                found = self._period_run(sheet, row, columns)
+                if found is None:
+                    continue
+                kind, periods = found
+                if blocks and row - blocks[-1][0] <= STACKED_HEADER_ROWS:
+                    if PERIOD_PRIORITY[kind] < PERIOD_PRIORITY[blocks[-1][1]]:
+                        blocks[-1] = (row, kind, periods)
+                    continue
+                blocks.append((row, kind, periods))
+            self._timelines[sheet] = [(row, periods) for row, _, periods in blocks]
         return self._timelines[sheet]
+
+    def _timeline_above(self, sheet: str, address: CellAddress) -> tuple[int, dict[int, str]] | None:
+        above = [block for block in self._timeline(sheet) if block[0] < address.row]
+        if not above or address.column not in above[-1][1]:
+            return None
+        return above[-1]
 
     def in_timeline(self, ref: str) -> bool:
         sheet, address = split_ref(normalize_ref(ref))
-        timeline = self._timeline(sheet)
-        return timeline is not None and address.row > timeline[0] and address.column in timeline[1]
+        return self._timeline_above(sheet, address) is not None
 
     def _qualified_label(self, sheet: str, column: int, row: int, label: str) -> str:
         if sheet not in self._label_counts:
