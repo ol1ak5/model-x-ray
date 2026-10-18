@@ -104,6 +104,7 @@ def test_a_sheet_formatted_out_to_the_last_column_loads_only_the_cells_it_uses(t
     sheet.title = "Inputs"
     sheet["B2"] = 100
     sheet["C2"] = "=B2*2"
+    sheet["C2"].number_format = "0.0%"
     sheet["XFD3000"].number_format = "0.0%"
     workbook.save(tmp_path / "wide.xlsx")
 
@@ -112,4 +113,5 @@ def test_a_sheet_formatted_out_to_the_last_column_loads_only_the_cells_it_uses(t
 
     assert time.perf_counter() - started < 5
     assert book.value("Inputs!C2") == 200.0
-    assert book.metadata_of("Inputs!XFD3000")["number_format"] == "0.0%"
+    assert book.metadata_of("Inputs!C2")["number_format"] == "0.0%"
+    assert book.raw("Inputs!XFD3000") is None
