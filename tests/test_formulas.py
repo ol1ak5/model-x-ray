@@ -288,3 +288,18 @@ def test_common_functions_from_public_valuation_and_trading_models_calculate_lik
         with pytest.raises(FormulaError, match=re.escape(message)):
             book.value(f"Calc!{ref}")
     assert set(book.precedents("Calc!A6")) == {f"Data!{c}{r}" for c in "CDE" for r in range(1, 5)}
+
+
+def test_a_link_to_another_workbook_is_reported_as_unsupported_in_plain_words(tmp_path: Path) -> None:
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.title = "Summary"
+    sheet["A1"] = "=[1]May!$J$10"
+    sheet["A2"] = "='[2]Deal sheet'!B4*2"
+    sheet["A3"] = "=IFERROR([1]May!$J$10,0)"
+    workbook.save(tmp_path / "linked.xlsx")
+    book = load_xlsx(tmp_path / "linked.xlsx")
+
+    for ref in ("Summary!A1", "Summary!A2", "Summary!A3"):
+        with pytest.raises(UnsupportedFormulaError, match="another workbook"):
+            book.value(ref)

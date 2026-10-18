@@ -77,6 +77,8 @@ Deliberately the small set real financial models use; an unsupported function fa
 
 Plus references (`A1`, `$C$7`, ranges, whole rows and columns such as `70:70`, other sheets, quoted names, workbook defined names), operators (`+ - * / ^ &`, comparisons), percentages, `_xlfn.` prefixes, and Excel-faithful error semantics (`IF` evaluates only the branch it returns, `IFERROR` never hides an unsupported function). Full spec: [`docs/spreadsheet-core.md`](docs/spreadsheet-core.md).
 
+Not supported: links to other workbooks (`=[1]May!J10`; open the linked file and paste its values), circular references, Data Tables and VBA functions. Each is reported by name instead of computed wrongly.
+
 ## Why these Nemotron models
 
 The mapper (the one call that labels every line and period of a sheet) started on the fastest candidate, `Nemotron-3_5-Lightning`, which passed every tool-calling check. On a real 63-line project-finance model, however, Lightning wrote its reasoning as text and hit its 8,192-token output limit without ever calling the tool — while **Nemotron 3 Super** returned all 63 lines and 24 periods in 7 seconds (~1,900 output tokens ≈ 0.3 cents), cached per file revision, so the cost is paid once per file. The mapper role moved to Super (PR #97). Every other role uses Super for one reason: a single strong model keeps the structured-output contracts (diagnosis, verdict, report) in one place, and the roles differ by prompt and tools, not by capability.

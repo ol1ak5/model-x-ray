@@ -165,7 +165,12 @@ def expand_range(text: str) -> list[str]:
     ]
 
 
+EXTERNAL_LINK = re.compile(r"\[[0-9]+\][^!\"]*!")
+
+
 def tokenize(formula: str) -> list[Token]:
+    if EXTERNAL_LINK.search(formula):
+        raise UnsupportedFormulaError(f"Formula {formula!r} reads another workbook; links to other files are not supported, so open the linked file and paste its values")
     tokens: list[Token] = []
     position = 1 if formula.startswith("=") else 0
     while position < len(formula):
