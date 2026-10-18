@@ -58,6 +58,13 @@ def make_rules_diagnose_node(book: Workbook) -> Callable[[InvestigationState], d
         target = state.get("target")
         if target is None:
             return {}
+        if target.get("mode") == "table":
+            ref = f"{target['sheet']}!{target['cell']}"
+            if ref in {h["cell"] for h in state.get("hypotheses", [])}:
+                return {}
+            hypothesis = {"id": f"hyp-{len(state.get('hypotheses', [])) + 1}", "cell": ref, "error_type": "wrong_reference", "claim": target["finding"], "evidence_ids": [], "confidence": "medium", "status": "open"}
+            patch = {"cell": ref, "old_formula": book.formula(ref) or str(book.raw(ref)), "new_formula": target["expected_formula"], "source": "agent"} if target.get("expected_formula") else None
+            return {"hypotheses": [hypothesis], "patch": patch}
         depths = precedent_depths(book, f"{target['sheet']}!{target['cell']}")
         candidates: list[tuple[int, int, int, int, str, str]] = []
         for sheet in book.sheets:

@@ -7,8 +7,8 @@ from pydantic import BaseModel
 
 from model_x_ray.llm import invoke_with_usage, model_name_of
 from model_x_ray.prompts import load_prompt
-from model_x_ray.rules import is_period_cell, scan_model
-from model_x_ray.spreadsheet.engine import CellAddress, Workbook, make_ref, normalize_ref, split_ref
+from model_x_ray.rules import is_period_cell, scan_model, scan_tables
+from model_x_ray.spreadsheet.engine import CellAddress, FormulaError, Workbook, make_ref, normalize_ref, split_ref
 from model_x_ray.state import InvestigationState, ModelMap, TargetCell
 from model_x_ray.tools import find_cells
 
@@ -140,8 +140,25 @@ def make_locate_node(llm: BaseChatModel | None, book: Workbook) -> Callable[[Inv
 
     def locate(state: InvestigationState) -> dict:
         if not state.get("question", "").strip():
-            ref, question = check_target(book)
-            return {"target": target_cell(book, ref), "question": question, "target_choice": None}
+            if scan_model(book):
+                try:
+                    ref, question = check_target(book)
+                    return {"target": target_cell(book, ref), "question": question, "target_choice": None}
+                except ValueError:
+                    pass
+            table = table_check(book)
+            if table is not None:
+                target, question = table
+                return {"target": target, "question": question, "target_choice": None}
+            try:
+                ref, question = check_target(book)
+                return {"target": target_cell(book, ref), "question": question, "target_choice": None}
+            except ValueError:
+                review = review_target(book)
+                if review is None:
+                    raise
+                target, question = review
+                return {"target": target, "question": question, "target_choice": None}
         request = read_question(state["question"], catalogue)
         records = []
         if request is None and structured is not None:
@@ -166,6 +183,47 @@ def make_locate_node(llm: BaseChatModel | None, book: Workbook) -> Callable[[Inv
         return {"target": target_cell(book, chosen), "target_choice": {"candidates": candidates, "chosen": chosen, "why": why}, "run_log": records}
 
     return locate
+
+
+def table_check(book: Workbook) -> tuple[TargetCell, str] | None:
+    findings = scan_tables(book)
+    if not findings:
+        return None
+    finding = max(findings, key=lambda f: (len(book.all_dependents(f["cell"])), f["kind"] == "incomplete_total"))
+    ref = finding["cell"]
+    sheet, address = split_ref(ref)
+    value = as_number(book.value(ref))
+    expected = value
+    if finding.get("fix"):
+        try:
+            expected = as_number(book.with_patch(ref, finding["fix"]).value(ref))
+        except FormulaError:
+            expected = value
+    label = book.row_label(ref) or book.column_header(ref) or ref
+    period = book.column_header(ref) if book.row_label(ref) else ""
+    target: TargetCell = {
+        "sheet": sheet, "cell": ref.rsplit("!", 1)[1], "label": label, "period": period or "", "value": value,
+        "prior_cell": "", "prior_value": expected, "mode": "table", "finding": finding["reason"], "expected_formula": finding.get("fix"),
+    }
+    return target, f"Check the model: {label} ({ref}) looks wrong: {finding['reason']}."
+
+
+def review_target(book: Workbook) -> tuple[TargetCell, str] | None:
+    outputs = [ref for ref in book.cells() if book.formula(ref) is not None and (book.row_label(ref) or book.column_header(ref))]
+    if not outputs:
+        return None
+    ref = max(outputs, key=lambda cell: (len(book.all_precedents(cell)), -split_ref(cell)[1].row))
+    try:
+        value = as_number(book.value(ref))
+    except FormulaError:
+        return None
+    label = book.row_label(ref) or book.column_header(ref) or ref
+    finding = "no cell breaks a pattern here, so the calculation logic behind this output needs a review"
+    target: TargetCell = {
+        "sheet": split_ref(ref)[0], "cell": ref.rsplit("!", 1)[1], "label": label, "period": "", "value": value,
+        "prior_cell": "", "prior_value": value, "mode": "review", "finding": finding, "expected_formula": None,
+    }
+    return target, f"Check the model: {label} ({ref}) is the main result; {finding}."
 
 
 def checked_instead(book: Workbook, records: list, missing: str) -> dict:

@@ -149,6 +149,31 @@ def total_findings(book: Workbook) -> list[dict[str, str]]:
     return findings
 
 
+def total_range(book: Workbook, ref: str) -> list[str] | None:
+    match = TOTAL_FORMULA.match(book.formula(ref) or "")
+    if match is None:
+        return None
+    sheet = split_ref(ref)[0]
+    first, last = match.group(1).replace("$", ""), (match.group(2) or match.group(1)).replace("$", "")
+    return [normalize_ref(cell) for cell in expand_range(f"{sheet}!{first}:{last}")]
+
+
+def double_count_findings(book: Workbook) -> list[dict[str, str]]:
+    findings = []
+    for ref in book.cells():
+        covered = total_range(book, ref)
+        if not covered:
+            continue
+        inside = set(covered)
+        for subtotal in covered:
+            parts = total_range(book, subtotal)
+            if parts and set(parts) <= inside:
+                kept = [cell for cell in covered if cell != subtotal and not (total_range(book, cell) or [])]
+                findings.append({"cell": ref, "kind": "double_count", "reason": f"the total adds the subtotal {subtotal.split('!')[1]} and also its parts {parts[0].split('!')[1]}:{parts[-1].split('!')[1]}", "fix": "=" + "+".join(cell.split("!")[1] for cell in kept) if 0 < len(kept) <= 12 else None})
+                break
+    return findings
+
+
 def scan_tables(book: Workbook) -> list[dict[str, str]]:
-    found = {finding["cell"]: finding for finding in [*total_findings(book), *column_findings(book)]}
+    found = {finding["cell"]: finding for finding in [*total_findings(book), *double_count_findings(book), *column_findings(book)]}
     return sorted(found.values(), key=lambda f: (split_ref(f["cell"])[0], split_ref(f["cell"])[1].row, split_ref(f["cell"])[1].column))

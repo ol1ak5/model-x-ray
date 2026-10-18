@@ -1,5 +1,5 @@
 import operator
-from typing import Annotated, Literal, TypedDict
+from typing import Annotated, Literal, NotRequired, TypedDict
 
 from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
@@ -13,6 +13,9 @@ class TargetCell(TypedDict):
     value: float
     prior_cell: str
     prior_value: float
+    mode: NotRequired[str]
+    finding: NotRequired[str]
+    expected_formula: NotRequired[str | None]
 
 
 class RowRole(TypedDict):

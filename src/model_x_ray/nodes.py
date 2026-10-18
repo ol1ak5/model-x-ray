@@ -12,7 +12,7 @@ from model_x_ray.llm import invoke_with_usage, model_name_of
 from model_x_ray.memory import ModelMemory
 from model_x_ray.prompts import load_prompt
 from model_x_ray.routing import MAX_ATTEMPTS
-from model_x_ray.spreadsheet.engine import Workbook
+from model_x_ray.spreadsheet.engine import FormulaError, Workbook
 from model_x_ray.spreadsheet.sandbox import Sandbox, SandboxWithWrite, run_sandbox_test
 from model_x_ray.spreadsheet.source import SpreadsheetSource
 from model_x_ray.state import CausalNode, Evidence, Hypothesis, InvestigationState, RunLog, TargetCell, Verification
@@ -79,12 +79,23 @@ def make_trace_node(book: Workbook) -> Callable[[InvestigationState], dict]:
     def trace_node(state: InvestigationState) -> dict:
         target = state["target"]
         ref = f"{target['sheet']}!{target['cell']}"
+        if target.get("mode") in ("table", "review"):
+            start = len(state.get("evidence", []))
+            text = f"{target['label']} = {target['value']:.2f}: {target['finding']}"
+            if target.get("expected_formula"):
+                text += f"; with {target['expected_formula']} it would be {target['prior_value']:.2f}"
+            tree = {"cell": ref, "label": target["label"], "value_before": target["prior_value"], "value_after": target["value"], "delta": target["value"] - target["prior_value"], "share_of_change": 1.0, "suspicious": True, "children": []}
+            return {"contributions": [], "causal_tree": tree, "evidence": [{"id": f"ev-{start + 1}", "cell": ref, "kind": "anomaly", "text": text}]}
         prior_ref = target["prior_cell"] if "!" in target["prior_cell"] else f"{target['sheet']}!{target['prior_cell']}"
         from_period = book.column_header(prior_ref)
         if not from_period:
             raise ValueError(f"No period header for prior cell {prior_ref}")
-        explanation = causal.explain_change(book, ref, from_period, target["period"])
-        tree = causal.build_causal_tree(book, ref, from_period, target["period"])
+        try:
+            explanation = causal.explain_change(book, ref, from_period, target["period"])
+            tree = causal.build_causal_tree(book, ref, from_period, target["period"])
+        except (ValueError, FormulaError):
+            explanation = {"contributions": []}
+            tree = {"cell": ref, "label": target["label"], "value_before": target["prior_value"], "value_after": target["value"], "delta": target["value"] - target["prior_value"], "share_of_change": 1.0, "suspicious": False, "children": []}
         suspicious = _suspicious_cells(tree)
         start = len(state.get("evidence", []))
         records = [
@@ -319,6 +330,13 @@ def unproven_report(state: InvestigationState) -> str:
     return report + f"Nothing was changed; review {'this cell' if count == 1 else 'these cells'} before relying on the number."
 
 
+def target_statement(target: TargetCell) -> str:
+    if target.get("mode") in ("table", "review"):
+        statement = f"{target['label']} ({target['sheet']}!{target['cell']}) is {target['value']:.2f}: {target['finding']}"
+        return statement + (f", which gives {target['prior_value']:.2f}" if target.get("expected_formula") else "")
+    return f"{target['label']} {target['period']} moved from {target['prior_value']:.2f} to {target['value']:.2f}"
+
+
 def movement_and_drivers(state: InvestigationState) -> str:
     target = state.get("target")
     if not target:
@@ -326,7 +344,7 @@ def movement_and_drivers(state: InvestigationState) -> str:
     evidence = state.get("evidence", [])
     target_ref = f"{target['sheet']}!{target['cell']}"
     target_id = next((e["id"] for e in evidence if e["cell"] == target_ref and e["kind"] == "anomaly"), None)
-    report = f"{target['label']} {target['period']} moved from {target['prior_value']:.2f} to {target['value']:.2f}"
+    report = target_statement(target)
     if target_id:
         report += f" ({target_id})"
     drivers = []
@@ -395,10 +413,7 @@ def make_explain_node(llm: BaseChatModel | None = None) -> Callable[[Investigati
         )
         parts = []
         if target and target_record:
-            parts.append(
-                f"{target['label']} {target['period']} moved from {target['prior_value']}"
-                f" to {target['value']} ({target_record['id']})."
-            )
+            parts.append(f"{target_statement(target)} ({target_record['id']}).")
         patch = state.get("patch")
         cell = patch["cell"] if patch else (hypothesis["cell"] if hypothesis else "")
         claim = hypothesis["claim"] if hypothesis else "the patch held in the sandbox"

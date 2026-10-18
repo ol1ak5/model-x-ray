@@ -7,6 +7,7 @@ from langchain_core.runnables import Runnable
 from pydantic import BaseModel
 
 from model_x_ray.llm import invoke_with_usage
+from model_x_ray.rules import scan_tables
 from model_x_ray.prompts import load_prompt
 from model_x_ray.spreadsheet.engine import CellAddress, Workbook, make_ref, split_ref
 from model_x_ray.state import InvestigationState, Patch, RunLog, Verification
@@ -44,11 +45,20 @@ def _pattern_restored(book: Workbook, patch: Patch, patched: Workbook) -> bool:
     neighbours = [
         make_ref(sheet, CellAddress(address.column + offset, address.row))
         for offset in (-2, -1, 1, 2)
+        if address.column + offset >= 1
     ]
     formula_neighbours = [n for n in neighbours if book.formula(n) is not None]
     if not formula_neighbours:
         return True
     return any(patched.formula_pattern(n) == pattern for n in formula_neighbours)
+
+
+def _column_pattern_restored(book: Workbook, patch: Patch, patched: Workbook) -> bool:
+    pattern = patched.formula_pattern(patch["cell"])
+    sheet, address = split_ref(patch["cell"])
+    neighbours = [make_ref(sheet, CellAddress(address.column, address.row + offset)) for offset in (-2, -1, 1, 2) if address.row + offset >= 1]
+    formula_neighbours = [n for n in neighbours if book.formula(n) is not None]
+    return pattern is not None and (not formula_neighbours or any(patched.formula_pattern(n) == pattern for n in formula_neighbours) or pattern.upper().startswith("=SUM("))
 
 
 def deterministic_checks(book: Workbook, state: InvestigationState, verification: Verification) -> dict[str, bool]:
@@ -60,6 +70,21 @@ def deterministic_checks(book: Workbook, state: InvestigationState, verification
     prior = target["prior_value"] if target else None
     target_before = before.get(target_ref) if target_ref else None
     target_after = after.get(target_ref) if target_ref else None
+    if target and target.get("mode") == "review":
+        patched_book = book.with_patch(patch["cell"], patch["new_formula"])
+        return {
+            "anomaly_resolved": not _matches(target_before, target_after),
+            "dependents_consistent": all(_dependent_matches(patched_book, dependent, after) for dependent in book.all_dependents(patch["cell"])),
+            "pattern_restored": True,
+        }
+    if target and target.get("mode") == "table":
+        patched_book = book.with_patch(patch["cell"], patch["new_formula"])
+        still_flagged = {f["cell"] for f in scan_tables(patched_book)}
+        return {
+            "anomaly_resolved": f"{target['sheet']}!{target['cell']}" not in still_flagged and patch["cell"] not in still_flagged,
+            "dependents_consistent": all(_dependent_matches(patched_book, dependent, after) for dependent in book.all_dependents(patch["cell"])),
+            "pattern_restored": _pattern_restored(book, patch, patched_book) or _column_pattern_restored(book, patch, patched_book),
+        }
     anomaly_resolved = (
         isinstance(target_before, (int, float))
         and isinstance(target_after, (int, float))
@@ -84,7 +109,7 @@ def _relevant_refs(book: Workbook, patch: Patch) -> list[str]:
     neighbours = [
         make_ref(sheet, CellAddress(address.column + offset, address.row))
         for offset in (-2, -1, 1, 2)
-        if book.raw(make_ref(sheet, CellAddress(address.column + offset, address.row))) is not None
+        if address.column + offset >= 1 and book.raw(make_ref(sheet, CellAddress(address.column + offset, address.row))) is not None
     ]
     return list(dict.fromkeys([patch["cell"], *neighbours, *book.all_dependents(patch["cell"])]))
 

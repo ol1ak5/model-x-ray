@@ -53,3 +53,66 @@ def test_a_clean_table_has_no_findings(tmp_path: Path) -> None:
     workbook.save(path)
 
     assert scan_tables(load_xlsx(path)) == []
+
+
+def test_a_table_without_a_timeline_is_checked_end_to_end_and_the_total_is_fixed(tmp_path: Path) -> None:
+    from uuid import uuid4
+
+    from conftest import ScriptedVerdict
+    from test_investigator import ScriptedDiagnosis
+
+    from model_x_ray.benchmark.runner import Setup, build_setup_graph, drive_graph
+    from model_x_ray.spreadsheet.sandbox import XlsxSandbox
+    from model_x_ray.spreadsheet.source import XlsxSource
+
+    path = write_trading_sheets(tmp_path / "trading.xlsx")
+    workbook = openpyxl.load_workbook(path)
+    workbook["Deals"]["D5"], workbook["Deals"]["D7"], workbook["Deals"]["E6"] = "=B5*C5", "=B7*C7", "=IF(B6>85,1,0)"
+    workbook.save(path)
+    setup = Setup(name="scripted", kind="investigator", model="scripted-investigator", verifier="scripted-verifier")
+
+    def factory(model_id: str):
+        if model_id == "scripted-verifier":
+            return ScriptedVerdict()
+        return ScriptedDiagnosis(turns=[(["Costs!B8"], "Costs!B8", "=SUM(B2:B6)")])
+
+    source = XlsxSource({"trading": path})
+    graph = build_setup_graph(setup, source, XlsxSandbox(source, tmp_path / "corrected"), "trading", factory)
+    final = drive_graph(graph, {"spreadsheet_id": "trading", "question": ""}, {"configurable": {"thread_id": uuid4().hex}})
+
+    target = final["target"]
+    assert (target["mode"], target["sheet"], target["cell"]) == ("table", "Costs", "B8")
+    assert (target["value"], target["prior_value"], target["expected_formula"]) == (74.0, 83.0, "=SUM(B2:B6)")
+    assert final["verifications"][-1]["verdict"] == "confirmed"
+    assert final["verifications"][-1]["checks"] == {"anomaly_resolved": True, "dependents_consistent": True, "pattern_restored": True}
+    assert "leaves out B6" in final["report"] and "which gives 83.00" in final["report"]
+    assert final["corrected_copy_id"]
+
+
+def test_a_subtotal_counted_twice_is_found() -> None:
+    from model_x_ray.spreadsheet.engine import Workbook
+
+    book = Workbook({
+        "Sheet!A1": "Fees", "Sheet!B1": 4.0, "Sheet!A2": "Taxes", "Sheet!B2": 6.0,
+        "Sheet!A3": "Subtotal", "Sheet!B3": "=SUM(B1:B2)", "Sheet!A4": "Total", "Sheet!B4": "=SUM(B1:B3)",
+    })
+
+    found = {f["cell"]: f for f in scan_tables(book)}
+    assert found["Sheet!B4"]["kind"] == "double_count"
+    assert found["Sheet!B4"]["fix"] == "=B1+B2"
+
+
+def test_a_calculation_with_no_broken_pattern_is_handed_to_the_investigator_for_a_logic_review(tmp_path: Path) -> None:
+    from model_x_ray.agents.locator import make_locate_node
+    from model_x_ray.spreadsheet.engine import Workbook
+
+    book = Workbook({
+        "Calc!A1": "Revenue", "Calc!B1": 100.0, "Calc!A2": "Costs", "Calc!B2": 60.0,
+        "Calc!A3": "Margin", "Calc!B3": "=B1+B2", "Calc!A4": "Margin %", "Calc!B4": "=B3/B1",
+    })
+
+    update = make_locate_node(None, book)({"spreadsheet_id": "calc", "question": ""})
+
+    assert update["target"]["mode"] == "review"
+    assert update["target"]["cell"] == "B4"
+    assert "main result" in update["question"]

@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from model_x_ray.causal import render_causal_tree
 from model_x_ray.llm import invoke_with_usage, model_name_of
 from model_x_ray.prompts import load_prompt
-from model_x_ray.spreadsheet.engine import Workbook, normalize_ref, split_ref
+from model_x_ray.spreadsheet.engine import CellAddress, Workbook, make_ref, normalize_ref, split_ref
 from model_x_ray.state import Evidence, InvestigationState, RunLog
 
 MAX_TOOL_CALLS = 8
@@ -98,11 +98,23 @@ def build_investigator(llm: BaseChatModel, tools: list[BaseTool], max_tool_calls
     return builder.compile()
 
 
+def target_line(target: dict) -> str:
+    ref = f"{target['sheet']}!{target['cell']}"
+    if target.get("mode") == "review":
+        return f"Target: {ref} ({target['label']}) = {target['value']}. This is the model's main result and no rule flagged a cell. Review the logic of the formulas behind it (signs, missing or extra terms, wrong inputs, units) and propose a fix only if one is clearly wrong."
+    if target.get("mode") == "table":
+        line = f"Target: {ref} ({target['label']}) = {target['value']}. This block is a table, not a time series: compare the cell with the cells around it, not with a prior period. Finding: {target['finding']}."
+        if target.get("expected_formula"):
+            line += f" The pattern suggests {target['expected_formula']}, which gives {target['prior_value']}."
+        return line
+    return f"Target: {ref} ({target['label']} {target['period']}) = {target['value']}, prior period {target['prior_cell']} = {target['prior_value']}"
+
+
 def investigation_brief(state: InvestigationState) -> str:
     target = state["target"]
     lines = [
         f"Question: {state['question']}",
-        f"Target: {target['sheet']}!{target['cell']} ({target['label']} {target['period']}) = {target['value']}, prior period {target['prior_cell']} = {target['prior_value']}",
+        target_line(target),
     ]
     lines += [f"Marked intentional by a reviewer, do not propose: {o['cell']} ({o['reason']})" for o in state.get("known_overrides", [])]
     lines += [f"Fixed before on this model: {f['cell']} {f['error_type']}, {f['old_formula']} -> {f['new_formula']}" for f in state.get("past_findings", [])]
@@ -155,6 +167,17 @@ def row_formula_suggestion(book: Workbook, cell: str) -> str | None:
     if source is None or any(pattern != patterns[0] for pattern in patterns):
         return None
     return book.shifted_formula(source, cell)
+
+
+def column_formula_suggestion(book: Workbook, cell: str) -> str | None:
+    sheet, address = split_ref(normalize_ref(cell))
+    for offset in (1, -1, 2, -2):
+        neighbour = make_ref(sheet, CellAddress(address.column, address.row - offset))
+        above_or_below = make_ref(sheet, CellAddress(address.column, address.row + offset))
+        pattern = book.formula_pattern(neighbour) if book.formula(neighbour) else None
+        if pattern is not None and book.formula(above_or_below) and book.formula_pattern(above_or_below) == pattern:
+            return book.shifted_formula(neighbour, cell)
+    return None
 
 
 def evidence_cells(name: str, args: dict, content: str, sheet: str) -> list[str]:
@@ -249,7 +272,7 @@ def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_t
             patch_cell = full_ref(diagnosis.patch.cell, sheet)
             new_formula = diagnosis.patch.new_formula
             if book.formula(patch_cell) is None:
-                new_formula = row_formula_suggestion(book, patch_cell) or new_formula
+                new_formula = row_formula_suggestion(book, patch_cell) or column_formula_suggestion(book, patch_cell) or new_formula
             patch = {"cell": patch_cell, "old_formula": old_formula(book, patch_cell), "new_formula": new_formula, "source": "agent"}
         return {"hypotheses": hypotheses, "evidence": new_evidence, "patch": patch, "run_log": result.get("run_log", []), "tool_call_counts": [result.get("tool_calls_used", 0)]}
 
