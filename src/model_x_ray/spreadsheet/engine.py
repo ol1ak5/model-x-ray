@@ -657,12 +657,14 @@ class Workbook:
 
     def _header(self, ref: str) -> tuple[int, str] | None:
         sheet, address = split_ref(normalize_ref(ref))
+        block = self._timeline_above(sheet, address)
+        if block:
+            return block[0], block[1][address.column]
         for row in range(address.row - 1, 0, -1):
             content = self._cells.get(make_ref(sheet, CellAddress(address.column, row)))
             if is_label_text(content):
                 return row, content
-        block = self._timeline_above(sheet, address)
-        return (block[0], block[1][address.column]) if block else None
+        return None
 
     def _sheet_rows(self, sheet: str) -> dict[int, list[int]]:
         if sheet not in self._rows:
