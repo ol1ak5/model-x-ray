@@ -1,44 +1,59 @@
-# Persistence: what is stored, what survives a restart
+# Where a run lives: the browser
 
-Issues #72 (Supabase persistence) and #75 (deploy) both assume the app needs a database. This page records what the code stores today, what each layer buys, and the gap that no storage engine can close on its own, so the hosting decision is made on facts. Implementation: `src/model_x_ray/memory.py`, `src/model_x_ray/server.py`, `src/model_x_ray/api.py`. Evidence: `tests/test_persistence.py`, `tests/test_long_term_memory.py`.
+Decision, 18 Oct 2026: an investigation's conversation and state are stored in the visitor's own browser (`localStorage`), and the server keeps no investigation and no database. The API becomes a function of the request: it either runs an investigation or continues one, and answers with the new state for the browser to keep.
 
-## Four things live outside a single request
+This supersedes the Postgres/Supabase direction of #72 and removes persistence as a reason for #75 to depend on Supabase. The measurements behind the decision are in "What this replaces" below.
 
-| Layer | Where | Read back | Survives a new process |
-|---|---|---|---|
-| LangGraph checkpoints, the state of one investigation per thread id | `sqlite_checkpointer`, default `checkpoints.db` | only through a compiled graph that this process still holds in `create_app`'s `graphs` dict | the file does, the access does not |
-| Long-term memory: model maps, intentional overrides, past fixes (`ModelMemory` over any LangGraph `BaseStore`) | `sqlite_store`, default `memory.db` | at the start of every run, through `store=` | yes |
-| Uploaded models | `.xlsx` files under `MODEL_X_RAY_UPLOAD_DIR`, plus an in-memory `uploads` set in `create_app` | the `SpreadsheetSource` | the files do, the ids do not |
-| Usage counts | `UsageCap.counts`, process memory | the cap check before a run | no |
+## What the browser stores
 
-Only the long-term memory is durable end to end, and it is the layer that changes what the agent knows: `make_load_sheet_node` feeds the overrides and past findings into every run, `map_model` reuses the cached model map instead of paying the mapper model again, and `remember_decision` writes both back. `tests/test_long_term_memory.py` covers all three.
+One entry per investigation under a versioned key, `model-x-ray:runs:v1`:
 
-## The gap: the checkpoint is written but never looked up
+| Field | Why |
+|---|---|
+| `id`, `spreadsheetId`, `name`, `question`, `startedAt`, `updatedAt` | identify the run and let the UI list it |
+| `steps` | the pipeline progress the app already streams |
+| `view` | the investigation view the API returns (`InvestigationView`): the whole picture the UI draws |
+| `sheet` | the sheet window around the target, so the grid survives a reload |
 
-`create_app` keeps `graphs: dict[str, CompiledStateGraph]`, and `graph_of()` answers `404` for any id this process has not seen. The checkpoint for the paused thread is written anyway, and nothing ever reads it back.
+Measured size for the demo model: `view` 11 KB and `sheet` 6 KB (`frontend/src/test/recorded/`), so about 17 KB per run and roughly 300 runs inside the 5 MB per-origin quota. Rules the code follows:
 
-`tests/test_persistence.py::test_a_restart_forgets_a_paused_investigation_even_with_the_checkpoint_on_disk` runs an investigation to `needs_review`, asserts that its thread id is in `checkpoints.db`, that the same app answers `200`, and that a second app on the same file answers `404` for both the view and the resume.
+- Keep the newest 25 runs, oldest evicted first, and evict on `QuotaExceededError` before giving up on a write.
+- `localStorage` holds strings only: the corrected `.xlsx` is **downloaded** when the visitor approves, never stored. A real model can be 10 MB, base64 would not fit, and keeping it would be a second copy of deal data.
+- `localStorage` is synchronous: write on `view` events and on decisions, not on every streamed step.
+- A corrupt or foreign value, or storage that refuses to work (private mode), degrades to "no history" and never breaks the app.
+- A `version` field inside the value, so a later shape can migrate or be dropped.
 
-So swapping SQLite for Postgres or Supabase (#72) as written would change nothing for a restart or a second instance: the missing piece is the app-level lookup, not the storage engine.
+## What the server does
 
-## What that means for hosting
+| Endpoint | Change |
+|---|---|
+| `POST /investigations`, `/investigations/stream` | unchanged: run the graph, answer the view and the steps |
+| `POST /investigations/{id}/resume` | keeps its path but its body gains the carried state; it no longer resumes a live LangGraph thread, it continues from a state the browser hands back |
+| `GET /investigations/{id}/sheet` | comes from the carried state, or from the model the browser names, never from a stored investigation |
 
-- A single long-lived process (a local run, one container with its own disk) can pause and resume, and its SQLite files are enough. No database is necessary.
-- Serverless, or more than one instance (`#75` option A), cannot resume with the current code: a request may land on an instance that never saw the id. A shared database is necessary *and* not sufficient — `graph_of` must rebuild the graph for an unknown id from the checkpoint before any of it works.
-- A shared database would also have to cover the other two layers to make a multi-instance demo honest: uploads to object storage, and the usage cap to the same database, otherwise each instance counts its own and the cap stops protecting the credits.
+The continuation is small and fully determined by the decision: `approve` runs only `apply_fix` and answers the corrected file's bytes, `reject` runs no model at all, `edit` runs `test → verify → explain` and pauses again. The first pause (choosing a cell) continues the same way. That is a handful of nodes over a state the request carries, so nothing needs a live thread and the served app needs no checkpointer at all (tests keep the in-memory one).
 
-## What the check turned up
+The API must treat that state as untrusted input: check its shape before running a node over it.
 
-- `ModelMemory` namespaces are `(kind, spreadsheet_id)` with no visitor in the key, so one visitor marking a cell intentional suppresses that cell in every later visitor's run on the same demo model. On a public demo that is a repeatability hazard.
-- `graphs` never evicts, so a long-running demo keeps every investigation's graph.
-- `checkpoints.db` and `memory.db` are git-ignored but outlive a demo run, so the same model can behave differently on the second run of the day.
+Why not the other two obvious carriers:
 
-## Options
+- **A cookie.** About 4 KB per cookie and silently dropped above that, and auto-attached to every request to the domain, so the run would ride along in headers on calls that do not need it. A run is 17 KB.
+- **Handing back the serialized checkpoint.** Works, but it means carrying the checkpoint *and* its pending writes so a fresh saver can be rehydrated, in order to save a few nodes of work. Only worth it if a later change needs true time travel or partial re-runs.
 
-| Option | What it takes | Cost |
-|---|---|---|
-| A. One container, no database | record the decision and drop or narrow #72; SQLite files on a disk | smallest, but no restart safety and one instance |
-| B. Rebuild the graph from the checkpointer | `graph_of` reads the thread's `spreadsheet_id` through the checkpointer and builds a fresh graph, which flips the test above | a handful of lines, and the precondition for any database being worth its setup |
-| C. Fully external state: checkpointer, uploads, cap | Postgres or Supabase plus Storage, and #75's open question about a 30 to 60 second run inside a serverless function limit | largest, most moving parts before the deadline |
+## Uploaded models and the privacy claim
 
-Recommendation: B first, because it turns the checkpointer from dead weight into restart safety, then take #75's hosting decision with A as the fallback if the deadline tightens.
+The landing says "Your file stays private", and today that is not true: `POST /spreadsheets` writes the `.xlsx` into `uploads/` and nothing ever deletes it (the only `unlink` is cleanup after a parse failure), while every approved fix accumulates in `corrected/`. With the run in the browser the server should hold nothing: delete an upload when the run ends (or after a short TTL), and answer the corrected copy in the response body instead of storing it.
+
+## What this replaces
+
+Measured before the decision, on the real workbook and the real SQLite checkpointer (`tests/test_persistence.py`):
+
+- The checkpointer was **written but never looked up**: `create_app`'s `graphs` dict answered only the ids that process had started, so a second app on the same file answered `404` for the view and for the resume. A paused investigation inside `checkpoints.db` (the dev file: 5.3 MB, 614 checkpoints, 1965 writes) was unreachable after a restart, so #72 as written would have bought nothing.
+- Only the long-term memory was durable end to end, and its namespace had no visitor in it, so one visitor's "intentional" rejection suppressed that cell for every later visitor on the same demo model. The dev `memory.db` already held `findings.demo / P&L!G5`.
+- Uploads and the usage cap lived in process memory, so a restart forgot them and several instances would each count their own.
+
+## Still open
+
+- Whether the agent's own memory (model maps, overrides, past fixes) also moves into the browser. It would fix the cross-visitor leak above and make memory private by construction, at the cost of the agent no longer learning anything for the next visitor.
+- Whether the usage cap moves to the browser as well; it is the only remaining reason for server-side state, and an in-memory cap is enough for one container.
+- A way for a visitor to clear their history and their memory from the UI.
