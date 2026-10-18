@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import openpyxl
 
-from model_x_ray.spreadsheet.engine import Workbook, column_letters, normalize_ref, split_ref
+from model_x_ray.spreadsheet.engine import FormulaError, Workbook, column_letters, normalize_ref, split_ref
 from model_x_ray.spreadsheet.source import SpreadsheetSource, XlsxSource
 from model_x_ray.state import Patch
 
@@ -54,11 +54,24 @@ def run_sandbox_test(
 ) -> dict[str, dict[str, object]]:
     book = source.load(spreadsheet_id)
     cells = affected_cells(book, patch["cell"])
-    before = {cell: book.value(cell) for cell in cells}
+    before = {}
+    for cell in cells:
+        try:
+            before[cell] = book.value(cell)
+        except FormulaError:
+            before[cell] = None
+    computed = [cell for cell in cells if before[cell] is not None]
     copy_id = sandbox.create_copy(spreadsheet_id)
     try:
         sandbox.apply_patch(copy_id, patch)
-        after = sandbox.read_values(copy_id, cells)
+        after = {}
+        for cell in cells:
+            try:
+                after.update(sandbox.read_values(copy_id, [cell]))
+            except FormulaError:
+                if cell in computed or cell == normalize_ref(patch["cell"]):
+                    raise
+                after[cell] = None
     finally:
         sandbox.discard(copy_id)
     return {"before": before, "after": after}

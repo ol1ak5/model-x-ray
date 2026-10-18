@@ -1,5 +1,6 @@
 import operator
 import re
+from collections import Counter
 from collections.abc import Callable
 from typing import Annotated, Literal, TypedDict
 
@@ -165,8 +166,12 @@ def row_formula_suggestion(book: Workbook, cell: str) -> str | None:
         patterns.append(pattern)
         if source is None:
             source = ref
-    if source is None or any(pattern != patterns[0] for pattern in patterns):
+    if source is None:
         return None
+    common, count = Counter(patterns).most_common(1)[0]
+    if count * 2 <= len(patterns) and len(patterns) > 1:
+        return None
+    source = next(ref for ref in book.cells() if split_ref(ref)[0] == sheet and split_ref(ref)[1].row == address.row and ref != cell and book.formula_pattern(ref) == common)
     return book.shifted_formula(source, cell)
 
 
