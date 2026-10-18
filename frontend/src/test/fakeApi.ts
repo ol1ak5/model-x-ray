@@ -45,19 +45,6 @@ export const REVIEW: InvestigationView = {
   run_log: [],
 };
 
-export const CELL_CHOICE: InvestigationView = {
-  ...REVIEW,
-  status: "needs_cell",
-  pause: { question: "Which cell do you mean?", candidates: ["P&L!H8", "Summary!D10"] },
-  target: null,
-  causal_tree: null,
-  hypotheses: [],
-  evidence: [],
-  verifications: [],
-  patch: null,
-  report: null,
-};
-
 export const APPROVED: InvestigationView = { ...REVIEW, status: "done", pause: null, corrected_copy_id: "demo-corrected.xlsx" };
 export const REJECTED: InvestigationView = { ...REVIEW, status: "done", pause: null, corrected_copy_id: null };
 

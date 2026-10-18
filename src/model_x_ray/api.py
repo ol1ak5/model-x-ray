@@ -47,7 +47,7 @@ XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.s
 
 GENERIC_FAILURE = "Something went wrong during the investigation. The team has the details; please try again."
 
-PUBLIC_FIELDS = ("question", "model_map", "known_overrides", "past_findings", "target", "causal_tree", "hypotheses", "evidence", "verifications", "patch", "report", "corrected_copy_id", "run_log")
+PUBLIC_FIELDS = ("question", "target_choice", "model_map", "known_overrides", "past_findings", "target", "causal_tree", "hypotheses", "evidence", "verifications", "patch", "report", "corrected_copy_id", "run_log")
 
 
 @dataclass
@@ -84,7 +84,6 @@ class StartRequest(BaseModel):
 
 
 class ResumeRequest(BaseModel):
-    ref: str | None = None
     action: Literal["approve", "edit", "reject"] | None = None
     reason: str = ""
     patch: dict[str, Any] | None = None
@@ -157,9 +156,7 @@ def sse(event: str, data: dict) -> str:
 def investigation_view(graph: CompiledStateGraph, investigation_id: str) -> dict:
     snapshot = graph.get_state({"configurable": {"thread_id": investigation_id}})
     pauses = [interrupt.value for task in snapshot.tasks for interrupt in task.interrupts]
-    if "choose_target" in snapshot.next:
-        status = "needs_cell"
-    elif "human_review" in snapshot.next:
+    if "human_review" in snapshot.next:
         status = "needs_review"
     else:
         status = "done"

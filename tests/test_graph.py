@@ -92,20 +92,17 @@ def test_human_rejection_ends_without_writing_anything() -> None:
     assert graph.get_state(config).next == ()
 
 
-def test_ambiguous_question_pauses_until_the_user_picks_a_cell() -> None:
+def test_an_ambiguous_question_is_resolved_by_the_agent_and_the_only_pause_is_the_review() -> None:
     graph = build_graph(InMemorySaver(), diagnose=nodes.stub_diagnose)
     config = {"configurable": {"thread_id": "ambiguous"}}
 
     paused = graph.invoke({"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump?"}, config)
-
-    assert graph.get_state(config).next == ("choose_target",)
-    assert paused["__interrupt__"][0].value["candidates"] == ["P&L!H8", "Summary!D10"]
-
-    graph.invoke(Command(resume={"ref": "Summary!D10"}), config)
     state = graph.get_state(config).values
 
-    assert state["target"]["sheet"] == "Summary"
     assert graph.get_state(config).next == ("human_review",)
+    assert state["target"]["sheet"] == "P&L"
+    assert state["target_choice"]["candidates"] == ["P&L!H8", "Summary!D10"]
+    assert paused["__interrupt__"][0].value["report"].startswith("2 cells match")
 
 
 def test_paused_investigation_survives_a_restart(tmp_path: Path) -> None:
