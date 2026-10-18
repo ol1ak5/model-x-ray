@@ -1,10 +1,11 @@
 import hashlib
+import math
 import re
 from collections import deque
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 from typing import TypedDict
 
 CellContent = float | str | bool
@@ -38,6 +39,7 @@ SUPPORTED_FUNCTIONS = (
     "SUM", "AVERAGE", "MIN", "MAX", "IF", "ROUND", "ABS",
     "IFERROR", "AND", "OR", "NOT", "SUMIF", "SUMIFS", "COUNTIF", "COUNTIFS", "SUMPRODUCT", "INDEX", "MATCH", "VLOOKUP", "XLOOKUP", "EOMONTH",
     "YEAR", "MONTH", "DAY", "DATE", "EDATE", "NPV", "XNPV",
+    "POWER", "ROUNDDOWN", "INT", "MOD", "PPMT", "XIRR",
 )
 TIMELINE_ROWS = 30
 YEAR_RANGE = (1900, 2100)
@@ -279,6 +281,67 @@ def matches_criteria(value: Value, criteria: Value) -> bool:
 def round_half_up(value: float, digits: int) -> float:
     quantum = Decimal(1).scaleb(-digits)
     return float(Decimal(str(value)).quantize(quantum, rounding=ROUND_HALF_UP))
+
+
+def round_down(value: float, digits: int) -> float:
+    quantum = Decimal(1).scaleb(-digits)
+    return float(Decimal(str(value)).quantize(quantum, rounding=ROUND_DOWN))
+
+
+def excel_power(base: float, exponent: float, ref: str) -> float:
+    if base == 0 and exponent < 0:
+        raise FormulaError(f"#DIV/0! zero raised to a negative power in {ref}")
+    if base < 0 and exponent != int(exponent):
+        raise FormulaError(f"#NUM! negative number raised to a fractional power in {ref}")
+    try:
+        return float(base**exponent)
+    except OverflowError as error:
+        raise FormulaError(f"#NUM! power too large in {ref}") from error
+
+
+def payment(rate: float, periods: float, present: float, future: float, due: int) -> float:
+    if rate == 0:
+        return -(present + future) / periods
+    growth = (1 + rate) ** periods
+    return -(rate * (present * growth + future)) / ((1 + rate * due) * (growth - 1))
+
+
+def future_value(rate: float, periods: float, pmt: float, present: float, due: int) -> float:
+    if rate == 0:
+        return -(present + pmt * periods)
+    growth = (1 + rate) ** periods
+    return -(present * growth + pmt * (1 + rate * due) * (growth - 1) / rate)
+
+
+def dated_npv(rate: float, flows: list[float], years: list[float]) -> float:
+    return sum(flow / (1 + rate) ** year for flow, year in zip(flows, years))
+
+
+def dated_irr(flows: list[float], years: list[float], guess: float) -> float | None:
+    rate = guess
+    for _ in range(100):
+        value = dated_npv(rate, flows, years)
+        slope = sum(-year * flow / (1 + rate) ** (year + 1) for flow, year in zip(flows, years))
+        if slope == 0:
+            break
+        step = value / slope
+        rate -= step
+        if rate <= -1:
+            break
+        if abs(step) < 1e-12:
+            return rate
+    low, high = -0.999999, 1.0
+    while dated_npv(high, flows, years) > 0 and high < 1e6:
+        high *= 2
+    if dated_npv(low, flows, years) * dated_npv(high, flows, years) > 0:
+        return None
+    for _ in range(300):
+        middle = (low + high) / 2
+        if dated_npv(low, flows, years) * dated_npv(middle, flows, years) <= 0:
+            high = middle
+        else:
+            low = middle
+    return (low + high) / 2
 
 
 def flatten(values: list[Value | list[Value]]) -> Iterator[Value]:
@@ -595,7 +658,7 @@ class FormulaEvaluator:
         while self.at_op("^"):
             self.take()
             right = self.unary()
-            left = self.number(left) ** self.number(right)
+            left = excel_power(self.number(left), self.number(right), self.ref)
         return left
 
     def unary(self) -> Value:
@@ -819,6 +882,46 @@ class FormulaEvaluator:
         if len(flows) != len(days) or not days:
             raise FormulaError(f"XNPV needs one date per cash flow in {self.ref}")
         return sum(self.number(flow) / (1 + rate) ** ((day - days[0]) / 365) for flow, day in zip(flows, days))
+
+    def call_power(self, values: list) -> Value:
+        return excel_power(self.number(values[0]), self.number(values[1]), self.ref)
+
+    def call_rounddown(self, values: list) -> Value:
+        return round_down(self.number(values[0]), int(self.number(values[1])))
+
+    def call_int(self, values: list) -> Value:
+        return float(math.floor(self.number(values[0])))
+
+    def call_mod(self, values: list) -> Value:
+        number, divisor = self.number(values[0]), self.number(values[1])
+        if divisor == 0:
+            raise FormulaError(f"#DIV/0! MOD by zero in {self.ref}")
+        return number - divisor * math.floor(number / divisor)
+
+    def call_ppmt(self, values: list) -> Value:
+        rate, period, periods, present = (self.number(v) for v in values[:4])
+        future = self.number(values[4]) if len(values) > 4 and values[4] is not None else 0.0
+        due = 1 if len(values) > 5 and values[5] is not None and self.number(values[5]) else 0
+        if not 1 <= period <= periods:
+            raise FormulaError(f"#NUM! PPMT period {period:g} is outside 1 to {periods:g} in {self.ref}")
+        pmt = payment(rate, periods, present, future, due)
+        if due and period == 1:
+            return pmt
+        interest = future_value(rate, period - 1, pmt, present, due) * rate
+        return pmt - (interest / (1 + rate) if due else interest)
+
+    def call_xirr(self, values: list) -> Value:
+        flows = [self.number(flow) for flow in self.cells_of(values[0])]
+        days = [to_serial(day) for day in self.cells_of(values[1])]
+        if len(flows) != len(days) or not days:
+            raise FormulaError(f"#NUM! XIRR needs one date per cash flow in {self.ref}")
+        if not (any(flow > 0 for flow in flows) and any(flow < 0 for flow in flows)):
+            raise FormulaError(f"#NUM! XIRR needs at least one positive and one negative cash flow in {self.ref}")
+        guess = self.number(values[2]) if len(values) > 2 and values[2] is not None else 0.1
+        rate = dated_irr(flows, [(day - days[0]) / 365 for day in days], guess)
+        if rate is None:
+            raise FormulaError(f"#NUM! XIRR found no rate that sets the cash flows to zero in {self.ref}")
+        return rate
 
     def call_eomonth(self, values: list) -> Value:
         start = from_serial(to_serial(values[0]))

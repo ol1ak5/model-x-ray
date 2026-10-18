@@ -111,3 +111,60 @@ def test_an_investigation_finds_the_planted_error_in_a_model_built_with_lookups(
     assert state["hypotheses"][0]["cell"] == "P&L!H7"
     assert state["hypotheses"][0]["status"] == "confirmed"
     assert state["verifications"][-1]["after"]["P&L!H8"] == pytest.approx(44.73, abs=0.01)
+
+
+FINANCE_FORMULAS = {
+    "A1": "=POWER(2,10)",
+    "A2": "=2^-1",
+    "A3": "=ROUNDDOWN(3.789,2)",
+    "A4": "=ROUNDDOWN(-3.789,1)",
+    "A5": "=ROUNDDOWN(31415.92654,-2)",
+    "A6": "=INT(8.9)",
+    "A7": "=INT(-8.9)",
+    "A8": "=MOD(3,2)",
+    "A9": "=MOD(-3,2)",
+    "A10": "=MOD(3,-2)",
+    "A11": "=PPMT(10%/12,1,24,2000)",
+    "A12": "=PPMT(8%,10,10,200000)",
+    "A13": "=_xlfn.XIRR(Flows!A1:A5,Flows!B1:B5)",
+    "A14": "=PPMT(0,3,4,1000)",
+    "A15": "=SUM(Flows!A1:A5)-PPMT(5%,2,3,Flows!A2,0,1)",
+    "B1": "=POWER(-8,1/3)",
+    "B2": "=(-8)^(1/3)",
+    "B3": "=POWER(0,-1)",
+    "B4": "=MOD(3,0)",
+    "B5": "=XIRR(Flows!C1:C2,Flows!B1:B2)",
+    "B6": "=PPMT(5%,5,4,1000)",
+}
+
+FINANCE_EXPECTED = {
+    "A1": 1024.0, "A2": 0.5, "A3": 3.78, "A4": -3.7, "A5": 31400.0, "A6": 8.0, "A7": -9.0,
+    "A8": 1.0, "A9": 1.0, "A10": -1.0, "A11": -75.623186, "A12": -27598.053462, "A13": 0.373362534, "A14": -250.0,
+    "A15": 3872.323553,
+}
+
+FINANCE_ERRORS = {"B1": "#NUM!", "B2": "#NUM!", "B3": "#DIV/0!", "B4": "#DIV/0!", "B5": "#NUM!", "B6": "#NUM!"}
+
+
+def test_finance_functions_from_a_real_project_finance_model_calculate_like_excel(tmp_path: Path) -> None:
+    workbook = openpyxl.Workbook()
+    flows = workbook.active
+    flows.title = "Flows"
+    for row, (flow, day) in enumerate(
+        [(-10000, datetime(2008, 1, 1)), (2750, datetime(2008, 3, 1)), (4250, datetime(2008, 10, 30)), (3250, datetime(2009, 2, 15)), (2750, datetime(2009, 4, 1))], start=1
+    ):
+        flows[f"A{row}"], flows[f"B{row}"] = flow, day
+    flows["C1"], flows["C2"] = 100, 50
+    calc = workbook.create_sheet("Calc")
+    for ref, formula in FINANCE_FORMULAS.items():
+        calc[ref] = formula
+    workbook.save(tmp_path / "finance.xlsx")
+    book = load_xlsx(tmp_path / "finance.xlsx")
+
+    for ref, expected in FINANCE_EXPECTED.items():
+        assert book.value(f"Calc!{ref}") == pytest.approx(expected, abs=1e-6), ref
+    assert set(book.precedents("Calc!A13")) == {f"Flows!{c}{r}" for c in "AB" for r in range(1, 6)}
+    assert "Calc!A15" in book.dependents("Flows!A2")
+    for ref, code in FINANCE_ERRORS.items():
+        with pytest.raises(FormulaError, match=code):
+            book.value(f"Calc!{ref}")

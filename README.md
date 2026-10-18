@@ -68,12 +68,12 @@ The suite runs realistic scenarios end to end — a whole formula trace, a full 
 
 Deliberately the small set real financial models use; an unsupported function fails the load with an error naming it instead of producing wrong numbers.
 
-- Maths: `SUM`, `AVERAGE`, `MIN`, `MAX`, `ROUND`, `ABS`, `SUMPRODUCT`
+- Maths: `SUM`, `AVERAGE`, `MIN`, `MAX`, `ROUND`, `ROUNDDOWN`, `INT`, `MOD`, `POWER`, `ABS`, `SUMPRODUCT`
 - Logic: `IF`, `IFERROR`, `AND`, `OR`, `NOT`
 - Conditional: `SUMIF`, `SUMIFS`, `COUNTIF`, `COUNTIFS`
 - Lookups: `INDEX`, `MATCH`, `VLOOKUP`, `XLOOKUP`
 - Dates: `EOMONTH`, `EDATE`, `YEAR`, `MONTH`, `DAY`, `DATE`
-- Valuation: `NPV`, `XNPV`
+- Valuation and debt: `NPV`, `XNPV`, `XIRR`, `PPMT`
 
 Plus references (`A1`, `$C$7`, ranges, other sheets, quoted names), operators (`+ - * / ^ &`, comparisons), percentages, `_xlfn.` prefixes, and Excel-faithful error semantics (`IF` evaluates only the branch it returns, `IFERROR` never hides an unsupported function). Full spec: [`docs/spreadsheet-core.md`](docs/spreadsheet-core.md).
 
