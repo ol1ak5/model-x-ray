@@ -70,10 +70,10 @@ def test_cases_are_read_split_by_spreadsheet_and_scored_against_the_corrected_fi
     assert control["false_alarm"] is False
 
     missing = run_case(SETUP_RULES, cases[2], tmp_path / "work")
-    assert missing["error"].startswith("missing file")
+    assert missing["excluded"].startswith("file not in the corpus download")
 
     summary = summarize([row, control, missing])
     assert summary["cases"] == 1
     assert summary["root_cause_found"] == "1 of 1"
     assert summary["false_alarms"] == "0 of 1"
-    assert summary["skipped"] == 1
+    assert (summary["skipped"], summary["excluded"]) == (0, 1)

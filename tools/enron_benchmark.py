@@ -66,7 +66,7 @@ def main() -> None:
         if args.controls:
             rows.append(run_case(setup, case, args.data / "work", corrected=True))
         last = rows[-1]
-        print(f"error {case.error}: {last.get('error') or ('found' if last.get('root_cause_found') else 'not found')}", flush=True)
+        print(f"error {case.error}: {last.get('excluded') or last.get('error') or ('found' if last.get('root_cause_found') else 'not found')}", flush=True)
     output = args.data / f"results-{args.setup}-{args.split}.json"
     summary = summarize(rows)
     output.write_text(json.dumps({"summary": summary, "rows": rows}, indent=1, default=str))

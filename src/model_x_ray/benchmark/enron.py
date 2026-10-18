@@ -116,7 +116,7 @@ def run_case(
     path = case.corrected_file if corrected else case.faulty_file
     row: dict = {"setup": setup.name, "error_nr": case.error, "spreadsheet": case.spreadsheet, "file": "corrected" if corrected else "faulty", "description": case.description, "error": None}
     if not path.is_file():
-        return {**row, "error": f"missing file {path.name}"}
+        return {**row, "error": None, "excluded": f"file not in the corpus download: {path.name}"}
     spreadsheet_id = f"enron-{case.error}-{row['file']}"
     source = XlsxSource({spreadsheet_id: path})
     sandbox = XlsxSandbox(source, workdir)
@@ -125,6 +125,8 @@ def run_case(
         graph = build_setup_graph(setup, source, sandbox, spreadsheet_id, factory)
         final = drive_graph(graph, {"spreadsheet_id": spreadsheet_id, "question": ""}, {"configurable": {"thread_id": f"{spreadsheet_id}-{uuid4().hex[:6]}"}})
     except Exception as error:
+        if "reads another workbook" in str(error):
+            return {**row, "error": None, "excluded": "links to another workbook, whose values are not in the file"}
         return {**row, "error": f"{type(error).__name__}: {str(error)[:160]}", "latency_ms": (time.perf_counter() - started) * 1000}
     latency_ms = (time.perf_counter() - started) * 1000
     verifications = final.get("verifications", [])
@@ -155,6 +157,8 @@ def count(rows: list[dict], field: str) -> str:
 
 
 def summarize(rows: list[dict]) -> dict:
+    excluded = [row for row in rows if row.get("excluded")]
+    rows = [row for row in rows if not row.get("excluded")]
     ran = [row for row in rows if row["error"] is None]
     faulty = [row for row in ran if row["file"] == "faulty"]
     corrected = [row for row in ran if row["file"] == "corrected"]
@@ -166,6 +170,7 @@ def summarize(rows: list[dict]) -> dict:
         "fix_matches_correction": count(faulty, "fix_matches_correction"),
         "false_alarms": count(corrected, "false_alarm"),
         "skipped": len(rows) - len(ran),
+        "excluded": len(excluded),
         "latency_p50_s": round(percentile(latencies, 0.5), 1),
         "latency_p95_s": round(percentile(latencies, 0.95), 1),
         "cost_usd_total": round(sum(row["cost_usd"] for row in ran), 4),
