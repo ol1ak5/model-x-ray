@@ -1,8 +1,10 @@
+import re
 from datetime import date, datetime
 from pathlib import Path
 
 import openpyxl
 import pytest
+from openpyxl.workbook.defined_name import DefinedName
 from conftest import write_demo_workbook
 from test_investigator import OutlierScanner
 
@@ -168,3 +170,52 @@ def test_finance_functions_from_a_real_project_finance_model_calculate_like_exce
     for ref, code in FINANCE_ERRORS.items():
         with pytest.raises(FormulaError, match=code):
             book.value(f"Calc!{ref}")
+
+
+def write_project_finance_layout(path: Path) -> Path:
+    workbook = openpyxl.Workbook()
+    inputs = workbook.active
+    inputs.title = "Inputs"
+    inputs["B2"], inputs["B3"], inputs["B4"] = 0.05, 200, 300
+    workbook.defined_names["growth"] = DefinedName("growth", attr_text="Inputs!$B$2")
+    workbook.defined_names["volumes"] = DefinedName("volumes", attr_text="Inputs!$B$3:$B$4")
+    workbook.defined_names["dates_row"] = DefinedName("dates_row", attr_text="Acc!$8:$8")
+    acc = workbook.create_sheet("Acc")
+    acc["H74"] = datetime(2021, 12, 31)
+    for column, (year, debt, scale) in zip("PQR", [(2020, 100, 2), (2021, 90, 3), (2022, 80, 4)]):
+        acc[f"{column}8"] = datetime(year, 12, 31)
+        acc[f"{column}70"] = debt
+        acc[f"{column}78"] = scale
+        acc[f"{column}114"] = f"=-IF({column}8<$H$74,0,INDEX(70:70,1,MATCH($H$74,8:8,0)))*{column}78"
+    acc["B1"] = "=MATCH(EOMONTH(Acc!P8,12),Acc!P8:R8,0)"
+    acc["B2"] = "=SUM(P:P)"
+    acc["B3"] = "=Inputs!B3*(1+growth)"
+    acc["B4"] = "=SUM(volumes)"
+    acc["B5"] = "=MATCH(Acc!H74,dates_row,0)"
+    acc["B6"] = "=IFERROR(#REF!,0)"
+    acc["C1"] = "=#REF!"
+    acc["C2"] = "=Inputs!B3*undefined_rate"
+    acc["C3"] = "=Inputs!#REF!+1"
+    workbook.save(path)
+    return path
+
+
+def test_a_project_finance_layout_with_whole_rows_names_and_dates_calculates_like_excel(tmp_path: Path) -> None:
+    book = load_xlsx(write_project_finance_layout(tmp_path / "layout.xlsx"))
+
+    assert [book.value(f"Acc!{c}114") for c in "PQR"] == [0.0, -270.0, -360.0]
+    assert book.value("Acc!B1") == 2.0
+    assert book.value("Acc!B2") == 100 + 2 + 0.0
+    assert book.value("Acc!B3") == pytest.approx(210.0)
+    assert book.value("Acc!B4") == 500.0
+    assert book.value("Acc!B5") == 17.0
+    assert book.value("Acc!B6") == 0.0
+    for ref, message in {"Acc!C1": "#REF!", "Acc!C2": "#NAME?", "Acc!C3": "#REF!"}.items():
+        with pytest.raises(FormulaError, match=re.escape(message)):
+            book.value(ref)
+
+    assert book.formula_pattern("Acc!P114") == book.formula_pattern("Acc!Q114") == book.formula_pattern("Acc!R114")
+    assert book.shifted_formula("Acc!P114", "Acc!Q114") == book.formula("Acc!Q114")
+    assert {"Acc!P70", "Acc!R70", "Acc!H74", "Acc!R8"} <= set(book.precedents("Acc!Q114"))
+    assert "Acc!B3" in book.dependents("Inputs!B2")
+    assert "Acc!B4" in book.dependents("Inputs!B4")
