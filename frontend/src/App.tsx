@@ -22,8 +22,11 @@ import Progress, { type Step } from "./components/Progress";
 import Report from "./components/Report";
 import Review from "./components/Review";
 import SheetGrid, { type Marks } from "./components/SheetGrid";
+import { clearCurrent, currentRun, newRunId, saveRun } from "./storage";
 
 type Phase = "idle" | "running" | "paused" | "done";
+
+type Run = { id: string; spreadsheetId: string; name: string; question: string; startedAt: number };
 
 const UNREACHABLE = "The Model X-Ray service could not be reached. Please try again.";
 
@@ -47,6 +50,7 @@ function marksOf(view: InvestigationView): Marks {
 
 export default function App() {
   const [demos, setDemos] = useState<Spreadsheet[]>([]);
+  const [check, setCheck] = useState<Run | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
   const [steps, setSteps] = useState<Step[]>([]);
   const [view, setView] = useState<InvestigationView | null>(null);
@@ -64,6 +68,22 @@ export default function App() {
   }
 
   useEffect(() => {
+    const saved = currentRun();
+    if (!saved) return;
+    setCheck({ id: saved.id, spreadsheetId: saved.spreadsheetId, name: saved.name, question: saved.question, startedAt: saved.startedAt });
+    setSteps(saved.steps);
+    setView(saved.view);
+    setSheet(saved.sheet);
+    setModelName(saved.name);
+    setPhase(saved.view ? (saved.view.status === "done" ? "done" : "paused") : "idle");
+  }, []);
+
+  useEffect(() => {
+    if (!check) return;
+    saveRun({ ...check, updatedAt: Date.now(), steps, view, sheet });
+  }, [check, steps, view, sheet]);
+
+  useEffect(() => {
     listSpreadsheets()
       .then(setDemos)
       .catch((reason: unknown) => setError(reason instanceof ApiError ? reason.message : UNREACHABLE));
@@ -74,7 +94,7 @@ export default function App() {
     if (!view || !targetKey) return;
     getSheet(view.id)
       .then(setSheet)
-      .catch(() => setSheet(null));
+      .catch(() => undefined);
   }, [targetKey]);
 
   function onEvent(event: ProgressEvent) {
@@ -105,6 +125,7 @@ export default function App() {
     setError(null);
     setModelName(name);
     setPhase("running");
+    setCheck({ id: newRunId(), spreadsheetId, question, name, startedAt: Date.now() });
     void run(startInvestigation(spreadsheetId, question, onEvent));
   }
 
@@ -121,6 +142,8 @@ export default function App() {
     setSheet(null);
     setError(null);
     setPhase("idle");
+    setCheck(null);
+    clearCurrent();
   }
 
   const started = phase === "running" || steps.length > 0 || view !== null;

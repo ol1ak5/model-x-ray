@@ -15,13 +15,15 @@ One entry per investigation under a versioned key, `model-x-ray:runs:v1`:
 | `view` | the investigation view the API returns (`InvestigationView`): the whole picture the UI draws |
 | `sheet` | the sheet window around the target, so the grid survives a reload |
 
-Measured size for the demo model: `view` 11 KB and `sheet` 6 KB (`frontend/src/test/recorded/`), so about 17 KB per run and roughly 300 runs inside the 5 MB per-origin quota. Rules the code follows:
+`id` is minted by the browser (`newRunId`) so a run is stored from its first streamed step; the investigation id the API returns travels inside `view`. A second entry, `current`, points at the run on screen: "Check another model" clears the pointer and keeps the history.
 
-- Keep the newest 25 runs, oldest evicted first, and evict on `QuotaExceededError` before giving up on a write.
+Measured size for the demo model: `view` 11 KB and `sheet` 6 KB, so about 17 KB per run and roughly 300 runs inside the 5 MB per-origin quota. Rules the code follows (`frontend/src/storage.ts`):
+
+- Keep the newest 25 runs, oldest evicted first, and keep dropping the oldest on `QuotaExceededError` before giving up on the write.
 - `localStorage` holds strings only: the corrected `.xlsx` is **downloaded** when the visitor approves, never stored. A real model can be 10 MB, base64 would not fit, and keeping it would be a second copy of deal data.
-- `localStorage` is synchronous: write on `view` events and on decisions, not on every streamed step.
-- A corrupt or foreign value, or storage that refuses to work (private mode), degrades to "no history" and never breaks the app.
-- A `version` field inside the value, so a later shape can migrate or be dropped.
+- Write whenever the picture changes (each streamed step, each view, each decision). A run emits a handful of events and the payload grows to a couple of KB, so a synchronous write is cheaper than the bookkeeping a debounce would need.
+- A restored run asks the API for a fresh sheet window and keeps the stored one when the API cannot answer, so the grid survives both a reload and a server restart.
+- A value with another version, or that is not our shape, is ignored: the app falls back to the home page. A stored run missing `view` or `sheet` is normalized to `null` on read, so a stale entry can never leave the app half-restored. Storage that refuses to work (private mode) leaves the app running without history.
 
 ## What the server does
 
@@ -54,6 +56,7 @@ Measured before the decision, on the real workbook and the real SQLite checkpoin
 
 ## Still open
 
-- Whether the agent's own memory (model maps, overrides, past fixes) also moves into the browser. It would fix the cross-visitor leak above and make memory private by construction, at the cost of the agent no longer learning anything for the next visitor.
+- The server half (#143): the browser keeps the run today, but a restored *paused* check can only be answered while the same process still holds its thread, because `resume` looks the id up in `create_app`'s `graphs`. Continuing from the carried state is what makes the restore survive a restart.
+- Whether the agent's own memory (model maps, overrides, past fixes) also moves into the browser (#144). It would fix the cross-visitor leak above and make memory private by construction, at the cost of the agent no longer learning anything for the next visitor.
 - Whether the usage cap moves to the browser as well; it is the only remaining reason for server-side state, and an in-memory cap is enough for one container.
-- A way for a visitor to clear their history and their memory from the UI.
+- A way for a visitor to clear their history and their memory from the UI. Deleting an entry and dropping a foreign value already work in the store (`deleteRun`, `clearRuns`); nothing calls them yet.
