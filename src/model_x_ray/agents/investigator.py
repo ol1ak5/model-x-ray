@@ -287,9 +287,10 @@ def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_t
                 new_formula = row_formula_suggestion(book, patch_cell) or column_formula_suggestion(book, patch_cell) or new_formula
             patch = {"cell": patch_cell, "old_formula": old_formula(book, patch_cell), "new_formula": new_formula, "source": "agent"}
         target = state["target"]
-        if patch is None and target.get("mode") == "table":
+        if patch is None and (target.get("mode") == "table" or target.get("other_findings")):
             tried = {h["cell"] for h in state.get("hypotheses", []) if h["status"] != "open"}
-            findings = [{"cell": f"{target['sheet']}!{target['cell']}", "reason": target["finding"], "fix": target.get("expected_formula")}, *target.get("other_findings", [])]
+            own = [{"cell": f"{target['sheet']}!{target['cell']}", "reason": target["finding"], "fix": target.get("expected_formula")}] if target.get("mode") == "table" else []
+            findings = [*own, *target.get("other_findings", [])]
             untried = [f for f in findings if f.get("fix") and f["cell"] not in tried and f["cell"] not in intentional]
             if untried:
                 proposed_cells = {h["cell"] for h in hypotheses}

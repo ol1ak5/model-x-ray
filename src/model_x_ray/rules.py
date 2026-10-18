@@ -17,11 +17,29 @@ def is_period_cell(book: Workbook, ref: str) -> bool:
     return bool(header and (PERIOD_LIKE.search(header) or book.in_timeline(ref)) and book.row_label(ref)) and (is_number(raw) or book.formula(ref) is not None)
 
 
+def row_fix(book: Workbook, ref: str) -> str | None:
+    sheet, address = split_ref(ref)
+    neighbours = [cell for cell in book.cells() if split_ref(cell)[0] == sheet and split_ref(cell)[1].row == address.row and cell != ref and book.formula(cell) is not None]
+    patterns = Counter(book.formula_pattern(cell) for cell in neighbours)
+    if not patterns:
+        return None
+    common, _ = patterns.most_common(1)[0]
+    source = min((cell for cell in neighbours if book.formula_pattern(cell) == common), key=lambda cell: abs(split_ref(cell)[1].column - address.column))
+    return book.shifted_formula(source, ref)
+
+
 def scan_model(book: Workbook) -> list[dict[str, str]]:
     cells = [ref for ref in book.cells() if is_period_cell(book, ref) and PERIOD_LIKE.search(book.column_header(ref) or "")]
+    edges: dict[tuple[str, int], tuple[int, int]] = {}
+    for ref in cells:
+        sheet, address = split_ref(ref)
+        low, high = edges.get((sheet, address.row), (address.column, address.column))
+        edges[(sheet, address.row)] = (min(low, address.column), max(high, address.column))
     found = []
     for outlier in row_outliers(book, cells):
         sheet, address = split_ref(outlier["cell"])
+        if outlier["reason"].startswith("reference pattern differs") and address.column in edges[(sheet, address.row)]:
+            continue
         if outlier["reason"].startswith("typed value"):
             left = [ref for ref in cells if split_ref(ref)[0] == sheet and split_ref(ref)[1].row == address.row and split_ref(ref)[1].column < address.column]
             if not any(book.formula(ref) is not None for ref in left):

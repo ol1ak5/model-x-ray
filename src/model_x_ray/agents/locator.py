@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from model_x_ray.llm import invoke_with_usage, model_name_of
 from model_x_ray.prompts import load_prompt
-from model_x_ray.rules import is_period_cell, scan_model, scan_tables
+from model_x_ray.rules import is_period_cell, row_fix, scan_model, scan_tables
 from model_x_ray.spreadsheet.engine import CellAddress, FormulaError, Workbook, make_ref, normalize_ref, split_ref
 from model_x_ray.state import InvestigationState, ModelMap, TargetCell
 from model_x_ray.tools import find_cells
@@ -140,10 +140,14 @@ def make_locate_node(llm: BaseChatModel | None, book: Workbook) -> Callable[[Inv
 
     def locate(state: InvestigationState) -> dict:
         if not state.get("question", "").strip():
-            if scan_model(book):
+            outliers = scan_model(book)
+            if outliers:
                 try:
                     ref, question = check_target(book)
-                    return {"target": target_cell(book, ref), "question": question, "target_choice": None}
+                    target = target_cell(book, ref)
+                    ranked = sorted(outliers, key=lambda o: len(book.all_dependents(o["cell"])), reverse=True)
+                    target["other_findings"] = [{"cell": o["cell"], "reason": o["reason"], "fix": row_fix(book, o["cell"])} for o in ranked[:6]]
+                    return {"target": target, "question": question, "target_choice": None}
                 except ValueError:
                     pass
             table = table_check(book)

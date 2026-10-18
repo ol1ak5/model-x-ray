@@ -7,7 +7,7 @@ from langchain_core.runnables import Runnable
 from pydantic import BaseModel, Field
 
 from model_x_ray.llm import invoke_with_usage
-from model_x_ray.rules import scan_tables
+from model_x_ray.rules import scan_model, scan_tables
 from model_x_ray.prompts import load_prompt
 from model_x_ray.spreadsheet.engine import CellAddress, FormulaError, Workbook, is_number, make_ref, normalize_ref, split_ref
 from model_x_ray.state import InvestigationState, Patch, RunLog, Verification
@@ -90,9 +90,10 @@ def _matches(expected: object, actual: object) -> bool:
 
 def _dependent_matches(patched: Workbook, dependent: str, after: dict[str, object]) -> bool:
     try:
-        return _matches(patched.value(dependent), after.get(dependent))
+        value = patched.value(dependent)
     except Exception:
-        return False
+        return dependent in after and after[dependent] is None
+    return _matches(value, after.get(dependent))
 
 
 def _pattern_restored(book: Workbook, patch: Patch, patched: Workbook) -> bool:
@@ -151,6 +152,9 @@ def deterministic_checks(book: Workbook, state: InvestigationState, verification
         and abs(target_after - prior) < abs(target_before - prior)
     )
     patched = book.with_patch(patch["cell"], patch["new_formula"])
+    if not anomaly_resolved:
+        was_flagged = patch["cell"] in {o["cell"] for o in scan_model(book)}
+        anomaly_resolved = was_flagged and patch["cell"] not in {o["cell"] for o in scan_model(patched)}
     dependents_consistent = all(
         _dependent_matches(patched, dependent, after)
         for dependent in book.all_dependents(patch["cell"])
