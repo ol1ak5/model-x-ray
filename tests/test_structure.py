@@ -60,3 +60,24 @@ def test_a_projection_alone_is_a_time_series_model(demo_workbook_path: Path) -> 
 
     assert {block.kind for block in blocks} >= {"temporal"}
     assert describe(blocks).startswith("Time-series model:")
+
+
+def test_every_sheet_with_content_gets_a_kind(tmp_path: Path) -> None:
+    workbook = openpyxl.Workbook()
+    calculator = workbook.active
+    calculator.title = "Calculator"
+    calculator["A1"], calculator["B1"] = "Equity value", 800
+    calculator["A2"], calculator["B2"] = "Debt", 200
+    calculator["A3"], calculator["B3"] = "Debt to capital", "=B2/(B1+B2)"
+    data = workbook.create_sheet("Prices")
+    for row in range(1, 8):
+        data[f"A{row}"], data[f"B{row}"] = f"Day {row}", 50 + row
+    readme = workbook.create_sheet("Readme")
+    readme["A1"], readme["A2"] = "How to use this model", "Fill the inputs in blue."
+    workbook.create_sheet("Empty")
+    workbook.save(tmp_path / "kinds.xlsx")
+
+    blocks = profile(load_xlsx(tmp_path / "kinds.xlsx"))
+
+    assert {(block.sheet, block.kind) for block in blocks} == {("Calculator", "calculation"), ("Prices", "data"), ("Readme", "notes")}
+    assert describe(blocks) == "Calculation model: calculation on Calculator; data on Prices; notes on Readme."

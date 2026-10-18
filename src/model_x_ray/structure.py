@@ -9,7 +9,8 @@ PERIOD_TEXT = re.compile(r"(?i)^\s*((19|20)\d{2}\s*[abefp]?|fy\s*'?\d{2,4}[abef]
 MIN_COPIES = 3
 MIN_TABLE_ROWS = 4
 COPY_SHARE = 0.6
-MIN_CALCULATIONS = 5
+MIN_CALCULATIONS = 1
+DATA_SHARE = 0.9
 TOTAL_GAP = 3
 INPUT_SHARE = 0.6
 SUMMARY_SHARE = 0.6
@@ -214,6 +215,28 @@ def calculation_block(book: Workbook, sheet: str, cells: dict[tuple[int, int], s
     return Block(sheet, "calculation", min(rows), max(rows), min(columns), max(columns), None, None, f"{len(formulas)} formulas, each line calculated once")
 
 
+def data_block(book: Workbook, sheet: str, cells: dict[tuple[int, int], str], taken: list[Block]) -> Block | None:
+    if any(block.sheet == sheet for block in taken):
+        return None
+    typed = [ref for ref in cells.values() if is_number(book.raw(ref))]
+    formulas = [ref for ref in cells.values() if book.formula(ref) is not None]
+    texts = sum(1 for ref in cells.values() if is_label_text(book.raw(ref)))
+    if len(typed) < MIN_COPIES or len(typed) < DATA_SHARE * (len(typed) + len(formulas)) or len(typed) < texts:
+        return None
+    rows = [split_ref(ref)[1].row for ref in typed]
+    columns = [split_ref(ref)[1].column for ref in typed]
+    return Block(sheet, "data", min(rows), max(rows), min(columns), max(columns), None, None, f"{len(typed)} typed values, {len(formulas)} formulas")
+
+
+def notes_block(book: Workbook, sheet: str, cells: dict[tuple[int, int], str], taken: list[Block]) -> Block | None:
+    if any(block.sheet == sheet for block in taken) or not cells:
+        return None
+    rows = [row for row, _ in cells]
+    columns = [column for _, column in cells]
+    texts = sum(1 for ref in cells.values() if is_label_text(book.raw(ref)))
+    return Block(sheet, "notes", min(rows), max(rows), min(columns), max(columns), None, None, f"{texts} text cells, no calculation")
+
+
 def profile(book: Workbook) -> list[Block]:
     blocks: list[Block] = []
     for sheet in book.sheets:
@@ -223,7 +246,13 @@ def profile(book: Workbook) -> list[Block]:
         blocks += found
     for sheet in book.sheets:
         cells = sheet_cells(book, sheet)
-        extra = inputs_block(book, sheet, cells, blocks) or summary_block(book, sheet, cells, blocks) or calculation_block(book, sheet, cells, blocks)
+        extra = (
+            inputs_block(book, sheet, cells, blocks)
+            or summary_block(book, sheet, cells, blocks)
+            or data_block(book, sheet, cells, blocks)
+            or calculation_block(book, sheet, cells, blocks)
+            or notes_block(book, sheet, cells, blocks)
+        )
         if extra is not None:
             blocks.append(extra)
     return blocks
@@ -239,8 +268,14 @@ def describe(blocks: list[Block]) -> str:
         title = "Table model"
     elif "calculation" in kinds:
         title = "Calculation model"
+    elif "summary" in kinds:
+        title = "Summary workbook"
+    elif "data" in kinds or "inputs" in kinds:
+        title = "Data workbook"
+    elif "notes" in kinds:
+        title = "Text document"
     else:
-        return "Unrecognised layout: no time series, table or calculation was found."
+        return "Empty workbook: no cells to check."
     parts = []
     temporal: dict[tuple[str, str], list[str]] = {}
     for block in blocks:
@@ -261,7 +296,7 @@ def describe(blocks: list[Block]) -> str:
             parts.append(f"table on {sheet} ({found[0].bottom - found[0].top + 1} rows, {'total in ' + totals if totals else 'no total'})")
         else:
             parts.append(f"{len(found)} tables on {sheet}")
-    for kind, name in (("calculation", "calculation"), ("inputs", "assumptions"), ("summary", "summary")):
+    for kind, name in (("calculation", "calculation"), ("inputs", "assumptions"), ("summary", "summary"), ("data", "data"), ("notes", "notes")):
         sheets = [block.sheet for block in blocks if block.kind == kind]
         if sheets:
             parts.append(f"{name} on {', '.join(sheets)}")
