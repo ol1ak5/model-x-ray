@@ -207,10 +207,10 @@ Generated from `src/model_x_ray/finance.py` by `tools/export_formulas.py`.
 `ebitda - ebit * tax_rate - capital_expenditure - change_in_working_capital`
 
 - **Usual names:** fcff, free cash flow to firm, unlevered free cash flow, ufcf, free cash flow
-- **Inputs:** `ebitda` (EBITDA); `ebit` (operating income, the base for the notional tax); `tax_rate` (tax rate); `capital_expenditure` (capital expenditure); `change_in_working_capital` (change in non-cash working capital (and provisions, when the model tracks them))
-- **Convention:** Taxes are notional (operating) taxes: EBIT times the tax rate, as if the company had no debt. The tax saving on interest is in the WACC, through the after-tax cost of debt.
+- **Inputs:** `ebitda` (EBITDA); `ebit` (operating income, the base for the unlevered taxes); `tax_rate` (tax rate); `capital_expenditure` (capital expenditure); `change_in_working_capital` (change in non-cash working capital (and provisions, when the model tracks them))
+- **Convention:** Taxes are unlevered taxes: EBIT times the tax rate, as if the company had no debt. Levered taxes (the P&L tax, after interest) belong to FCFE. The tax saving on interest is in the WACC, through the after-tax cost of debt.
 - **Convention:** Equal to EBIT(1-t) + D&A - capex - change in working capital; only the layout differs.
-- **Typical error:** Actual P&L taxes used instead of notional taxes on EBIT (the interest tax shield counted twice).
+- **Typical error:** Levered taxes (the P&L tax, after interest) used instead of unlevered taxes on EBIT, which counts the interest tax shield twice.
 - **Typical error:** Tax computed on EBITDA instead of EBIT.
 - **Typical error:** Interest deducted from the cash flow.
 - **Typical error:** An increase in working capital added instead of subtracted.
@@ -345,13 +345,14 @@ Generated from `src/model_x_ray/finance.py` by `tools/export_formulas.py`.
 `next_cash_flow / (discount_rate - stable_growth)`
 
 - **Usual names:** terminal value, continuing value, gordon growth, tv
-- **Inputs:** `next_cash_flow` (cash flow in the first year after the forecast); `discount_rate` (cost of capital (or cost of equity for FCFE) in stable growth); `stable_growth` (growth rate in perpetuity)
-- **Convention:** The cash flow is already the first year of the perpetuity: a separate normalised terminal-year column, or a projection whose last year (e.g. 2050) is taken as year n+1.
+- **Inputs:** `next_cash_flow` (cash flow of the terminal column n+1 (2051 when the forecast ends in 2050)); `discount_rate` (cost of capital (or cost of equity for FCFE) in stable growth); `stable_growth` (growth rate in perpetuity)
+- **Convention:** The cash flow is already the first year of the perpetuity: a separate normalised terminal-year column n+1 (2051 when the forecast ends in 2050).
+- **Convention:** The terminal value is dated at the end of year n, so it is discounted with the factor of year n (2050), not of the terminal column (2051).
 - **Convention:** Stable growth cannot exceed the growth of the economy (in practice the risk-free rate).
-- **Typical error:** Last-year cash flow used instead of next year's.
-- **Typical error:** The flow grown twice: a terminal-year (n+1) flow multiplied again by (1 + g).
+- **Typical error:** Last forecast year's cash flow used without growth as if it were year n+1.
+- **Typical error:** The flow grown twice: the terminal-column (n+1) flow multiplied again by (1 + g).
+- **Typical error:** Terminal value discounted with the factor of the terminal column (n+1) instead of year n.
 - **Typical error:** Growth at or above the discount rate.
-- **Typical error:** Terminal value discounted one period too many or too few.
 - **Accepted form of:** terminal value (both practice)
 - **Source:** Damodaran, Valuation lecture slides (NYU Stern, spring 2023): building blocks of valuation, stable growth
 

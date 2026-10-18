@@ -167,15 +167,15 @@ FORMULAS: list[FinancialFormula] = [
     FinancialFormula(
         "fcff_from_ebitda", "Free cash flow to the firm, built from EBITDA", "cash flow",
         "ebitda - ebit * tax_rate - capital_expenditure - change_in_working_capital",
-        {"ebitda": "EBITDA", "ebit": "operating income, the base for the notional tax", "tax_rate": "tax rate", "capital_expenditure": "capital expenditure", "change_in_working_capital": "change in non-cash working capital (and provisions, when the model tracks them)"},
+        {"ebitda": "EBITDA", "ebit": "operating income, the base for the unlevered taxes", "tax_rate": "tax rate", "capital_expenditure": "capital expenditure", "change_in_working_capital": "change in non-cash working capital (and provisions, when the model tracks them)"},
         lambda ebitda, ebit, tax_rate, capital_expenditure, change_in_working_capital: ebitda - max(ebit, 0.0) * tax_rate - capital_expenditure - change_in_working_capital,
         aliases=("fcff", "free cash flow to firm", "unlevered free cash flow", "ufcf", "free cash flow"),
         conventions=(
-            "Taxes are notional (operating) taxes: EBIT times the tax rate, as if the company had no debt. The tax saving on interest is in the WACC, through the after-tax cost of debt.",
+            "Taxes are unlevered taxes: EBIT times the tax rate, as if the company had no debt. Levered taxes (the P&L tax, after interest) belong to FCFE. The tax saving on interest is in the WACC, through the after-tax cost of debt.",
             "Equal to EBIT(1-t) + D&A - capex - change in working capital; only the layout differs.",
         ),
         common_errors=(
-            "Actual P&L taxes used instead of notional taxes on EBIT (the interest tax shield counted twice).",
+            "Levered taxes (the P&L tax, after interest) used instead of unlevered taxes on EBIT, which counts the interest tax shield twice.",
             "Tax computed on EBITDA instead of EBIT.",
             "Interest deducted from the cash flow.",
             "An increase in working capital added instead of subtracted.",
@@ -290,11 +290,20 @@ FORMULAS: list[FinancialFormula] = [
     FinancialFormula(
         "terminal_value_gordon", "Terminal value from the first year of the perpetuity", "valuation",
         "next_cash_flow / (discount_rate - stable_growth)",
-        {"next_cash_flow": "cash flow in the first year after the forecast", "discount_rate": "cost of capital (or cost of equity for FCFE) in stable growth", "stable_growth": "growth rate in perpetuity"},
+        {"next_cash_flow": "cash flow of the terminal column n+1 (2051 when the forecast ends in 2050)", "discount_rate": "cost of capital (or cost of equity for FCFE) in stable growth", "stable_growth": "growth rate in perpetuity"},
         lambda next_cash_flow, discount_rate, stable_growth: ratio(next_cash_flow, discount_rate - stable_growth),
         aliases=("terminal value", "continuing value", "gordon growth", "tv"),
-        conventions=("The cash flow is already the first year of the perpetuity: a separate normalised terminal-year column, or a projection whose last year (e.g. 2050) is taken as year n+1.", "Stable growth cannot exceed the growth of the economy (in practice the risk-free rate)."),
-        common_errors=("Last-year cash flow used instead of next year's.", "The flow grown twice: a terminal-year (n+1) flow multiplied again by (1 + g).", "Growth at or above the discount rate.", "Terminal value discounted one period too many or too few."),
+        conventions=(
+            "The cash flow is already the first year of the perpetuity: a separate normalised terminal-year column n+1 (2051 when the forecast ends in 2050).",
+            "The terminal value is dated at the end of year n, so it is discounted with the factor of year n (2050), not of the terminal column (2051).",
+            "Stable growth cannot exceed the growth of the economy (in practice the risk-free rate).",
+        ),
+        common_errors=(
+            "Last forecast year's cash flow used without growth as if it were year n+1.",
+            "The flow grown twice: the terminal-column (n+1) flow multiplied again by (1 + g).",
+            "Terminal value discounted with the factor of the terminal column (n+1) instead of year n.",
+            "Growth at or above the discount rate.",
+        ),
         source=DAMODARAN_SLIDES, concept="terminal value", practice="both",
     ),
     FinancialFormula(
