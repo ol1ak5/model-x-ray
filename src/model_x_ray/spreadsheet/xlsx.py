@@ -51,6 +51,7 @@ def load_xlsx(path: Path) -> Workbook:
     reader.read()
     source = reader.wb
     notes = sheet_notes(reader)
+    names = {name: defined.attr_text for name, defined in source.defined_names.items() if defined.attr_text}
     cells: dict[str, CellContent] = {}
     metadata: dict[str, CellMetadata] = {}
     try:
@@ -69,4 +70,4 @@ def load_xlsx(path: Path) -> Workbook:
                         metadata[ref] = {"note": notes.get(ref), "font_color": color, "number_format": number_format}
     finally:
         source.close()
-    return Workbook(cells, notes, source.sheetnames, metadata)
+    return Workbook(cells, notes, source.sheetnames, metadata, names)

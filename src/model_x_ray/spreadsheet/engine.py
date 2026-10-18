@@ -21,10 +21,13 @@ TOKEN_PATTERN = re.compile(
     r"""
     (?P<ws>\s+)
     |(?P<string>"(?:[^"]|"")*")
+    |(?P<error>(?:(?:'(?:[^']|'')+'|[A-Za-z_][A-Za-z0-9_&.]*)!)?\#(?:REF!|N/A|DIV/0!|VALUE!|NAME\?|NUM!|NULL!))
+    |(?P<span>(?:(?:'(?:[^']|'')+'|[A-Za-z_][A-Za-z0-9_&.]*)!)?(?:\$?[0-9]+:\$?[0-9]+|\$?[A-Za-z]{1,3}:\$?[A-Za-z]{1,3})(?![A-Za-z0-9_]))
     |(?P<func>[A-Za-z_][A-Za-z0-9_.]*(?=\())
-    |(?P<ref>(?:(?:'(?:[^']|'')+'|[A-Za-z_][A-Za-z0-9_&.]*)!)?\$?[A-Za-z]{1,3}\$?[0-9]+(?::\$?[A-Za-z]{1,3}\$?[0-9]+)?)
+    |(?P<ref>(?:(?:'(?:[^']|'')+'|[A-Za-z_][A-Za-z0-9_&.]*)!)?\$?[A-Za-z]{1,3}\$?[0-9]+(?::\$?[A-Za-z]{1,3}\$?[0-9]+)?(?![A-Za-z0-9_]))
     |(?P<number>[0-9]+(?:\.[0-9]+)?(?:[eE][-+]?[0-9]+)?%?)
-    |(?P<bool>TRUE|FALSE)
+    |(?P<bool>(?:TRUE|FALSE)(?![A-Za-z0-9_.]))
+    |(?P<name>[A-Za-z_\\][A-Za-z0-9_.]*)
     |(?P<op><=|>=|<>|[-+*/^&=<>])
     |(?P<lparen>\()
     |(?P<rparen>\))
@@ -33,6 +36,10 @@ TOKEN_PATTERN = re.compile(
     re.VERBOSE,
 )
 
+INFORMATION_FUNCTIONS = ("ISERROR", "ISNUMBER", "ISTEXT", "ISBLANK")
+SPAN_PATTERN = re.compile(r"(\$?)([0-9]+|[A-Za-z]{1,3})")
+MAX_ROWS = 1048576
+MAX_COLUMNS = 16384
 CELL_PATTERN = re.compile(r"(\$?)([A-Za-z]{1,3})(\$?)([0-9]+)")
 
 SUPPORTED_FUNCTIONS = (
@@ -40,6 +47,8 @@ SUPPORTED_FUNCTIONS = (
     "IFERROR", "AND", "OR", "NOT", "SUMIF", "SUMIFS", "COUNTIF", "COUNTIFS", "SUMPRODUCT", "INDEX", "MATCH", "VLOOKUP", "XLOOKUP", "EOMONTH",
     "YEAR", "MONTH", "DAY", "DATE", "EDATE", "NPV", "XNPV",
     "POWER", "ROUNDDOWN", "INT", "MOD", "PPMT", "XIRR",
+    "PMT", "IRR", "HLOOKUP", "COUNT", "COUNTA", "ISERROR", "ISTEXT", "ISNUMBER", "ISBLANK", "LARGE", "SMALL", "CHOOSE",
+    "EXP", "LN", "NORMSDIST", "NORM.S.DIST",
 )
 YEAR_RANGE = (1900, 2100)
 PERIOD_INDEX_RANGE = (-50, 200)
@@ -80,6 +89,9 @@ class Grid(list):
 
     def column(self, column: int) -> list["Value"]:
         return [self.at(row, column) for row in range(1, self.height + 1)]
+
+    def row(self, row: int) -> list["Value"]:
+        return [self.at(row, column) for column in range(1, self.width + 1)]
 
 
 @dataclass
@@ -158,7 +170,12 @@ def expand_range(text: str) -> list[str]:
     ]
 
 
+EXTERNAL_LINK = re.compile(r"\[[0-9]+\][^!\"]*!")
+
+
 def tokenize(formula: str) -> list[Token]:
+    if EXTERNAL_LINK.search(formula):
+        raise UnsupportedFormulaError(f"Formula {formula!r} reads another workbook; links to other files are not supported, so open the linked file and paste its values")
     tokens: list[Token] = []
     position = 1 if formula.startswith("=") else 0
     while position < len(formula):
@@ -192,6 +209,32 @@ def expand(reference: Reference, base_sheet: str) -> list[str]:
         for row in range(min(reference.start.row, end.row), max(reference.start.row, end.row) + 1)
         for column in range(min(reference.start.column, end.column), max(reference.start.column, end.column) + 1)
     ]
+
+
+@dataclass(frozen=True)
+class Span:
+    sheet: str | None
+    sheet_text: str
+    rows: bool
+    first: int
+    last: int
+    absolute_first: bool
+    absolute_last: bool
+
+
+def parse_span(text: str) -> Span:
+    sheet_text, _, cells = text.rpartition("!")
+    sheet = sheet_text[1:-1].replace("''", "'") if sheet_text.startswith("'") else sheet_text or None
+    (first_dollar, first), (last_dollar, last) = (SPAN_PATTERN.fullmatch(part).groups() for part in cells.split(":"))
+    rows = first.isdigit()
+    first_number, last_number = (int(part) if rows else column_number(part) for part in (first, last))
+    return Span(sheet, sheet_text, rows, first_number, last_number, first_dollar == "$", last_dollar == "$")
+
+
+def span_text(span: Span, first: int, last: int) -> str:
+    prefix = f"{span.sheet_text}!" if span.sheet_text else ""
+    show = (lambda n: str(n)) if span.rows else column_letters
+    return f"{prefix}{'$' if span.absolute_first else ''}{show(first)}:{'$' if span.absolute_last else ''}{show(last)}"
 
 
 def relative_part(address: CellAddress, base: CellAddress) -> str:
@@ -249,7 +292,16 @@ def is_number(value: Value) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
+def as_date_serial(left: Value, right: Value) -> tuple[Value, Value]:
+    if isinstance(left, str) and ISO_DATE.match(left) and is_number(right):
+        return to_serial(left), right
+    if isinstance(right, str) and ISO_DATE.match(right) and is_number(left):
+        return left, to_serial(right)
+    return left, right
+
+
 def same_value(left: Value, right: Value) -> bool:
+    left, right = as_date_serial(left, right)
     if isinstance(left, str) and isinstance(right, str):
         return left.lower() == right.lower()
     if is_number(left) and is_number(right):
@@ -258,6 +310,7 @@ def same_value(left: Value, right: Value) -> bool:
 
 
 def not_greater(item: Value, target: Value) -> bool:
+    item, target = as_date_serial(item, target)
     if is_number(item) and is_number(target):
         return float(item) <= float(target)
     if isinstance(item, str) and isinstance(target, str):
@@ -362,7 +415,7 @@ def numbers(values: list[Value | list[Value]]) -> list[float]:
 
 
 class Workbook:
-    def __init__(self, cells: dict[str, CellContent], notes: dict[str, str] | None = None, sheets: list[str] | None = None, metadata: dict[str, CellMetadata] | None = None) -> None:
+    def __init__(self, cells: dict[str, CellContent], notes: dict[str, str] | None = None, sheets: list[str] | None = None, metadata: dict[str, CellMetadata] | None = None, names: dict[str, str] | None = None) -> None:
         self._cells = {normalize_ref(ref): content for ref, content in cells.items()}
         self._notes = {normalize_ref(ref): text for ref, text in (notes or {}).items()}
         self._sheets = sheets or list(dict.fromkeys(ref.rsplit("!", 1)[0] for ref in self._cells))
@@ -373,6 +426,45 @@ class Workbook:
         self._rows: dict[str, dict[int, list[int]]] = {}
         self._label_counts: dict[str, dict[tuple[int, str], int]] = {}
         self._timelines: dict[str, list[tuple[int, dict[int, str]]]] = {}
+        self._names = {name.upper(): text.lstrip("=") for name, text in (names or {}).items()}
+        self._bounds: dict[str, tuple[int, int]] | None = None
+
+    def bounds(self, sheet: str) -> tuple[int, int]:
+        if self._bounds is None:
+            found: dict[str, tuple[int, int]] = {}
+            for ref in self._cells:
+                name, address = split_ref(ref)
+                rows, columns = found.get(name, (1, 1))
+                found[name] = (max(rows, address.row), max(columns, address.column))
+            self._bounds = found
+        return self._bounds.get(sheet, (1, 1))
+
+    def resolve(self, token: Token, base_sheet: str) -> Token:
+        if token.kind != "name":
+            return token
+        target = self._names.get(token.text.upper())
+        resolved = tokenize(target) if target else []
+        if len(resolved) != 1 or resolved[0].kind not in ("ref", "span"):
+            raise FormulaError(f"#NAME? {token.text} is not a defined range in {base_sheet}")
+        return resolved[0]
+
+    def span_reference(self, text: str, base_sheet: str) -> Reference:
+        span = parse_span(text)
+        sheet = span.sheet or base_sheet
+        rows, columns = self.bounds(sheet)
+        if span.rows:
+            start, end = CellAddress(1, span.first, True, span.absolute_first), CellAddress(columns, min(span.last, MAX_ROWS), True, span.absolute_last)
+        else:
+            start, end = CellAddress(span.first, 1, span.absolute_first, True), CellAddress(min(span.last, MAX_COLUMNS), rows, span.absolute_last, True)
+        return Reference(span.sheet, span.sheet_text, start, end)
+
+    def reference_of(self, token: Token, base_sheet: str) -> Reference | None:
+        token = self.resolve(token, base_sheet)
+        if token.kind == "ref":
+            return parse_reference(token.text)
+        if token.kind == "span":
+            return self.span_reference(token.text, base_sheet)
+        return None
 
     @property
     def sheets(self) -> list[str]:
@@ -432,7 +524,15 @@ class Workbook:
         if formula is None:
             return []
         sheet = ref.rsplit("!", 1)[0]
-        found = [cell for token in tokenize(formula) if token.kind == "ref" for cell in expand(parse_reference(token.text), sheet)]
+        found = []
+        for token in tokenize(formula):
+            if token.kind not in ("ref", "span", "name"):
+                continue
+            try:
+                reference = self.reference_of(token, sheet)
+            except FormulaError:
+                continue
+            found.extend(expand(reference, sheet))
         return list(dict.fromkeys(found))
 
     def all_precedents(self, ref: str) -> list[str]:
@@ -458,6 +558,13 @@ class Workbook:
         _, base = split_ref(ref)
         pieces = []
         for token in tokenize(formula):
+            if token.kind == "span":
+                span = parse_span(token.text)
+                origin = base.row if span.rows else base.column
+                part = lambda number, absolute: f"{number}" if absolute else f"[{number - origin}]"
+                letter = "R" if span.rows else "C"
+                pieces.append(f"{span.sheet_text}!" * bool(span.sheet_text) + f"{letter}{part(span.first, span.absolute_first)}:{letter}{part(span.last, span.absolute_last)}")
+                continue
             if token.kind != "ref":
                 pieces.append(token.text)
                 continue
@@ -479,6 +586,11 @@ class Workbook:
         delta_column = target.column - source.column
         pieces = []
         for token in tokenize(formula):
+            if token.kind == "span":
+                span = parse_span(token.text)
+                delta = delta_row if span.rows else delta_column
+                pieces.append(span_text(span, span.first if span.absolute_first else span.first + delta, span.last if span.absolute_last else span.last + delta))
+                continue
             if token.kind != "ref":
                 pieces.append(token.text)
                 continue
@@ -730,8 +842,10 @@ class FormulaEvaluator:
             return token.text[1:-1].replace('""', '"')
         if token.kind == "bool":
             return token.text == "TRUE"
-        if token.kind == "ref":
-            reference = parse_reference(token.text)
+        if token.kind == "error":
+            raise FormulaError(f"{token.text[token.text.index('#'):]} written in the formula in {self.ref}")
+        if token.kind in ("ref", "span", "name"):
+            reference = self.book.reference_of(token, self.sheet)
             values = [self.book.value(cell) for cell in expand(reference, self.sheet)]
             if reference.end is None:
                 return values[0]
@@ -760,13 +874,33 @@ class FormulaEvaluator:
         self.expect("rparen")
         if name == "IFERROR":
             return self.settled(arguments[1]) if isinstance(arguments[0], Failure) else arguments[0]
+        if name in INFORMATION_FUNCTIONS:
+            return self.information(name, arguments[0] if arguments else None)
+        if name == "CHOOSE":
+            index = int(self.number(self.settled(arguments[0])))
+            if not 1 <= index < len(arguments):
+                raise FormulaError(f"#VALUE! CHOOSE index {index} has no value in {self.ref}")
+            return self.settled(arguments[index])
         if name == "IF":
             condition = self.settled(arguments[0])
             if condition:
                 return self.settled(arguments[1]) if len(arguments) > 1 else True
             return self.settled(arguments[2]) if len(arguments) > 2 else False
         values = [self.settled(argument) for argument in arguments]
-        return getattr(self, f"call_{name.lower()}")(values)
+        return getattr(self, f"call_{name.lower().replace('.', '_')}")(values)
+
+    def information(self, name: str, argument: Value | list[Value] | Failure) -> Value:
+        if isinstance(argument, Failure):
+            return name == "ISERROR"
+        if isinstance(argument, list):
+            argument = argument[0] if argument else None
+        if name == "ISERROR":
+            return False
+        if name == "ISNUMBER":
+            return is_number(argument)
+        if name == "ISTEXT":
+            return isinstance(argument, str) and not ISO_DATE.match(argument)
+        return argument is None
 
     def argument(self) -> Value | list[Value] | Failure:
         if self.peek() is not None and self.peek().kind in ("comma", "rparen"):
@@ -974,6 +1108,71 @@ class FormulaEvaluator:
         if rate is None:
             raise FormulaError(f"#NUM! XIRR found no rate that sets the cash flows to zero in {self.ref}")
         return rate
+
+    def call_pmt(self, values: list) -> Value:
+        rate, periods, present = (self.number(v) for v in values[:3])
+        future = self.number(values[3]) if len(values) > 3 and values[3] is not None else 0.0
+        due = 1 if len(values) > 4 and values[4] is not None and self.number(values[4]) else 0
+        return payment(rate, periods, present, future, due)
+
+    def call_irr(self, values: list) -> Value:
+        flows = numbers(values[:1])
+        if not (any(flow > 0 for flow in flows) and any(flow < 0 for flow in flows)):
+            raise FormulaError(f"#NUM! IRR needs at least one positive and one negative cash flow in {self.ref}")
+        guess = self.number(values[1]) if len(values) > 1 and values[1] is not None else 0.1
+        rate = dated_irr(flows, [float(period) for period in range(len(flows))], guess)
+        if rate is None:
+            raise FormulaError(f"#NUM! IRR found no rate that sets the cash flows to zero in {self.ref}")
+        return rate
+
+    def call_hlookup(self, values: list) -> Value:
+        table = self.grid_of(values[1])
+        row = int(self.number(values[2]))
+        approximate = bool(values[3]) if len(values) > 3 and values[3] is not None else True
+        if not 1 <= row <= table.height:
+            raise FormulaError(f"#REF: HLOOKUP row {row} is outside the table in {self.ref}")
+        column = self.position_of(values[0], table.row(1), 1 if approximate else 0)
+        return table.at(row, column)
+
+    def call_count(self, values: list) -> Value:
+        return float(sum(1 for v in flatten(values) if is_number(v) or (isinstance(v, str) and ISO_DATE.match(v))))
+
+    def call_counta(self, values: list) -> Value:
+        return float(sum(1 for v in flatten(values) if v is not None and v != ""))
+
+    def call_large(self, values: list) -> Value:
+        return self.ranked(values, reverse=True)
+
+    def call_small(self, values: list) -> Value:
+        return self.ranked(values, reverse=False)
+
+    def ranked(self, values: list, reverse: bool) -> Value:
+        found = sorted(numbers(values[:1]), reverse=reverse)
+        position = int(self.number(values[1]))
+        if not 1 <= position <= len(found):
+            raise FormulaError(f"#NUM! position {position} is outside the {len(found)} numbers in {self.ref}")
+        return found[position - 1]
+
+    def call_exp(self, values: list) -> Value:
+        try:
+            return math.exp(self.number(values[0]))
+        except OverflowError as error:
+            raise FormulaError(f"#NUM! EXP too large in {self.ref}") from error
+
+    def call_ln(self, values: list) -> Value:
+        number = self.number(values[0])
+        if number <= 0:
+            raise FormulaError(f"#NUM! LN of a number that is not positive in {self.ref}")
+        return math.log(number)
+
+    def call_normsdist(self, values: list) -> Value:
+        return 0.5 * (1 + math.erf(self.number(values[0]) / math.sqrt(2)))
+
+    def call_norm_s_dist(self, values: list) -> Value:
+        z = self.number(values[0])
+        if len(values) > 1 and values[1] is not None and not values[1]:
+            return math.exp(-z * z / 2) / math.sqrt(2 * math.pi)
+        return self.call_normsdist(values[:1])
 
     def call_eomonth(self, values: list) -> Value:
         start = from_serial(to_serial(values[0]))
