@@ -87,10 +87,10 @@ def make_trace_node(book: Workbook) -> Callable[[InvestigationState], dict]:
             tree = {"cell": ref, "label": target["label"], "value_before": target["prior_value"], "value_after": target["value"], "delta": target["value"] - target["prior_value"], "share_of_change": 1.0, "suspicious": True, "children": []}
             return {"contributions": [], "causal_tree": tree, "evidence": [{"id": f"ev-{start + 1}", "cell": ref, "kind": "anomaly", "text": text}]}
         prior_ref = target["prior_cell"] if "!" in target["prior_cell"] else f"{target['sheet']}!{target['prior_cell']}"
-        from_period = book.column_header(prior_ref)
-        if not from_period:
-            raise ValueError(f"No period header for prior cell {prior_ref}")
+        from_period = book.column_header(prior_ref) or ""
         try:
+            if not from_period:
+                raise ValueError(f"No period header for prior cell {prior_ref}")
             explanation = causal.explain_change(book, ref, from_period, target["period"])
             tree = causal.build_causal_tree(book, ref, from_period, target["period"])
         except (ValueError, FormulaError):

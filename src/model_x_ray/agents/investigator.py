@@ -281,6 +281,16 @@ def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_t
             if book.formula(patch_cell) is None:
                 new_formula = row_formula_suggestion(book, patch_cell) or column_formula_suggestion(book, patch_cell) or new_formula
             patch = {"cell": patch_cell, "old_formula": old_formula(book, patch_cell), "new_formula": new_formula, "source": "agent"}
+        target = state["target"]
+        target_ref = f"{target['sheet']}!{target['cell']}"
+        tried = {h["cell"] for h in state.get("hypotheses", [])}
+        if patch is None and target.get("mode") == "table" and target.get("expected_formula") and target_ref not in tried and target_ref not in intentional:
+            hypotheses = [h for h in hypotheses if h["cell"] != target_ref][: max(0, budget - 1)]
+            hypotheses.append({
+                "id": f"hyp-{first_number + len(hypotheses)}", "cell": target_ref, "error_type": "wrong_reference",
+                "claim": target["finding"], "evidence_ids": [e["id"] for e in all_evidence if e["cell"] == target_ref], "confidence": "medium", "status": "open",
+            })
+            patch = {"cell": target_ref, "old_formula": old_formula(book, target_ref), "new_formula": target["expected_formula"], "source": "agent"}
         return {"hypotheses": hypotheses, "evidence": new_evidence, "patch": patch, "run_log": result.get("run_log", []), "tool_call_counts": [result.get("tool_calls_used", 0)]}
 
     return diagnose

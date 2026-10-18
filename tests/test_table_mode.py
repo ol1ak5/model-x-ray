@@ -126,3 +126,30 @@ def test_a_proposed_formula_without_the_equals_sign_is_read_as_a_formula() -> No
     assert as_formula("=B5*C5") == "=B5*C5"
     assert as_formula("45.2") == "45.2"
     assert as_formula(45.2) == 45.2
+
+
+def test_when_the_investigator_proposes_nothing_the_rule_fix_is_tested(tmp_path: Path) -> None:
+    from uuid import uuid4
+
+    from conftest import ScriptedVerdict
+    from test_investigator import ScriptedDiagnosis
+
+    from model_x_ray.benchmark.runner import Setup, build_setup_graph, drive_graph
+    from model_x_ray.spreadsheet.sandbox import XlsxSandbox
+    from model_x_ray.spreadsheet.source import XlsxSource
+
+    path = write_trading_sheets(tmp_path / "trading.xlsx")
+    workbook = openpyxl.load_workbook(path)
+    workbook["Deals"]["D5"], workbook["Deals"]["D7"], workbook["Deals"]["E6"] = "=B5*C5", "=B7*C7", "=IF(B6>85,1,0)"
+    workbook.save(path)
+    setup = Setup(name="scripted", kind="investigator", model="scripted-investigator", verifier="scripted-verifier")
+
+    def factory(model_id: str):
+        return ScriptedVerdict() if model_id == "scripted-verifier" else ScriptedDiagnosis(turns=[([], None)])
+
+    source = XlsxSource({"trading": path})
+    graph = build_setup_graph(setup, source, XlsxSandbox(source, tmp_path / "corrected"), "trading", factory)
+    final = drive_graph(graph, {"spreadsheet_id": "trading", "question": ""}, {"configurable": {"thread_id": uuid4().hex}})
+
+    assert final["patch"]["new_formula"] == "=SUM(B2:B6)"
+    assert final["verifications"][-1]["verdict"] == "confirmed"
