@@ -203,13 +203,15 @@ def sandbox_proof(state: InvestigationState, verification: Verification) -> Evid
     target = state["target"]
     target_ref = f"{target['sheet']}!{target['cell']}"
     patched = state["patch"]["cell"]
-    before = verification["before"][target_ref]
-    after = verification["after"][target_ref]
+    shown = target_ref if target_ref in verification["before"] else patched
+    before = verification["before"].get(shown)
+    after = verification["after"].get(shown)
+    change = f"{before:.2f} -> {after:.2f}" if isinstance(before, (int, float)) and isinstance(after, (int, float)) else f"{before} -> {after}"
     return {
         "id": f"ev-{len(state.get('evidence', [])) + 1}",
         "cell": patched,
         "kind": "verification",
-        "text": f"{target_ref} {before:.2f} -> {after:.2f} in a sandbox copy after patching {patched}",
+        "text": f"{shown} {change} in a sandbox copy after patching {patched}",
     }
 
 

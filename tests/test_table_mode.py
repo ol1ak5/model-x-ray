@@ -153,3 +153,31 @@ def test_when_the_investigator_proposes_nothing_the_rule_fix_is_tested(tmp_path:
 
     assert final["patch"]["new_formula"] == "=SUM(B2:B6)"
     assert final["verifications"][-1]["verdict"] == "confirmed"
+
+
+def test_when_the_first_finding_cannot_be_proven_the_next_one_is_tried(tmp_path: Path) -> None:
+    from uuid import uuid4
+
+    from conftest import ScriptedVerdict
+    from test_investigator import ScriptedDiagnosis
+
+    from model_x_ray.benchmark.runner import Setup, build_setup_graph, drive_graph
+    from model_x_ray.spreadsheet.sandbox import XlsxSandbox
+    from model_x_ray.spreadsheet.source import XlsxSource
+
+    path = write_trading_sheets(tmp_path / "trading.xlsx")
+    setup = Setup(name="scripted", kind="investigator", model="scripted-investigator", verifier="scripted-verifier")
+    verdict = ScriptedVerdict(verdicts=[("rejected", "the total is meant to exclude the last item"), ("confirmed", "the column formula holds")])
+
+    def factory(model_id: str):
+        return verdict if model_id == "scripted-verifier" else ScriptedDiagnosis(turns=[([], None)])
+
+    source = XlsxSource({"trading": path})
+    graph = build_setup_graph(setup, source, XlsxSandbox(source, tmp_path / "corrected"), "trading", factory)
+    final = drive_graph(graph, {"spreadsheet_id": "trading", "question": ""}, {"configurable": {"thread_id": uuid4().hex}})
+
+    verdicts = [v["verdict"] for v in final["verifications"] if v.get("verdict")]
+    assert verdicts[0] == "rejected" and verdicts[-1] == "confirmed"
+    assert final["target"]["cell"] == "B8"
+    assert final["patch"]["cell"] != "Costs!B8"
+    assert final["patch"]["cell"] in {f["cell"] for f in final["target"]["other_findings"]}

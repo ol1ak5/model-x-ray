@@ -16,6 +16,7 @@ class TargetCell(TypedDict):
     mode: NotRequired[str]
     finding: NotRequired[str]
     expected_formula: NotRequired[str | None]
+    other_findings: NotRequired[list[dict]]
 
 
 class RowRole(TypedDict):

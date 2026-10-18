@@ -189,7 +189,8 @@ def table_check(book: Workbook) -> tuple[TargetCell, str] | None:
     findings = scan_tables(book)
     if not findings:
         return None
-    finding = max(findings, key=lambda f: (len(book.all_dependents(f["cell"])), f["kind"] == "incomplete_total"))
+    ranked = sorted(findings, key=lambda f: (len(book.all_dependents(f["cell"])), f["kind"] == "incomplete_total"), reverse=True)
+    finding = ranked[0]
     ref = finding["cell"]
     sheet, address = split_ref(ref)
     value = as_number(book.value(ref))
@@ -204,6 +205,7 @@ def table_check(book: Workbook) -> tuple[TargetCell, str] | None:
     target: TargetCell = {
         "sheet": sheet, "cell": ref.rsplit("!", 1)[1], "label": label, "period": period or "", "value": value,
         "prior_cell": "", "prior_value": expected, "mode": "table", "finding": finding["reason"], "expected_formula": finding.get("fix"),
+        "other_findings": [{"cell": f["cell"], "reason": f["reason"], "fix": f.get("fix")} for f in ranked[1:6]],
     }
     return target, f"Check the model: {label} ({ref}) looks wrong: {finding['reason']}."
 
