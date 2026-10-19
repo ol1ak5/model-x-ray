@@ -17,9 +17,11 @@ One entry per investigation under a versioned key, `model-x-ray:runs:v1`:
 
 `id` is minted by the browser (`newRunId`) so a run is stored from its first streamed step; the investigation id the API returns travels inside `view`. A second entry, `current`, points at the run on screen: "Check another model" clears the pointer and keeps the history.
 
-Measured size for the demo model: `view` 11 KB and `sheet` 6 KB, so about 17 KB per run and roughly 300 runs inside the 5 MB per-origin quota. Rules the code follows (`frontend/src/storage.ts`):
+Measured size for the demo model: `view` 11 KB and `sheet` 6 KB, so about 17 KB per run and roughly 300 runs inside the 5 MB per-origin quota. A real model is not the demo model: a 200-row window of copied columns measured 290 KB per run, so 18 such runs already fill the budget below. Rules the code follows (`frontend/src/storage.ts`):
 
-- Keep the newest 25 runs, oldest evicted first, and keep dropping the oldest on `QuotaExceededError` before giving up on the write.
+- Keep the newest 25 runs and at most `STORAGE_BYTES` (2 MB) of JSON, leaving room in the ~5 MB quota for the rest of the app. Pruning drops the oldest run that is not the one on screen, one at a time until the payload fits.
+- Keep the run on screen whatever happens: when it alone exceeds the budget, its `sheet` goes first (the `view` and the report survive and the reload still restores the facts, refetching the window from the API), then its `view`. A run that fits nothing is dropped from storage rather than losing the write silently.
+- A write that still fails with `QuotaExceededError` (another tab, a smaller quota than assumed) prunes further in the same order before giving up, and only removes the key when nothing is left to give up.
 - `localStorage` holds strings only: the corrected `.xlsx` is **downloaded** when the visitor approves, never stored. A real model can be 10 MB, base64 would not fit, and keeping it would be a second copy of deal data.
 - Write whenever the picture changes (each streamed step, each view, each decision). A run emits a handful of events and the payload grows to a couple of KB, so a synchronous write is cheaper than the bookkeeping a debounce would need.
 - A restored run asks the API for a fresh sheet window and keeps the stored one when the API cannot answer, so the grid survives both a reload and a server restart.

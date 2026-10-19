@@ -3,8 +3,33 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import App from "../App";
-import { STORAGE_KEY, listRuns } from "../storage";
+import type { StoredRun } from "../storage";
+import { STORAGE_BYTES, STORAGE_KEY, currentRun, listRuns, saveRun } from "../storage";
 import { APPROVED, REVIEW, STEPS, fakeApi, steps } from "./fakeApi";
+
+function heavyRun(id: string, updatedAt: number, factor = 20): StoredRun {
+  const columns = ["F", "G", "H"].map((letter, index) => ({ letter, header: `${2024 + index}A` }));
+  const rows = Array.from({ length: 200 }, (_, offset) => ({
+    row: offset + 5,
+    label: `Operating line ${offset + 5} with a realistic label`,
+    cells: columns.map((column) => ({
+      ref: `${column.letter}${offset + 5}`,
+      value: 1000 + offset,
+      formula: `=${column.letter}${offset + 4}*Assumptions!$C$${offset + 5}`.repeat(factor),
+    })),
+  }));
+  return {
+    id,
+    spreadsheetId: "demo",
+    name: "Demo model",
+    question: "",
+    startedAt: updatedAt,
+    updatedAt,
+    steps: [],
+    view: { ...REVIEW, id },
+    sheet: { sheet: "P&L", header_row: 4, columns, rows },
+  };
+}
 
 afterEach(() => {
   window.history.replaceState(null, "", "/");
@@ -119,6 +144,45 @@ describe("a run kept in the browser", () => {
 
     expect(await screen.findByRole("region", { name: "Investigation facts" })).toBeInTheDocument();
     expect(listRuns()).toEqual([]);
+  });
+
+  test("drops the oldest checks by size, not only by count, and keeps the newest one", () => {
+    const runs = Array.from({ length: 12 }, (_, index) => heavyRun(`old-${index}`, index));
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, current: "old-11", runs }));
+
+    saveRun(heavyRun("newest", 99));
+
+    const kept = listRuns();
+    const stored = window.localStorage.getItem(STORAGE_KEY) ?? "";
+    expect(stored.length).toBeLessThanOrEqual(STORAGE_BYTES);
+    expect(kept[0].id).toBe("newest");
+    expect(kept.map((run) => run.id)).not.toContain("old-0");
+    expect(kept.map((run) => run.id)).toContain("old-11");
+  });
+
+  test("a check bigger than the whole budget keeps its facts and drops its sheet", () => {
+    saveRun(heavyRun("huge", 1, 200));
+
+    const stored = currentRun();
+    expect(stored?.id).toBe("huge");
+    expect(stored?.view?.id).toBe("huge");
+    expect(stored?.sheet).toBeNull();
+    expect((window.localStorage.getItem(STORAGE_KEY) ?? "").length).toBeLessThanOrEqual(STORAGE_BYTES);
+  });
+
+  test("a check stored without its sheet still restores its facts and its report", async () => {
+    const run = { id: REVIEW.id, spreadsheetId: "demo", name: "Demo model", question: "", startedAt: 1, updatedAt: 1, steps: [], view: REVIEW, sheet: null };
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, current: REVIEW.id, runs: [run] }));
+    vi.stubGlobal("fetch", async () => {
+      throw new Error("the service is unreachable");
+    });
+
+    render(<App />);
+
+    const facts = await screen.findByRole("region", { name: "Investigation facts" });
+    const user = userEvent.setup();
+    await user.click(within(facts).getByRole("button", { name: "Why?" }));
+    expect(within(facts).getByRole("region", { name: "Report" })).toHaveTextContent(/Gross profit 2025A moved from 84\.72 to 285\.76/);
   });
 
   test("the browser keeps the newest 25 checks", async () => {

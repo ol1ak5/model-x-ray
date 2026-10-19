@@ -19,6 +19,7 @@ from langgraph.store.base import BaseStore
 from langgraph.types import Command
 from pydantic import BaseModel
 
+from model_x_ray.agents.verifier import CHECK_LABELS
 from model_x_ray.graph import run_continuation, run_investigation
 from model_x_ray.rules import is_period_cell
 from model_x_ray.spreadsheet.engine import FormulaError, UnsupportedFormulaError, Workbook, column_letters, is_number, split_ref
@@ -218,7 +219,13 @@ def investigation_view(graph: CompiledStateGraph, investigation_id: str) -> dict
     else:
         status = "done"
     values = snapshot.values
-    return {"id": investigation_id, "status": status, "pause": pauses[0] if pauses else None, **{name: values.get(name) for name in PUBLIC_FIELDS}}
+    return {
+        "id": investigation_id,
+        "status": status,
+        "pause": pauses[0] if pauses else None,
+        "check_labels": CHECK_LABELS,
+        **{name: values.get(name) for name in PUBLIC_FIELDS},
+    }
 
 
 def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: AgentModels, checkpointer: BaseCheckpointSaver, cap: UsageCap, allowed_origins: list[str] | None = None, store: BaseStore | None = None, upload_dir: Path | None = None) -> FastAPI:
