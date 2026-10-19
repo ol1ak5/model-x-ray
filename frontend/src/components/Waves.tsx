@@ -1,3 +1,5 @@
+import styles from "./Waves.module.css";
+
 const COLUMNS = 64;
 const ROWS = 22;
 const WIDTH = 1600;
@@ -29,7 +31,7 @@ export default function Waves() {
   const rows = Array.from({ length: ROWS }, (_, r) => r / (ROWS - 1));
   const columns = Array.from({ length: COLUMNS }, (_, c) => c / (COLUMNS - 1));
   return (
-    <svg className="waves" viewBox={`0 0 ${WIDTH} ${HEIGHT}`} preserveAspectRatio="none" aria-hidden="true">
+    <svg className={styles.waves} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} preserveAspectRatio="none" aria-hidden="true">
       <defs>
         <linearGradient id="wave-fade" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="white" stopOpacity="0" />
@@ -56,7 +58,7 @@ export default function Waves() {
           <polyline key={`c${u}`} points={line(rows.map((d) => point(u, d)))} strokeWidth="0.6" style={{ opacity: 0.35 }} />
         ))}
       </g>
-      <line x1="0" y1={HEIGHT - 1} x2={WIDTH} y2={HEIGHT - 1} className="wave-horizon" />
+      <line x1="0" y1={HEIGHT - 1} x2={WIDTH} y2={HEIGHT - 1} className={styles.horizon} />
     </svg>
   );
 }

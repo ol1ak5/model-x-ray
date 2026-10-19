@@ -1,0 +1,276 @@
+{
+  "sheet": "P&L",
+  "header_row": 3,
+  "columns": [
+    {
+      "letter": "F",
+      "header": "2024A"
+    },
+    {
+      "letter": "G",
+      "header": "2025A"
+    },
+    {
+      "letter": "H",
+      "header": "2026E"
+    },
+    {
+      "letter": "I",
+      "header": "2027E"
+    },
+    {
+      "letter": "J",
+      "header": "2028E"
+    }
+  ],
+  "rows": [
+    {
+      "row": 4,
+      "label": "Revenue",
+      "cells": [
+        {
+          "ref": "P&L!F4",
+          "value": 176.5,
+          "formula": null
+        },
+        {
+          "ref": "P&L!G4",
+          "value": 188.0,
+          "formula": null
+        },
+        {
+          "ref": "P&L!H4",
+          "value": 199.28,
+          "formula": "=G4*(1+Assumptions!$C$4)"
+        },
+        {
+          "ref": "P&L!I4",
+          "value": 211.23680000000002,
+          "formula": "=H4*(1+Assumptions!$C$4)"
+        },
+        {
+          "ref": "P&L!J4",
+          "value": 223.91100800000004,
+          "formula": "=I4*(1+Assumptions!$C$4)"
+        }
+      ]
+    },
+    {
+      "row": 5,
+      "label": "COGS",
+      "cells": [
+        {
+          "ref": "P&L!F5",
+          "value": -91.78,
+          "formula": "=-F4*Assumptions!$C$5"
+        },
+        {
+          "ref": "P&L!G5",
+          "value": 97.76,
+          "formula": "=G4*Assumptions!$C$5"
+        },
+        {
+          "ref": "P&L!H5",
+          "value": -103.6256,
+          "formula": "=-H4*Assumptions!$C$5"
+        },
+        {
+          "ref": "P&L!I5",
+          "value": -109.84313600000002,
+          "formula": "=-I4*Assumptions!$C$5"
+        },
+        {
+          "ref": "P&L!J5",
+          "value": -40.30398144000001,
+          "formula": "=-J4*Assumptions!$C$6"
+        }
+      ]
+    },
+    {
+      "row": 6,
+      "label": "Gross profit",
+      "cells": [
+        {
+          "ref": "P&L!F6",
+          "value": 84.72,
+          "formula": "=F4+F5"
+        },
+        {
+          "ref": "P&L!G6",
+          "value": 285.76,
+          "formula": "=G4+G5"
+        },
+        {
+          "ref": "P&L!H6",
+          "value": 95.6544,
+          "formula": "=H4+H5"
+        },
+        {
+          "ref": "P&L!I6",
+          "value": 95.6544,
+          "formula": null
+        },
+        {
+          "ref": "P&L!J6",
+          "value": 183.60702656000004,
+          "formula": "=J4+J5"
+        }
+      ]
+    },
+    {
+      "row": 7,
+      "label": "Direct costs",
+      "cells": [
+        {
+          "ref": "P&L!F7",
+          "value": -31.77,
+          "formula": "=-F4*Assumptions!$C$6"
+        },
+        {
+          "ref": "P&L!G7",
+          "value": -33.839999999999996,
+          "formula": "=-G4*Assumptions!$C$6"
+        },
+        {
+          "ref": "P&L!H7",
+          "value": -35.8704,
+          "formula": "=-H4*Assumptions!$C$6"
+        },
+        {
+          "ref": "P&L!I7",
+          "value": -38.022624,
+          "formula": "=-I4*Assumptions!$C$6"
+        },
+        {
+          "ref": "P&L!J7",
+          "value": -40.30398144000001,
+          "formula": "=-J4*Assumptions!$C$6"
+        }
+      ]
+    },
+    {
+      "row": 8,
+      "label": "Overhead",
+      "cells": [
+        {
+          "ref": "P&L!F8",
+          "value": -24.71,
+          "formula": "=-F4*Assumptions!$C$7"
+        },
+        {
+          "ref": "P&L!G8",
+          "value": -26.320000000000004,
+          "formula": "=-G4*Assumptions!$C$7"
+        },
+        {
+          "ref": "P&L!H8",
+          "value": -27.899200000000004,
+          "formula": "=-H4*Assumptions!$C$7"
+        },
+        {
+          "ref": "P&L!I8",
+          "value": -29.573152000000004,
+          "formula": "=-I4*Assumptions!$C$7"
+        },
+        {
+          "ref": "P&L!J8",
+          "value": -31.34754112000001,
+          "formula": "=-J4*Assumptions!$C$7"
+        }
+      ]
+    },
+    {
+      "row": 9,
+      "label": "Operating expenses",
+      "cells": [
+        {
+          "ref": "P&L!F9",
+          "value": -56.480000000000004,
+          "formula": "=SUM(F7:F8)"
+        },
+        {
+          "ref": "P&L!G9",
+          "value": -60.16,
+          "formula": "=SUM(G7:G8)"
+        },
+        {
+          "ref": "P&L!H9",
+          "value": -63.7696,
+          "formula": "=SUM(H7:H8)"
+        },
+        {
+          "ref": "P&L!I9",
+          "value": -67.595776,
+          "formula": "=SUM(I7:I8)"
+        },
+        {
+          "ref": "P&L!J9",
+          "value": -71.65152256000002,
+          "formula": "=SUM(J7:J8)"
+        }
+      ]
+    },
+    {
+      "row": 10,
+      "label": "EBITDA",
+      "cells": [
+        {
+          "ref": "P&L!F10",
+          "value": 28.239999999999995,
+          "formula": "=F6+F9"
+        },
+        {
+          "ref": "P&L!G10",
+          "value": 225.6,
+          "formula": "=G6+G9"
+        },
+        {
+          "ref": "P&L!H10",
+          "value": 31.8848,
+          "formula": "=H6+H9"
+        },
+        {
+          "ref": "P&L!I10",
+          "value": 28.058623999999995,
+          "formula": "=I6+I9"
+        },
+        {
+          "ref": "P&L!J10",
+          "value": 111.95550400000002,
+          "formula": "=J6+J9"
+        }
+      ]
+    },
+    {
+      "row": 11,
+      "label": "EBITDA margin",
+      "cells": [
+        {
+          "ref": "P&L!F11",
+          "value": 0.15999999999999998,
+          "formula": "=F10/F4"
+        },
+        {
+          "ref": "P&L!G11",
+          "value": 1.2,
+          "formula": "=G10/G4"
+        },
+        {
+          "ref": "P&L!H11",
+          "value": 0.16,
+          "formula": "=H10/H4"
+        },
+        {
+          "ref": "P&L!I11",
+          "value": 0.13283018867924526,
+          "formula": "=I10/I4"
+        },
+        {
+          "ref": "P&L!J11",
+          "value": 0.5,
+          "formula": "=J10/J4"
+        }
+      ]
+    }
+  ]
+}

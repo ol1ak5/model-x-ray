@@ -22,7 +22,7 @@ from pydantic import BaseModel
 from model_x_ray.graph import run_investigation
 from model_x_ray.rules import is_period_cell
 from model_x_ray.spreadsheet.engine import FormulaError, UnsupportedFormulaError, Workbook, column_letters, is_number, split_ref
-from model_x_ray.spreadsheet.sandbox import SandboxWithWrite
+from model_x_ray.spreadsheet.sandbox import SandboxWithWrite, check_patch, normalized_formula
 from model_x_ray.spreadsheet.source import SpreadsheetSource
 from model_x_ray.spreadsheet.xlsx import load_xlsx
 
@@ -42,6 +42,8 @@ STEP_LABELS = {
 }
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+
+LOCAL_DEV_ORIGIN = r"http://(localhost|127\.0\.0\.1)(:\d+)?"
 
 XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -116,6 +118,27 @@ def friendly_error(error: Exception) -> tuple[int, str]:
     return 500, GENERIC_FAILURE
 
 
+def checked_patch(source: SpreadsheetSource, spreadsheet_id: str, requested: dict[str, Any]) -> dict[str, str]:
+    cell = str(requested.get("cell", "")).strip()
+    formula = str(requested.get("new_formula", "")).strip()
+    if not cell or not formula:
+        raise HTTPException(422, "An edited fix needs a cell and a number or formula")
+    patch = {
+        "cell": cell,
+        "old_formula": str(requested.get("old_formula", "")),
+        "new_formula": normalized_formula(formula),
+        "source": "human",
+    }
+    try:
+        check_patch(source.load(spreadsheet_id), patch)
+    except (FormulaError, UnsupportedFormulaError) as error:
+        raise HTTPException(
+            422,
+            f"That fix does not work in {cell}: {error}. Enter a number, or a formula that starts with =.",
+        ) from error
+    return patch
+
+
 MAX_GRID_ROWS = 40
 
 
@@ -169,7 +192,7 @@ def investigation_view(graph: CompiledStateGraph, investigation_id: str) -> dict
 
 def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: AgentModels, checkpointer: BaseCheckpointSaver, cap: UsageCap, allowed_origins: list[str] | None = None, store: BaseStore | None = None, upload_dir: Path | None = None) -> FastAPI:
     app = FastAPI(title="Model X-Ray")
-    app.add_middleware(CORSMiddleware, allow_origins=allowed_origins or [], allow_methods=["GET", "POST"], allow_headers=["Content-Type"])
+    app.add_middleware(CORSMiddleware, allow_origins=allowed_origins or [], allow_origin_regex=LOCAL_DEV_ORIGIN, allow_methods=["GET", "POST"], allow_headers=["Content-Type"])
     graphs: dict[str, CompiledStateGraph] = {}
     uploads: set[str] = set()
 
@@ -214,6 +237,13 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
         if investigation_view(graph, investigation_id)["status"] == "done":
             raise HTTPException(409, "This investigation is finished and cannot be resumed")
         return graph
+
+    def resume_payload(graph: CompiledStateGraph, investigation_id: str, request: ResumeRequest) -> dict[str, Any]:
+        payload = request.model_dump(exclude_none=True)
+        if payload.get("patch"):
+            values = graph.get_state({"configurable": {"thread_id": investigation_id}}).values
+            payload["patch"] = checked_patch(source, values["spreadsheet_id"], payload["patch"])
+        return payload
 
     @app.get("/health")
     def health() -> dict:
@@ -283,13 +313,13 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
     @app.post("/investigations/{investigation_id}/resume")
     def resume(investigation_id: str, request: ResumeRequest) -> dict:
         graph = paused_graph(investigation_id)
-        graph.invoke(Command(resume=request.model_dump(exclude_none=True)), {"configurable": {"thread_id": investigation_id}})
+        graph.invoke(Command(resume=resume_payload(graph, investigation_id, request)), {"configurable": {"thread_id": investigation_id}})
         return investigation_view(graph, investigation_id)
 
     @app.post("/investigations/{investigation_id}/resume/stream")
     def resume_stream(investigation_id: str, request: ResumeRequest) -> StreamingResponse:
         graph = paused_graph(investigation_id)
-        graph_input = Command(resume=request.model_dump(exclude_none=True))
+        graph_input = Command(resume=resume_payload(graph, investigation_id, request))
         return StreamingResponse(progress(graph, graph_input, investigation_id), media_type="text/event-stream")
 
     return app
