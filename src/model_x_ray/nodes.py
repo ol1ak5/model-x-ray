@@ -12,7 +12,7 @@ from model_x_ray.llm import invoke_with_usage, model_name_of
 from model_x_ray.memory import ModelMemory
 from model_x_ray.prompts import load_prompt
 from model_x_ray.routing import MAX_ATTEMPTS
-from model_x_ray.spreadsheet.engine import Workbook
+from model_x_ray.spreadsheet.engine import FormulaError, Workbook
 from model_x_ray.spreadsheet.sandbox import Sandbox, SandboxWithWrite, run_sandbox_test
 from model_x_ray.spreadsheet.source import SpreadsheetSource
 from model_x_ray.state import CausalNode, Evidence, Hypothesis, InvestigationState, RunLog, TargetCell, Verification
@@ -178,7 +178,10 @@ def make_test_node(source: SpreadsheetSource, sandbox: Sandbox) -> Callable[[Inv
         hypothesis = verification_target(state)
         if patch is None or hypothesis is None:
             return {}
-        result = run_sandbox_test(source, sandbox, state["spreadsheet_id"], patch)
+        try:
+            result = run_sandbox_test(source, sandbox, state["spreadsheet_id"], patch)
+        except FormulaError:
+            return {"verifications": [{"hypothesis_id": hypothesis["id"], "before": {}, "after": {}}]}
         return {
             "verifications": [{
                 "hypothesis_id": hypothesis["id"],
@@ -231,16 +234,21 @@ def make_verify_node(llm: BaseChatModel | None, source: SpreadsheetSource) -> Ca
         book = source.load(state["spreadsheet_id"])
         checks = deterministic_checks(book, state, verification)
         failed = [name for name, ok in checks.items() if not ok]
+        verdict = None
+        if not failed and verifier is not None:
+            verdict, records = invoke_verifier(verifier, state, verification, checks, book, model=model_name)
         if failed:
             final = "rejected"
             reason = f"deterministic checks failed: {', '.join(failed)}; the verifier was not consulted"
+        elif verdict is not None:
+            final = verdict.verdict
+            reason = verdict.reason
         elif verifier is None:
             final = "confirmed"
             reason = "deterministic checks passed; no second opinion configured"
         else:
-            verdict, records = invoke_verifier(verifier, state, verification, checks, book, model=model_name)
-            final = verdict.verdict
-            reason = verdict.reason
+            final = "confirmed"
+            reason = "deterministic checks passed; the second opinion returned nothing"
         return {
             "verifications": [{
                 "hypothesis_id": hypothesis["id"],

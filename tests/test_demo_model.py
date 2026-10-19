@@ -3,10 +3,12 @@ from pathlib import Path
 import pytest
 
 from model_x_ray.agents.locator import read_question, workbook_catalogue
+from model_x_ray.causal import build_causal_tree
 from model_x_ray.rules import find_formula_outliers
 from model_x_ray.spreadsheet.xlsx import load_xlsx
 
 DEMO_DIR = Path(__file__).resolve().parents[1] / "demo"
+SERVED_MODEL = Path(__file__).resolve().parents[1] / "demo_models" / "demo.xlsx"
 
 
 def test_the_demo_model_loads_and_every_formula_calculates() -> None:
@@ -44,3 +46,14 @@ def test_the_error_variant_plants_one_break_the_agent_can_see() -> None:
 
     request = read_question("Why did EBITDA 2030E jump?", workbook_catalogue(error))
     assert request is not None and request.label == "EBITDA" and request.period == "2030E"
+
+
+def test_the_served_demo_model_marks_its_planted_sign_slip_as_suspicious() -> None:
+    book = load_xlsx(SERVED_MODEL)
+
+    tree = build_causal_tree(book, "P&L!G6", "2024A", "2025A")
+    children = {child["cell"]: child for child in tree["children"]}
+
+    assert tree["suspicious"] is False
+    assert children["P&L!G5"]["suspicious"] is True
+    assert children["P&L!G4"]["suspicious"] is False

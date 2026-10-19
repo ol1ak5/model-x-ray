@@ -10,7 +10,7 @@ from langchain_core.tools import tool
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
 
-from conftest import ScriptedDiagnosis
+from conftest import EngineSandbox, ScriptedAnswer, ScriptedDiagnosis
 from model_x_ray.agents.investigator import build_investigator, make_diagnose_node
 from model_x_ray.graph import build_graph, run_investigation
 from model_x_ray.llm import build_chat_model
@@ -392,6 +392,36 @@ def test_a_typed_value_patch_is_corrected_to_the_row_formula_even_when_the_inves
     assert state["verifications"][-1]["verdict"] == "confirmed"
     assert state["corrected_copy_id"] == "corrected:demo"
     assert engine_sandbox.writes[0]["patch"]["new_formula"] == "=G7*(1+Assumptions!$C$7)"
+
+
+def test_a_verifier_that_answers_without_a_verdict_does_not_stop_the_investigation(demo_workbook_path: Path, engine_sandbox) -> None:
+    model = ScriptedDiagnosis(turns=[(["P&L!H7"], "P&L!H7")])
+    graph = run_investigation(model, "demo", XlsxSource({"demo": demo_workbook_path}), engine_sandbox, verifier=ScriptedAnswer(tool=""))
+    config = {"configurable": {"thread_id": "silent-verifier"}}
+
+    graph.invoke({"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump on the P&L sheet?"}, config)
+    state = graph.get_state(config).values
+
+    assert state["verifications"][-1]["verdict"] == "confirmed"
+    assert state["verifications"][-1]["reason"] == "deterministic checks passed; the second opinion returned nothing"
+    assert state["report"].startswith("EBITDA 2027E moved from")
+
+
+def test_a_patch_on_a_row_breaking_cell_is_repaired_to_the_row_formula(scripted_verdict) -> None:
+    served = Path(__file__).resolve().parents[1] / "demo_models" / "demo.xlsx"
+    source = XlsxSource({"demo": served})
+    model = ScriptedDiagnosis(turns=[(["P&L!G5"], "P&L!G5", "=G4*1.05", "wrong_reference")])
+    graph = run_investigation(model, "demo", source, EngineSandbox(source), verifier=scripted_verdict)
+    config = {"configurable": {"thread_id": "repaired-sign-slip"}}
+
+    graph.invoke({"spreadsheet_id": "demo", "question": ""}, config)
+    state = graph.get_state(config).values
+
+    assert state["target"]["cell"] == "G6"
+    assert any(record["cell"] == "P&L!G5" and record["kind"] == "anomaly" for record in state["evidence"])
+    assert state["patch"]["cell"] == "P&L!G5"
+    assert state["patch"]["new_formula"] == "=-G4*Assumptions!$C$5"
+    assert state["verifications"][-1]["verdict"] == "confirmed"
 
 
 def test_approve_writes_a_corrected_copy_with_a_change_log(demo_workbook_path: Path, engine_sandbox, scripted_verdict) -> None:
