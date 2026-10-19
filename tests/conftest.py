@@ -1,3 +1,4 @@
+import json
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -95,7 +96,7 @@ def engine_sandbox(demo_workbook_path: Path) -> EngineSandbox:
 
 class ScriptedVerdict(BaseChatModel):
     bound: list[str] = []
-    verdicts: list[tuple[str, str]] = [("confirmed", "the sandbox numbers hold")]
+    verdicts: list[tuple] = [("confirmed", "the sandbox numbers hold")]
     human: list[str] = []
     system: list[str] = []
 
@@ -110,8 +111,14 @@ class ScriptedVerdict(BaseChatModel):
     def _generate(self, messages: list[BaseMessage], stop: list[str] | None = None, **kwargs: Any) -> ChatResult:
         self.system.append(messages[0].content)
         self.human.append(messages[-1].content)
-        verdict, reason = self.verdicts[min(len(self.human), len(self.verdicts)) - 1]
-        call = {"name": "Verdict", "args": {"verdict": verdict, "reason": reason}, "id": "verify"}
+        scripted = self.verdicts[min(len(self.human), len(self.verdicts)) - 1]
+        verdict, reason = scripted[0], scripted[1]
+        args: dict = {"verdict": verdict, "reason": reason}
+        if verdict == "rejected":
+            target = json.loads(messages[-1].content)["target"]
+            true_number = [{"kind": "value", "cell": target["ref"], "stated_value": target["after"], "explanation": reason}]
+            args["objections"] = scripted[2] if len(scripted) > 2 else true_number
+        call = {"name": "Verdict", "args": args, "id": "verify"}
         usage = {"input_tokens": 800, "output_tokens": 50, "total_tokens": 850}
         return ChatResult(generations=[ChatGeneration(message=AIMessage(content="", tool_calls=[call], usage_metadata=usage))])
 

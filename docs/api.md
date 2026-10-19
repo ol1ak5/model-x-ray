@@ -2,7 +2,7 @@
 
 Implementation: `src/model_x_ray/api.py`. Tests: `tests/test_api.py`. Issue: #73.
 
-The API wraps the investigation graph so the React app (#74) can start an investigation, show its two pauses (which cell, approve the fix) and resume them.
+The API wraps the investigation graph so the React app (#74) can start an investigation, show its one pause (approve, edit or reject the fix) and resume it.
 
 ## Running it locally
 
@@ -21,9 +21,11 @@ The first command fills `models/` with the clean base model and planted-error va
 | `MODEL_X_RAY_UPLOAD_DIR` | `uploads` | Where uploaded models are saved |
 | `MODEL_X_RAY_OUTPUT_DIR` | `corrected` | Where approved corrected copies are saved |
 | `MODEL_X_RAY_CHECKPOINTS` | `checkpoints.db` | SQLite checkpointer file (Postgres on Supabase in the deployed app, #72) |
-| `MODEL_X_RAY_ALLOWED_ORIGINS` | `http://localhost:5173` | Comma-separated web addresses allowed to call the API from a browser (CORS): the React dev server, then the Vercel URL |
+| `MODEL_X_RAY_ALLOWED_ORIGINS` | `http://localhost:5173` | Comma-separated web addresses allowed to call the API from a browser (CORS): the React dev server, then the Vercel URL. Any `localhost` port is allowed on top of this list, so a dev server that had to fall back to `5174` (or `4173` after a preview build) still works; the deployed URL must be listed here |
 | `MODEL_X_RAY_MEMORY` | `memory.db` | SQLite long-term memory: model maps, intentional overrides, past fixes (Postgres on Supabase in the deployed app, #72) |
 | `DEMO_MAX_PER_VISITOR` / `DEMO_MAX_PER_DAY` | `5` / `100` | The usage cap |
+
+Which of these actually survive a restart, and which deployment needs a database, is recorded in `docs/persistence.md`.
 
 Models come from the role registry: Super for the Investigator, Verifier and locate, Lightning for the mapper.
 
@@ -44,7 +46,7 @@ Models come from the role registry: Super for the Investigator, Verifier and loc
 | `POST /spreadsheets?name=My%20model.xlsx` | The raw `.xlsx` bytes | `201` and `{"id", "name", "sheets"}`; `.xlsx` only, up to 10 MB, checked by opening it; the saved name is generated, so a name like `../x.xlsx` cannot escape the folder |
 | `GET /investigations/{id}` | | The investigation view |
 | `GET /investigations/{id}/corrected` | | The corrected `.xlsx` after approval (404 before) |
-| `POST /investigations/{id}/resume` | A cell choice `{"ref": "P&L!H8"}` or a decision `{"action": "approve" \| "edit" \| "reject", "reason", "patch", "intentional"}` (`intentional: true` with `reject` remembers the cell as deliberate, see `docs/agent-architecture.md` §Memory) | The investigation view after the graph continued |
+| `POST /investigations/{id}/resume` | A cell choice `{"ref": "P&L!H8"}` or a decision `{"action": "approve" \| "edit" \| "reject", "reason", "patch", "intentional"}` (`intentional: true` with `reject` remembers the cell as deliberate, see `docs/agent-architecture.md` §Memory). An `edit` patch is normalized and calculated before it is accepted: `-G4*Assumptions!$C$5` becomes `=-G4*Assumptions!$C$5`, a plain number stays a number, and a formula that cannot be calculated in that cell answers `422` with a sentence naming the cell, leaving the investigation paused at `human_review`. `state` carries the investigation view the browser kept, so a server that never saw this id can still continue it (see below) | The investigation view after the graph continued |
 | `POST /investigations/stream` | Same as `POST /investigations` | A live stream of progress events, then the view |
 | `POST /investigations/{id}/resume/stream` | Same as `resume` | A live stream of progress events, then the view |
 
@@ -83,9 +85,15 @@ On the planted benchmark models the scan lists exactly the planted cells, includ
 Every endpoint answers with the same JSON, built by `investigation_view` from the graph's checkpoint:
 
 - `id`: also the LangGraph `thread_id`, so one investigation is one thread.
-- `status`: `needs_cell` (paused in `choose_target`), `needs_review` (paused in `human_review`) or `done`.
-- `pause`: the value the graph passed to `interrupt()`: the question and candidate cells, or the report and patch to approve. `null` when not paused.
-- The public state fields: `question`, `model_map`, `known_overrides`, `past_findings`, `target`, `causal_tree`, `hypotheses`, `evidence`, `verifications`, `patch`, `report`, `corrected_copy_id`, `run_log`. LangChain messages are never sent.
+- `status`: `needs_review` (paused in `human_review`) or `done`.
+- `pause`: the value the graph passed to `interrupt()`: the report and patch to approve. `null` when not paused.
+- The public state fields: `spreadsheet_id`, `question`, `target_choice` (the candidates, the chosen cell and why), `model_map`, `known_overrides`, `past_findings`, `target`, `causal_tree`, `contributions`, `hypotheses`, `evidence`, `verifications`, `patch`, `report`, `corrected_copy_id`, `run_log`, `attempts`. LangChain messages are never sent. These are also the fields a browser can hand back as `state` to continue an investigation the server has forgotten.
+
+## Continuing without a thread
+
+`resume` looks the id up in the process that started the investigation. When the request also carries the `state` the browser kept, that lookup is not needed: the server builds a small continuation graph over the carried state and the decision, with the same nodes and the same checks, and runs only the nodes after the review. `approve` runs `apply_fix` alone, `reject` runs no model at all, `edit` runs `test → verify → explain` and pauses for review again. `/{id}/sheet` and `/{id}/corrected` still resolve through the process, which is why the browser keeps its own sheet window (`docs/persistence.md`).
+
+The state is untrusted input. `carried_state` keeps only the fields an investigation carries, requires the spreadsheet id and the question, and answers `400` for a list or an object of the wrong shape. The workbook is never taken from the state but loaded from the spreadsheet id, so an uploaded model has to still be on the server. A cell choice is no longer part of the API: `locate` picks the cell itself and records the choice in `target_choice`.
 
 ## Errors
 
@@ -104,4 +112,4 @@ Users never see a traceback. `friendly_error(error)` turns any exception into a 
 
 ## Not yet
 
-- Investigation ids live in memory, so a restart forgets them; the Postgres checkpointer and store (#72) fix this.
+- An investigation id belongs to the process that started it, so `GET /investigations/{id}` and `/{id}/sheet` answer `404` for an id this process never saw, even with the checkpoint on disk: the checkpointer is written but never looked up. A browser that kept its state can still finish the review, because `resume` continues from that state when the id is unknown. `docs/persistence.md` records the decision.

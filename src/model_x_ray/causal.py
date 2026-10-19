@@ -1,6 +1,12 @@
-from model_x_ray.rules import find_formula_outliers
-from model_x_ray.spreadsheet.engine import CellAddress, Workbook, column_letters, make_ref, normalize_ref, split_ref
+import re
+
+from model_x_ray.rules import breaks_row_pattern
+from model_x_ray.spreadsheet.engine import CellAddress, FormulaError, Workbook, is_number, make_ref, normalize_ref, split_ref
 from model_x_ray.state import CausalNode, Contribution
+
+
+def period_matches(header: str, period: str) -> bool:
+    return re.search(rf"(?<![0-9A-Za-z]){re.escape(period)}(?![0-9])", header) is not None
 
 
 def _grid(book: Workbook, sheet: str, from_period: str, to_period: str) -> tuple[int, int] | None:
@@ -12,9 +18,9 @@ def _grid(book: Workbook, sheet: str, from_period: str, to_period: str) -> tuple
         header = book.column_header(ref)
         if header is None:
             continue
-        if from_period in header:
+        if period_matches(header, from_period):
             from_columns.add(split_ref(ref)[1].column)
-        if to_period in header:
+        if period_matches(header, to_period):
             to_columns.add(split_ref(ref)[1].column)
     if not from_columns or not to_columns:
         return None
@@ -27,22 +33,17 @@ def _from_ref(book: Workbook, ref: str, from_period: str, to_period: str) -> str
     if grid is None:
         return None
     header = book.column_header(ref)
-    if header is None or (from_period not in header and to_period not in header):
+    if header is None or not (period_matches(header, from_period) or period_matches(header, to_period)):
         return None
     shifted = make_ref(sheet, CellAddress(address.column - (grid[1] - grid[0]), address.row))
-    if book.raw(shifted) is None:
+    try:
+        return shifted if is_number(book.value(shifted)) else None
+    except FormulaError:
         return None
-    return shifted
 
 
-def _suspicious(book: Workbook, ref: str, from_period: str, to_period: str) -> bool:
-    sheet, address = split_ref(ref)
-    grid = _grid(book, sheet, from_period, to_period)
-    if grid is None:
-        return False
-    low, high = sorted(grid)
-    row_range = f"{sheet}!{column_letters(low)}{address.row}:{column_letters(high)}{address.row}"
-    return ref in {o["cell"] for o in find_formula_outliers(book, row_range)}
+def _suspicious(book: Workbook, ref: str) -> bool:
+    return breaks_row_pattern(book, ref)
 
 
 def _node(book: Workbook, ref: str, from_period: str, to_period: str, root_delta: float) -> CausalNode | None:
@@ -66,7 +67,7 @@ def _node(book: Workbook, ref: str, from_period: str, to_period: str, root_delta
         "value_after": value_after,
         "delta": delta,
         "share_of_change": delta / root_delta if root_delta else 0.0,
-        "suspicious": _suspicious(book, ref, from_period, to_period),
+        "suspicious": _suspicious(book, ref),
         "children": children,
     }
 

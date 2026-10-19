@@ -68,14 +68,16 @@ The suite runs realistic scenarios end to end — a whole formula trace, a full 
 
 Deliberately the small set real financial models use; an unsupported function fails the load with an error naming it instead of producing wrong numbers.
 
-- Maths: `SUM`, `AVERAGE`, `MIN`, `MAX`, `ROUND`, `ABS`, `SUMPRODUCT`
-- Logic: `IF`, `IFERROR`, `AND`, `OR`, `NOT`
-- Conditional: `SUMIF`, `SUMIFS`, `COUNTIF`, `COUNTIFS`
-- Lookups: `INDEX`, `MATCH`, `VLOOKUP`, `XLOOKUP`
+- Maths: `SUM`, `AVERAGE`, `MIN`, `MAX`, `ROUND`, `ROUNDDOWN`, `INT`, `MOD`, `POWER`, `ABS`, `EXP`, `LN`, `SUMPRODUCT`, `LARGE`, `SMALL`
+- Logic and information: `IF`, `IFERROR`, `AND`, `OR`, `NOT`, `CHOOSE`, `ISERROR`, `ISNUMBER`, `ISTEXT`, `ISBLANK`
+- Counting and conditional: `COUNT`, `COUNTA`, `SUMIF`, `SUMIFS`, `COUNTIF`, `COUNTIFS`
+- Lookups: `INDEX`, `MATCH`, `VLOOKUP`, `HLOOKUP`, `XLOOKUP`
 - Dates: `EOMONTH`, `EDATE`, `YEAR`, `MONTH`, `DAY`, `DATE`
-- Valuation: `NPV`, `XNPV`
+- Valuation, debt and statistics: `NPV`, `XNPV`, `IRR`, `XIRR`, `PMT`, `PPMT`, `NORMSDIST` / `NORM.S.DIST`
 
-Plus references (`A1`, `$C$7`, ranges, other sheets, quoted names), operators (`+ - * / ^ &`, comparisons), percentages, `_xlfn.` prefixes, and Excel-faithful error semantics (`IF` evaluates only the branch it returns, `IFERROR` never hides an unsupported function). Full spec: [`docs/spreadsheet-core.md`](docs/spreadsheet-core.md).
+Plus references (`A1`, `$C$7`, ranges, whole rows and columns such as `70:70`, other sheets, quoted names, workbook defined names), operators (`+ - * / ^ &`, comparisons), percentages, `_xlfn.` prefixes, and Excel-faithful error semantics (`IF` evaluates only the branch it returns, `IFERROR` never hides an unsupported function). Full spec: [`docs/spreadsheet-core.md`](docs/spreadsheet-core.md).
+
+Not supported: links to other workbooks (`=[1]May!J10`; open the linked file and paste its values), circular references, Data Tables and VBA functions. Each is reported by name instead of computed wrongly.
 
 ## Why these Nemotron models
 

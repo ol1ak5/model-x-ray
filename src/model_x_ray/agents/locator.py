@@ -3,7 +3,6 @@ from collections.abc import Callable
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
-from langgraph.types import interrupt
 from pydantic import BaseModel
 
 from model_x_ray.llm import invoke_with_usage, model_name_of
@@ -124,6 +123,16 @@ def check_target(book: Workbook) -> tuple[str, str]:
     return ref, f"Check the model: no cell breaks its row's pattern; {label} {book.column_header(ref)} is the model's main output in its largest move."
 
 
+def pick_target(book: Workbook, candidates: list[str]) -> tuple[str, str]:
+    usable = [ref for ref in candidates if is_target(book, ref)] or candidates
+    links = {ref for ref in usable if any(other in book.all_precedents(ref) for other in usable if other != ref)}
+    sources = [ref for ref in usable if ref not in links] or usable
+    order = {sheet: index for index, sheet in enumerate(book.sheets)}
+    chosen = max(sources, key=lambda ref: (len(book.all_precedents(ref)), -order.get(ref.rsplit("!", 1)[0], 0), -split_ref(ref)[1].row))
+    reason = "the source the other cells link to" if links else "the one with the most inputs"
+    return chosen, f"{len(candidates)} cells match ({', '.join(candidates)}); I investigated {chosen}, {reason}."
+
+
 def make_locate_node(llm: BaseChatModel | None, book: Workbook) -> Callable[[InvestigationState], dict]:
     catalogue = workbook_catalogue(book)
     structured = llm.with_structured_output(LocateRequest, method="function_calling") if llm is not None else None
@@ -132,7 +141,7 @@ def make_locate_node(llm: BaseChatModel | None, book: Workbook) -> Callable[[Inv
     def locate(state: InvestigationState) -> dict:
         if not state.get("question", "").strip():
             ref, question = check_target(book)
-            return {"target": target_cell(book, ref), "question": question, "cell_choice": None}
+            return {"target": target_cell(book, ref), "question": question, "target_choice": None}
         request = read_question(state["question"], catalogue)
         records = []
         if request is None and structured is not None:
@@ -140,22 +149,26 @@ def make_locate_node(llm: BaseChatModel | None, book: Workbook) -> Callable[[Inv
             request, records = invoke_with_usage(structured, messages, role="locate", model=model_name_of(llm))
         if request is None:
             labels = [label for label in catalogue.labels if label.lower() in state["question"].lower()]
-            candidates = [ref for label in labels for ref in find_cells(book, label, "")]
-            return {"target": None, "cell_choice": {"question": "Which cell do you mean?", "candidates": candidates}, "run_log": records}
+            rows = [ref for label in labels for ref in find_cells(book, label, "") if is_target(book, ref)]
+            if not rows:
+                return checked_instead(book, records, "I could not tell which line the question is about")
+            chosen = max(rows, key=lambda ref: relative_move(book, ref))
+            choice = {"candidates": rows, "chosen": chosen, "why": f"The question names no period; I investigated {chosen}, the largest move on that line."}
+            return {"target": target_cell(book, chosen), "target_choice": choice, "run_log": records}
         candidates = find_cells(book, request.label, request.period) if request.label in catalogue.labels else []
         if request.sheet:
             candidates = [ref for ref in candidates if ref.startswith(f"{request.sheet}!")] or candidates
+        if not candidates:
+            return checked_instead(book, records, f"I could not find {request.label} {request.period} in this model")
         if len(candidates) == 1:
-            return {"target": target_cell(book, candidates[0]), "cell_choice": None, "run_log": records}
-        question = "Which cell do you mean?" if candidates else f"I could not find {request.label} {request.period} in this model. Which cell do you mean?"
-        return {"target": None, "cell_choice": {"question": question, "candidates": candidates}, "run_log": records}
+            return {"target": target_cell(book, candidates[0]), "target_choice": None, "run_log": records}
+        chosen, why = pick_target(book, candidates)
+        return {"target": target_cell(book, chosen), "target_choice": {"candidates": candidates, "chosen": chosen, "why": why}, "run_log": records}
 
     return locate
 
 
-def make_choose_target_node(book: Workbook) -> Callable[[InvestigationState], dict]:
-    def choose_target(state: InvestigationState) -> dict:
-        choice = interrupt(state["cell_choice"])
-        return {"target": target_cell(book, choice["ref"]), "cell_choice": None}
-
-    return choose_target
+def checked_instead(book: Workbook, records: list, missing: str) -> dict:
+    ref, question = check_target(book)
+    why = f"{missing}, so I checked the whole model instead. {question}"
+    return {"target": target_cell(book, ref), "target_choice": {"candidates": [], "chosen": ref, "why": why}, "run_log": records}

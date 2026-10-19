@@ -45,10 +45,10 @@ def explain_metrics(state: InvestigationState) -> dict:
     return {"citations": len(citations), "citations_valid": all(c in known for c in citations)}
 
 
-def locate_metrics(state: InvestigationState, question: dict, asked: bool) -> dict:
+def locate_metrics(state: InvestigationState, question: dict) -> dict:
     target = state.get("target")
     exact = bool(target) and same_cell(f"{target['sheet']}!{target['cell']}", question["target"])
-    return {"exact": bool(exact), "exact_unassisted": bool(exact) and not asked}
+    return {"exact": bool(exact), "auto_picked": bool(state.get("target_choice"))}
 
 
 def tree_cells(node: dict) -> set[str]:
