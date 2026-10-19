@@ -92,15 +92,17 @@ Results are reported per set, because the expected winner differs by set and the
 - Each node records its latency in `node_log` and each LLM call its role, model, tokens and latency in `run_log`; the runner needs no LangSmith.
 - The benchmark isolates the diagnose step: in every set-up `map_model` is the code stub and `locate` runs without an LLM.
 - `uv run tools/benchmark.py --setups rules` runs the rules baseline offline and for free, generating the dataset first if it is missing.
-- `scripts/benchmark.sh` (zero flags) runs all four set-ups and writes `docs/benchmark-results.json`; the three LLM set-ups spend Token Factory credits.
+- `scripts/benchmark.sh` (zero flags) runs all four set-ups with six parallel workers and writes `docs/benchmark-results.json`, the rendered `docs/benchmark.md` and the chart `docs/benchmark.svg`; the three LLM set-ups spend Token Factory credits.
+- `uv run tools/benchmark.py --render-only` re-renders the report and chart from an existing results file — the re-run-and-refresh workflow needs no new measurements.
 - Unit tests for the evaluators use fixed fake outputs; the full four-way run is a separate, opt-in invocation.
 
 ## Report
 
-`docs/benchmark.md` is rendered from `docs/benchmark-results.json` by the report step (#17) and contains:
+`docs/benchmark.md` is rendered by the benchmark run itself (or re-rendered with `--render-only`) and contains:
 
-1. A results table per set (type 1 to 4, blended, overrides, clean): root-cause accuracy, fix accuracy, false alarms, latency p50 and p95, cost
-2. A per-step table with the metrics above
+1. A results table per set (type 1 to 4, blended, overrides, clean): root-cause accuracy with 95% Wilson intervals, fix accuracy, false alarms, latency p50 and p95, cost
+2. A per-step table with the metrics above, plus per-node latency p50 and per-role token and cost totals
 3. A confusion matrix of predicted vs planted error types
 4. The four-way comparison, per set
-5. A short conclusion in plain language, quoted in the README and the demo video
+5. A short conclusion in plain language with intervals, quoted in the README and the demo video
+6. `docs/benchmark.svg`, one bar per set-up and set, for the demo video
