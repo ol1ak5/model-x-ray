@@ -35,4 +35,5 @@ def app_from_env() -> FastAPI:
     origins = [origin.strip() for origin in setting("MODEL_X_RAY_ALLOWED_ORIGINS", "http://localhost:5173").split(",") if origin.strip()]
     store = sqlite_store(setting("MODEL_X_RAY_MEMORY", "memory.db"))
     uploads = Path(setting("MODEL_X_RAY_UPLOAD_DIR", "uploads"))
-    return create_app(source, sandbox, models, checkpointer, cap, origins, store, uploads)
+    upload_ttl = float(setting("MODEL_X_RAY_UPLOAD_TTL", "1800"))
+    return create_app(source, sandbox, models, checkpointer, cap, origins, store, uploads, upload_ttl)

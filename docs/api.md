@@ -18,7 +18,7 @@ The first command fills `models/` with the clean base model and planted-error va
 | Setting | Default | Meaning |
 |---|---|---|
 | `MODEL_X_RAY_MODELS_DIR` | `demo_models` | Folder with the demo models anyone can try (the repo ships `demo_models/demo.xlsx`, a synthetic model with three mixed planted errors); point it at `models/` to expose the benchmark set locally |
-| `MODEL_X_RAY_UPLOAD_DIR` | `uploads` | Where uploaded models are saved |
+| `MODEL_X_RAY_UPLOAD_DIR` | `uploads` | Where uploaded models are saved while their run is alive; each file is deleted when the run ends or after the upload TTL |
 | `MODEL_X_RAY_OUTPUT_DIR` | `corrected` | Where approved corrected copies are saved |
 | `MODEL_X_RAY_CHECKPOINTS` | `checkpoints.db` | SQLite checkpointer file (Postgres on Supabase in the deployed app, #72) |
 | `MODEL_X_RAY_ALLOWED_ORIGINS` | `http://localhost:5173` | Comma-separated web addresses allowed to call the API from a browser (CORS): the React dev server, then the Vercel URL. Any `localhost` port is allowed on top of this list, so a dev server that had to fall back to `5174` (or `4173` after a preview build) still works; the deployed URL must be listed here |
@@ -42,10 +42,10 @@ Models come from the role registry: Super for the Investigator, Verifier and loc
 |---|---|---|
 | `POST /investigations` | `{"spreadsheet_id", "question"}`; `question` is optional | `201` and the investigation view. Without a question the agent checks the whole model (see below) |
 | `GET /health` | | `{"status": "ok"}` for the host's health check |
-| `GET /spreadsheets` | | The demo models: `[{"id", "sheets"}]`. Uploads are never listed, so one visitor never sees another's file |
-| `POST /spreadsheets?name=My%20model.xlsx` | The raw `.xlsx` bytes | `201` and `{"id", "name", "sheets"}`; `.xlsx` only, up to 10 MB, checked by opening it; the saved name is generated, so a name like `../x.xlsx` cannot escape the folder |
+| `GET /spreadsheets` | | The demo models: `[{"id", "sheets"}]`. Uploads are never listed, so one visitor never sees another's file, and each call first sweeps uploads older than the TTL |
+| `POST /spreadsheets?name=My%20model.xlsx` | The raw `.xlsx` bytes | `201` and `{"id", "name", "sheets"}`; `.xlsx` only, up to 10 MB, checked by opening it; the saved name is generated, so a name like `../x.xlsx` cannot escape the folder. The file is deleted when the run finishes (approve or reject) or after `MODEL_X_RAY_UPLOAD_TTL` seconds, whichever comes first, and its id stops resolving |
 | `GET /investigations/{id}` | | The investigation view |
-| `GET /investigations/{id}/corrected` | | The corrected `.xlsx` after approval (404 before) |
+| `GET /investigations/{id}/corrected` | | The corrected `.xlsx` after approval, served once: the file is removed from the server when the download finishes, so a second call answers 404 |
 | `POST /investigations/{id}/resume` | A cell choice `{"ref": "P&L!H8"}` or a decision `{"action": "approve" \| "edit" \| "reject", "reason", "patch", "intentional"}` (`intentional: true` with `reject` remembers the cell as deliberate, see `docs/agent-architecture.md` §Memory). An `edit` patch is normalized and calculated before it is accepted: `-G4*Assumptions!$C$5` becomes `=-G4*Assumptions!$C$5`, a plain number stays a number, and a formula that cannot be calculated in that cell answers `422` with a sentence naming the cell, leaving the investigation paused at `human_review`. `state` carries the investigation view the browser kept, so a server that never saw this id can still continue it (see below) | The investigation view after the graph continued |
 | `POST /investigations/stream` | Same as `POST /investigations` | A live stream of progress events, then the view |
 | `POST /investigations/{id}/resume/stream` | Same as `resume` | A live stream of progress events, then the view |

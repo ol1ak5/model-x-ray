@@ -1,6 +1,7 @@
 import json
 import logging
-from collections.abc import Iterator
+import time
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -12,6 +13,7 @@ import pydantic
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from starlette.background import BackgroundTask
 from langchain_core.language_models import BaseChatModel
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph.state import CompiledStateGraph
@@ -83,6 +85,44 @@ class UsageCap:
 
     def record(self, visitor: str) -> None:
         self.counts[visitor] = self.counts.get(visitor, 0) + 1
+
+
+UPLOAD_TTL = 1800.0
+
+
+@dataclass
+class Uploads:
+    source: SpreadsheetSource
+    directory: Path | None
+    ttl: float = UPLOAD_TTL
+    clock: Callable[[], float] = time.monotonic
+
+    def __post_init__(self) -> None:
+        self._held: dict[str, tuple[Path, float]] = {}
+
+    @property
+    def enabled(self) -> bool:
+        return self.directory is not None
+
+    def add(self, spreadsheet_id: str, path: Path) -> None:
+        self._held[spreadsheet_id] = (path, self.clock())
+
+    def holds(self, spreadsheet_id: str) -> bool:
+        return spreadsheet_id in self._held
+
+    def drop(self, spreadsheet_id: str) -> None:
+        entry = self._held.pop(spreadsheet_id, None)
+        if entry is None:
+            return
+        self.source.remove(spreadsheet_id)
+        entry[0].unlink(missing_ok=True)
+
+    def sweep(self) -> list[str]:
+        now = self.clock()
+        expired = [name for name, (_, added) in self._held.items() if now - added >= self.ttl]
+        for name in expired:
+            self.drop(name)
+        return expired
 
 
 class StartRequest(BaseModel):
@@ -228,18 +268,29 @@ def investigation_view(graph: CompiledStateGraph, investigation_id: str) -> dict
     }
 
 
-def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: AgentModels, checkpointer: BaseCheckpointSaver, cap: UsageCap, allowed_origins: list[str] | None = None, store: BaseStore | None = None, upload_dir: Path | None = None) -> FastAPI:
+def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: AgentModels, checkpointer: BaseCheckpointSaver, cap: UsageCap, allowed_origins: list[str] | None = None, store: BaseStore | None = None, upload_dir: Path | None = None, upload_ttl: float = UPLOAD_TTL, clock: Callable[[], float] = time.monotonic) -> FastAPI:
     app = FastAPI(title="Model X-Ray")
     app.add_middleware(CORSMiddleware, allow_origins=allowed_origins or [], allow_origin_regex=LOCAL_DEV_ORIGIN, allow_methods=["GET", "POST"], allow_headers=["Content-Type"])
     graphs: dict[str, CompiledStateGraph] = {}
-    uploads: set[str] = set()
+    held = Uploads(source, upload_dir, upload_ttl, clock)
 
     @app.exception_handler(Exception)
     def explain_failure(request: Request, error: Exception) -> JSONResponse:
         status, detail = friendly_error(error)
         return JSONResponse({"detail": detail}, status_code=status)
 
+    def release(graph: CompiledStateGraph, investigation_id: str, failed: bool) -> None:
+        try:
+            state = graph.get_state({"configurable": {"thread_id": investigation_id}}).values
+            finished = failed or investigation_view(graph, investigation_id)["status"] == "done"
+        except Exception:
+            return
+        spreadsheet_id = state.get("spreadsheet_id")
+        if finished and spreadsheet_id and held.holds(spreadsheet_id):
+            held.drop(spreadsheet_id)
+
     def progress(graph: CompiledStateGraph, graph_input: Any, investigation_id: str) -> Iterator[str]:
+        failed = False
         try:
             for update in graph.stream(graph_input, {"configurable": {"thread_id": investigation_id}}, stream_mode="updates"):
                 for step in update:
@@ -247,8 +298,11 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
                         yield sse("step", {"step": step, "label": STEP_LABELS[step]})
             yield sse("view", investigation_view(graph, investigation_id))
         except Exception as error:
+            failed = True
             status, detail = friendly_error(error)
             yield sse("error", {"status": status, "detail": detail})
+        finally:
+            release(graph, investigation_id, failed)
 
     def build(spreadsheet_id: str) -> CompiledStateGraph:
         try:
@@ -309,11 +363,12 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
 
     @app.get("/spreadsheets")
     def spreadsheets() -> list[dict]:
-        return [{"id": spreadsheet_id, "sheets": source.list_sheets(spreadsheet_id)} for spreadsheet_id in source.ids() if spreadsheet_id not in uploads]
+        held.sweep()
+        return [{"id": spreadsheet_id, "sheets": source.list_sheets(spreadsheet_id)} for spreadsheet_id in source.ids() if not held.holds(spreadsheet_id)]
 
     @app.post("/spreadsheets", status_code=201)
     async def upload(request: Request, name: str) -> dict:
-        if upload_dir is None:
+        if not held.enabled:
             raise HTTPException(404, "Uploading models is not enabled on this server")
         filename = Path(name).name
         if not filename.lower().endswith(".xlsx"):
@@ -331,7 +386,7 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
             path.unlink(missing_ok=True)
             raise HTTPException(400, f"{filename} is not a readable .xlsx file") from error
         source.add(upload_id, path)
-        uploads.add(upload_id)
+        held.add(upload_id, path)
         return {"id": upload_id, "name": filename, "sheets": sheets}
 
     @app.get("/investigations/{investigation_id}/sheet")
@@ -340,7 +395,10 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
         target = values.get("target")
         if not target:
             raise HTTPException(404, "The investigation has not found its cell yet")
-        book = source.load(values["spreadsheet_id"])
+        try:
+            book = source.load(values["spreadsheet_id"])
+        except ValueError as error:
+            raise HTTPException(404, f"This model is no longer on the server; upload it again to check it ({error})") from error
         return sheet_window(book, target["sheet"], split_ref(f"{target['sheet']}!{target['cell']}")[1].row)
 
     @app.get("/investigations/{investigation_id}/corrected")
@@ -349,8 +407,8 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
         locate_file = getattr(sandbox, "corrected_path", None)
         path = locate_file(name) if name and locate_file else None
         if path is None:
-            raise HTTPException(404, "No corrected file for this investigation; it is written only after you approve the fix")
-        return FileResponse(path, media_type=XLSX_MEDIA_TYPE, filename=path.name)
+            raise HTTPException(404, "No corrected file for this investigation; it is written only after you approve the fix, and once downloaded it is removed from the server")
+        return FileResponse(path, media_type=XLSX_MEDIA_TYPE, filename=path.name, background=BackgroundTask(path.unlink, missing_ok=True))
 
     @app.post("/investigations", status_code=201)
     def start(request: StartRequest, http: Request) -> dict:
@@ -372,6 +430,7 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
     def resume(investigation_id: str, request: ResumeRequest) -> dict:
         graph, graph_input = resumable(investigation_id, request)
         graph.invoke(graph_input, {"configurable": {"thread_id": investigation_id}})
+        release(graph, investigation_id, False)
         return investigation_view(graph, investigation_id)
 
     @app.post("/investigations/{investigation_id}/resume/stream")

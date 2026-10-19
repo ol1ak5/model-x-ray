@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
@@ -64,7 +64,11 @@ describe("an investigation in the browser", () => {
     await user.type(within(facts).getByLabelText("Reason"), "sign slip on COGS");
     await user.click(within(facts).getByRole("button", { name: "Approve fix" }));
 
-    expect(await screen.findByRole("link", { name: "Download corrected model" })).toHaveAttribute("href", `http://localhost:8000/investigations/${APPROVED.id}/corrected`);
+    const download = await screen.findByRole("link", { name: "Download corrected model" });
+    expect(download).toHaveAttribute("href", `http://localhost:8000/investigations/${APPROVED.id}/corrected`);
+    fireEvent.click(download);
+    expect(screen.queryByRole("link", { name: "Download corrected model" })).toBeNull();
+    expect(within(facts).getByText(/the copy is no longer on the server/)).toBeInTheDocument();
     expect(lastResume(api)).toMatchObject({
       url: `http://localhost:8000/investigations/${REVIEW.id}/resume/stream`,
       body: { action: "approve", reason: "sign slip on COGS", state: { id: REVIEW.id, status: "needs_review" } },
