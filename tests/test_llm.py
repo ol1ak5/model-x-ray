@@ -18,6 +18,11 @@ def test_the_role_registry_maps_roles_to_models_and_overrides_from_the_environme
     assert model_for_role("verifier") == "nvidia/nemotron-3-super-120b-a12b"
     assert model_for_role("mapper") == "nvidia/nemotron-3-super-120b-a12b"
 
+    explainer = build_chat_model(role="explain")
+    assert explainer.model_name == "nvidia/Nemotron-3_5-Lightning"
+    assert explainer.max_tokens == 900
+    assert investigator.max_tokens is None
+
     monkeypatch.setenv("NEBIUS_MODEL_INVESTIGATOR", "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B")
     assert build_chat_model(role="investigator").model_name == "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
 

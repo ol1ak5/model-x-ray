@@ -1,0 +1,19 @@
+.alert {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  color: var(--danger);
+  font-weight: 500;
+  font-size: 0.9rem;
+  animation: fade-up var(--dur-slow) var(--ease) both;
+}
+
+.alert::before {
+  content: "";
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--danger);
+  transform: translateY(-0.0625rem);
+}

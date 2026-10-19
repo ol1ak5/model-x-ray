@@ -141,3 +141,60 @@ def test_verify_cannot_confirm_a_patch_that_fails_the_deterministic_checks(
     assert state["hypotheses"][0]["status"] == "rejected"
     assert "P&L!G4 (wrong reference), because the fix did not remove the unusual change and the fix did not match the formulas next to it." in state["report"]
     assert scripted_verdict.human == []
+
+
+def run_with_objections(path: Path, engine_sandbox, scripted_verdict, objections: list[dict], thread: str):
+    scripted_verdict.verdicts = [("rejected", "the fix breaks the dependents", objections)]
+    graph = run_investigation(
+        ScriptedDiagnosis(turns=[(["P&L!H7"], "P&L!H7")]), "demo", XlsxSource({"demo": path}), engine_sandbox, verifier=scripted_verdict,
+    )
+    config = {"configurable": {"thread_id": thread}}
+    graph.invoke({"spreadsheet_id": "demo", "question": QUESTION}, config)
+    return graph.get_state(config).values
+
+
+def test_a_rejection_built_on_wrong_arithmetic_is_overruled_by_the_engine(demo_workbook_path: Path, engine_sandbox, scripted_verdict) -> None:
+    wrong = [{"kind": "formula", "cell": "P&L!H8", "stated_value": 30.08, "explanation": "H8 no longer equals H6+H7"}]
+    state = run_with_objections(demo_workbook_path, engine_sandbox, scripted_verdict, wrong, "overruled-formula")
+
+    record = state["verifications"][-1]
+    assert record["verdict"] == "confirmed"
+    assert record["checks"]["verifier_claims_hold"] is False
+    assert "the engine disproved each claim" in record["reason"]
+    assert "the recalculated copy gives P&L!H8 = 44.73, which matches its formula =H6+H7" in record["reason"]
+    assert state["hypotheses"][0]["status"] == "confirmed"
+    assert "Root cause found in P&L!H7" in state["report"]
+
+
+def test_a_misread_number_or_a_missing_note_cannot_reject_a_fix(demo_workbook_path: Path, engine_sandbox, scripted_verdict) -> None:
+    misread = [
+        {"kind": "value", "cell": "P&L!H8", "stated_value": 61.0, "explanation": "EBITDA is still too high"},
+        {"kind": "note", "cell": "P&L!H7", "explanation": "the typed value is documented as intentional"},
+    ]
+    state = run_with_objections(demo_workbook_path, engine_sandbox, scripted_verdict, misread, "overruled-misread")
+
+    record = state["verifications"][-1]
+    assert record["verdict"] == "confirmed"
+    assert "the second model read P&L!H8 as 61.00, but the recalculated copy gives 44.73" in record["reason"]
+    assert "P&L!H7 has no note" in record["reason"]
+
+
+def test_a_rejection_without_any_checkable_claim_does_not_stand(demo_workbook_path: Path, engine_sandbox, scripted_verdict) -> None:
+    state = run_with_objections(demo_workbook_path, engine_sandbox, scripted_verdict, [], "overruled-empty")
+
+    record = state["verifications"][-1]
+    assert record["verdict"] == "confirmed"
+    assert "without a claim the engine could check" in record["reason"]
+
+
+def test_a_documented_note_or_a_judgment_on_true_numbers_still_rejects(demo_workbook_with_override_note: Path, demo_workbook_path: Path, engine_sandbox, scripted_verdict) -> None:
+    note = [{"kind": "note", "cell": "P&L!H7", "explanation": "the cell note says the value is deliberate"}]
+    noted = run_with_objections(demo_workbook_with_override_note, engine_sandbox, scripted_verdict, note, "upheld-note")
+    record = noted["verifications"][-1]
+    assert record["verdict"] == "rejected"
+    assert record["checks"]["verifier_claims_hold"] is True
+    assert "Checked by the engine: P&L!H7 has the note 'Per budget meeting, opex frozen at 45.2'" in record["reason"]
+
+    judged = run_with_objections(demo_workbook_path, engine_sandbox, scripted_verdict, [{"kind": "value", "cell": "P&L!H8", "stated_value": 44.73, "explanation": "a 12% EBITDA growth is still above plan"}], "upheld-value")
+    assert judged["verifications"][-1]["verdict"] == "rejected"
+    assert "P&L!H8 is 44.73 after the fix, as stated" in judged["verifications"][-1]["reason"]

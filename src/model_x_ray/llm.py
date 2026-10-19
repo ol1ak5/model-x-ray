@@ -11,13 +11,17 @@ from langchain_openai import ChatOpenAI
 
 from model_x_ray.state import RunLog
 
+SUPER = "nvidia/nemotron-3-super-120b-a12b"
+LIGHTNING = "nvidia/Nemotron-3_5-Lightning"
+
 ROLE_MODELS: dict[str, str] = {
-    "investigator": "nvidia/nemotron-3-super-120b-a12b",
-    "verifier": "nvidia/nemotron-3-super-120b-a12b",
-    "mapper": "nvidia/nemotron-3-super-120b-a12b",
-    "locate": "nvidia/nemotron-3-super-120b-a12b",
-    "explain": "nvidia/nemotron-3-super-120b-a12b",
+    "investigator": SUPER,
+    "verifier": SUPER,
+    "mapper": SUPER,
+    "locate": SUPER,
+    "explain": LIGHTNING,
 }
+ROLE_MAX_TOKENS: dict[str, int] = {"explain": 900}
 DEFAULT_TIMEOUT = 120.0
 DEFAULT_MAX_RETRIES = 3
 
@@ -51,6 +55,7 @@ def build_chat_model(model: str | None = None, *, role: str | None = None) -> Ch
         base_url=base_url,
         api_key=api_key,
         temperature=0,
+        max_tokens=ROLE_MAX_TOKENS.get(role) if role else None,
         timeout=DEFAULT_TIMEOUT,
         max_retries=DEFAULT_MAX_RETRIES,
     )

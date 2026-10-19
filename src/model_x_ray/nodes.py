@@ -7,12 +7,12 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.types import interrupt
 
 from model_x_ray import causal
-from model_x_ray.agents.verifier import build_verifier, deterministic_checks, invoke_verifier
+from model_x_ray.agents.verifier import build_verifier, deterministic_checks, invoke_verifier, settle_verdict
 from model_x_ray.llm import invoke_with_usage, model_name_of
 from model_x_ray.memory import ModelMemory
 from model_x_ray.prompts import load_prompt
 from model_x_ray.routing import MAX_ATTEMPTS
-from model_x_ray.spreadsheet.engine import Workbook
+from model_x_ray.spreadsheet.engine import FormulaError, Workbook
 from model_x_ray.spreadsheet.sandbox import Sandbox, SandboxWithWrite, run_sandbox_test
 from model_x_ray.spreadsheet.source import SpreadsheetSource
 from model_x_ray.state import CausalNode, Evidence, Hypothesis, InvestigationState, RunLog, TargetCell, Verification
@@ -178,7 +178,10 @@ def make_test_node(source: SpreadsheetSource, sandbox: Sandbox) -> Callable[[Inv
         hypothesis = verification_target(state)
         if patch is None or hypothesis is None:
             return {}
-        result = run_sandbox_test(source, sandbox, state["spreadsheet_id"], patch)
+        try:
+            result = run_sandbox_test(source, sandbox, state["spreadsheet_id"], patch)
+        except FormulaError:
+            return {"verifications": [{"hypothesis_id": hypothesis["id"], "before": {}, "after": {}}]}
         return {
             "verifications": [{
                 "hypothesis_id": hypothesis["id"],
@@ -239,8 +242,13 @@ def make_verify_node(llm: BaseChatModel | None, source: SpreadsheetSource) -> Ca
             reason = "deterministic checks passed; no second opinion configured"
         else:
             verdict, records = invoke_verifier(verifier, state, verification, checks, book, model=model_name)
-            final = verdict.verdict
-            reason = verdict.reason
+            if verdict is None:
+                final = "confirmed"
+                reason = "deterministic checks passed; the second opinion returned nothing"
+            else:
+                final, reason, claims_hold = settle_verdict(verdict, book, state["patch"], verification["after"])
+                if claims_hold is not None:
+                    checks = {**checks, "verifier_claims_hold": claims_hold}
         return {
             "verifications": [{
                 "hypothesis_id": hypothesis["id"],

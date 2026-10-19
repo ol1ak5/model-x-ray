@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
@@ -7,6 +7,7 @@ import { STORAGE_KEY, listRuns } from "../storage";
 import { APPROVED, REVIEW, STEPS, fakeApi, steps } from "./fakeApi";
 
 afterEach(() => {
+  window.history.replaceState(null, "", "/");
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -36,27 +37,35 @@ describe("a run kept in the browser", () => {
     );
     vi.stubGlobal("fetch", api.fetch);
     const { user, unmount } = await startDemo();
-    await screen.findByRole("button", { name: "Approve fix" });
+    await screen.findByRole("region", { name: "Investigation facts" });
     expect(listRuns()).toHaveLength(1);
     unmount();
 
     render(<App />);
-    await screen.findByRole("button", { name: "Approve fix" });
-    expect(screen.getByRole("region", { name: "Report" })).toHaveTextContent("Root cause found in P&L!H7");
-    expect(screen.getByRole("list", { name: "Progress" })).toHaveTextContent("Writing the explanation");
+    const facts = await screen.findByRole("region", { name: "Investigation facts" });
+    await user.click(within(facts).getByRole("button", { name: "Why?" }));
+    const report = within(facts).getByRole("region", { name: "Report" });
+    expect(within(report).getByText(/Gross profit 2025A moved from 84\.72 to 285\.76/)).toBeInTheDocument();
+    const rail = screen.getByRole("region", { name: "Investigation steps" });
+    expect(within(rail).getAllByRole("listitem")).toHaveLength(8);
+    expect(within(rail).getByText("Found the root cause")).toBeInTheDocument();
 
-    await user.type(screen.getByLabelText("Reason"), "typed opex");
-    await user.click(screen.getByRole("button", { name: "Approve fix" }));
+    await user.type(within(facts).getByLabelText("Reason"), "typed opex");
+    await user.click(within(facts).getByRole("button", { name: "Approve fix" }));
 
     expect(await screen.findByRole("link", { name: "Download corrected model" })).toBeInTheDocument();
-    expect(sentTo(api, "/resume/stream")).toEqual({ url: "http://localhost:8000/investigations/inv-1/resume/stream", body: { action: "approve", reason: "typed opex" } });
+    expect(sentTo(api, "/resume/stream")).toEqual({
+      url: `http://localhost:8000/investigations/${REVIEW.id}/resume/stream`,
+      body: { action: "approve", reason: "typed opex" },
+    });
   });
 
   test("the finished check, its sheet and its corrected file come back even when the service is gone", async () => {
     const api = fakeApi([...steps("explain"), ["view", REVIEW]], [[...steps("human_review", "apply_fix"), ["view", APPROVED]]]);
     vi.stubGlobal("fetch", api.fetch);
     const { user, unmount } = await startDemo();
-    await user.click(await screen.findByRole("button", { name: "Approve fix" }));
+    const facts = await screen.findByRole("region", { name: "Investigation facts" });
+    await user.click(within(facts).getByRole("button", { name: "Approve fix" }));
     await screen.findByRole("link", { name: "Download corrected model" });
     unmount();
 
@@ -64,10 +73,15 @@ describe("a run kept in the browser", () => {
     offline();
     render(<App />);
 
-    expect(await screen.findByRole("region", { name: "Report" })).toHaveTextContent("Root cause found in P&L!H7");
-    expect(screen.getByRole("link", { name: "Download corrected model" })).toHaveAttribute("href", "http://localhost:8000/investigations/inv-1/corrected");
+    const restored = await screen.findByRole("region", { name: "Investigation facts" });
+    await user.click(within(restored).getByRole("button", { name: "Why?" }));
+    expect(within(restored).getByRole("region", { name: "Report" })).toHaveTextContent(/Gross profit 2025A moved from 84\.72 to 285\.76/);
+    expect(within(restored).getByRole("link", { name: "Download corrected model" })).toHaveAttribute(
+      "href",
+      `http://localhost:8000/investigations/${APPROVED.id}/corrected`,
+    );
     const grid = await screen.findByRole("region", { name: "Sheet" });
-    expect(within(grid).getByRole("button", { name: "P&L!H7, confirmed" })).toHaveTextContent("(45.2)(52.5)");
+    expect(within(grid).getByRole("button", { name: "P&L!G5, confirmed" })).toBeInTheDocument();
   });
 
   test("a corrupt or foreign value is ignored: the home page shows and a new check runs", async () => {
@@ -75,10 +89,13 @@ describe("a run kept in the browser", () => {
     vi.stubGlobal("fetch", api.fetch);
     window.localStorage.setItem(STORAGE_KEY, '{"version":1,"current":"gone","runs":[');
     const broken = render(<App />);
-    expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent("Your Excel models under the X-Ray.");
+    expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent("Every formula, checked. Under the X-Ray.");
     broken.unmount();
 
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, current: "run-1", runs: [{ id: 7, steps: "no" }, { id: "run-1", spreadsheetId: "demo", steps: [] }] }));
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ version: 1, current: "run-1", runs: [{ id: 7, steps: "no" }, { id: "run-1", spreadsheetId: "demo", steps: [] }] }),
+    );
     const drifted = render(<App />);
     expect(await screen.findByRole("button", { name: "See it in action" })).toBeInTheDocument();
     drifted.unmount();
@@ -87,7 +104,7 @@ describe("a run kept in the browser", () => {
     const future = render(<App />);
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: "See it in action" }));
-    expect(await screen.findByRole("button", { name: "Approve fix" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Investigation facts" })).toBeInTheDocument();
     future.unmount();
   });
 
@@ -100,7 +117,7 @@ describe("a run kept in the browser", () => {
 
     await startDemo();
 
-    expect(await screen.findByRole("button", { name: "Approve fix" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Investigation facts" })).toBeInTheDocument();
     expect(listRuns()).toEqual([]);
   });
 
@@ -121,11 +138,11 @@ describe("a run kept in the browser", () => {
     vi.stubGlobal("fetch", api.fetch);
 
     await startDemo();
-    await screen.findByRole("button", { name: "Approve fix" });
+    await screen.findByRole("region", { name: "Investigation facts" });
 
+    await waitFor(() => expect(listRuns()).toHaveLength(25));
     const runs = listRuns();
-    expect(runs).toHaveLength(25);
-    expect(runs[0].view?.id).toBe("inv-1");
+    expect(runs[0].view?.id).toBe(REVIEW.id);
     expect(runs.map((run) => run.id)).not.toContain("old-0");
     expect(runs.map((run) => run.id)).toContain("old-29");
   });
