@@ -53,7 +53,7 @@ class InvestigatorState(TypedDict):
 def build_investigator(llm: BaseChatModel, tools: list[BaseTool], max_tool_calls: int = MAX_TOOL_CALLS) -> CompiledStateGraph:
     model = llm.bind_tools(tools) if tools else llm
     structured = llm.with_structured_output(Diagnosis, method="function_calling")
-    tool_node = ToolNode(tools)
+    tool_node = ToolNode(tools, handle_tool_errors=True)
     system = SystemMessage(content=load_prompt("investigator"))
     model_name = model_name_of(llm)
 
@@ -143,6 +143,14 @@ ANOMALY_MARKERS = ("breaks the pattern", "typed value where the row uses", "refe
 
 def full_ref(ref: str, sheet: str) -> str:
     return normalize_ref(ref) if "!" in ref else normalize_ref(f"{sheet}!{ref}")
+
+
+def readable_ref(ref: str, sheet: str) -> bool:
+    try:
+        full_ref(ref, sheet)
+    except FormulaError:
+        return False
+    return True
 
 
 def old_formula(book: Workbook, cell: str) -> str:
@@ -298,7 +306,7 @@ def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_t
         currently_open = sum(1 for h in state.get("hypotheses", []) if h["status"] == "open")
         budget = max(0, MAX_OPEN_HYPOTHESES - currently_open)
         intentional = {o["cell"] for o in state.get("known_overrides", [])}
-        proposed = [h for h in diagnosis.hypotheses if full_ref(h.cell, sheet) not in intentional][:budget]
+        proposed = [h for h in diagnosis.hypotheses if readable_ref(h.cell, sheet) and full_ref(h.cell, sheet) not in intentional][:budget]
         first_number = len(state.get("hypotheses", [])) + 1
         hypotheses = []
         for i, h in enumerate(proposed):
@@ -324,7 +332,7 @@ def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_t
                     "id": f"hyp-{first_number + len(hypotheses)}", "cell": chosen["cell"], "error_type": "wrong_reference", "claim": chosen["reason"],
                     "evidence_ids": [e["id"] for e in all_evidence if e["cell"] == chosen["cell"]], "confidence": "high", "status": "open",
                 })
-        elif diagnosis.patch is not None and full_ref(diagnosis.patch.cell, sheet) not in intentional:
+        elif diagnosis.patch is not None and readable_ref(diagnosis.patch.cell, sheet) and full_ref(diagnosis.patch.cell, sheet) not in intentional:
             patch_cell = full_ref(diagnosis.patch.cell, sheet)
             model_formula = as_formula(diagnosis.patch.new_formula)
             new_formula = model_formula

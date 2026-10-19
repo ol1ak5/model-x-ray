@@ -225,3 +225,12 @@ def test_when_the_model_chooses_nothing_the_rule_decides_and_the_record_says_so(
     assert final["decisions"][0]["decided_by"] == "rule"
     assert final["patch"]["cell"] == "Costs!B8"
     assert "the rule's fix was tested" in final["report"]
+
+
+def test_a_model_answer_naming_a_cell_that_does_not_exist_does_not_stop_the_run(tmp_path: Path) -> None:
+    from test_investigator import ScriptedDiagnosis
+
+    final = run_trading(tmp_path, ScriptedDiagnosis(turns=[(["Costs!", "Costs!B8"], "Costs!", "=SUM(B2:B6)")]))
+
+    assert all(h["cell"] != "Costs!" for h in final["hypotheses"])
+    assert final["verifications"][-1]["verdict"] == "confirmed"
