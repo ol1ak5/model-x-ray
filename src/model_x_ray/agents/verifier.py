@@ -63,10 +63,17 @@ def check_objection(book: Workbook, patch: Patch, after: dict[str, object], obje
     return False, f"the second model read {cell} as {stated}, but the recalculated copy gives {recalculated:.2f}"
 
 
+def safe_check(book: Workbook, patch: Patch, after: dict[str, object], objection: Objection) -> tuple[bool, str]:
+    try:
+        return check_objection(book, patch, after, objection)
+    except FormulaError:
+        return False, f"{objection.cell} could not be read in the model"
+
+
 def settle_verdict(verdict: Verdict, book: Workbook, patch: Patch, after: dict[str, object]) -> tuple[str, str, bool | None]:
     if verdict.verdict == "confirmed":
         return "confirmed", verdict.reason, None
-    results = [check_objection(book, patch, after, objection) for objection in verdict.objections]
+    results = [safe_check(book, patch, after, objection) for objection in verdict.objections]
     upheld = [finding for holds, finding in results if holds]
     if upheld:
         return "rejected", f"{verdict.reason.rstrip('.')}. Checked by the engine: {'; '.join(upheld)}.", True
