@@ -21,7 +21,7 @@ ROLE_MODELS: dict[str, str] = {
     "locate": SUPER,
     "explain": LIGHTNING,
 }
-ROLE_MAX_TOKENS: dict[str, int] = {"explain": 900}
+ROLE_MAX_TOKENS: dict[str, int] = {"explain": 1400}
 DEFAULT_TIMEOUT = 120.0
 DEFAULT_MAX_RETRIES = 3
 

@@ -82,7 +82,7 @@ export type InvestigationView = {
   tool_call_counts: number[] | null;
   node_log: { node: string; latency_ms: number }[] | null;
   attempts: number | null;
-  check_labels: Record<string, string>;
+  check_labels?: Record<string, string>;
   run_log: { role: string; model: string | null; input_tokens: number | null; output_tokens: number | null; latency_ms: number }[] | null;
 };
 

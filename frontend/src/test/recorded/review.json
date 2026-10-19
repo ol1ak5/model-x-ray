@@ -1,8 +1,8 @@
 {
-  "id": "1098c9e28cb7452fb92b4bbcdbb39c5e",
+  "id": "79b2746dad0d4e6ea45c49b415ef95cc",
   "status": "needs_review",
   "pause": {
-    "report": "\n\nGross profit 2025A moved from 84.72 to 285.76 (ev-1). The formula in P&L!G5 lacked the negative sign present in neighboring cells, causing COGS to be positive instead of negative (ev-7). The patch changed P&L!G5 from =G4*Assumptions!$C$5 to =-G4*Assumptions!$C$5 (ev-10). After the patch, P&L!G6 moved from 285.76 to 90.24, approaching the prior\u2011period value of 84.72, and verification confirmed anomaly_resolved=true, dependents_consistent=true, pattern_restored=true (ev-10).",
+    "report": "Gross profit 2025A moved from 84.72 to 285.76 (ev-1). Root cause found in P&L!G5: Formula =G4*Assumptions!$C$5 lacks the minus sign used by neighbouring COGS cells (e.g., P&L!F5 uses =-F4*Assumptions!$C$5), breaking the row pattern and causing the large positive contribution to gross profit. (evidence: ev-3, ev-4, ev-8, ev-10). The fix was tested: P&L!G6 285.76 -> 90.24 in a sandbox copy after patching P&L!G5 (ev-11).",
     "patch": {
       "cell": "P&L!G5",
       "old_formula": "=G4*Assumptions!$C$5",
@@ -15,7 +15,9 @@
     "dependents_consistent": "Cells downstream still agree",
     "pattern_restored": "The formula matches its row again"
   },
+  "spreadsheet_id": "demo",
   "question": "Check the model: Gross profit 2025A depends on P&L!G5, whose reference pattern differs from the row: the row uses =-R[-1]C*Assumptions!R5C3.",
+  "target_choice": null,
   "model_map": {
     "rows": [
       {
@@ -96,19 +98,6 @@
     "prior_cell": "F6",
     "prior_value": 84.72
   },
-  "cell_choice": null,
-  "contributions": [
-    {
-      "cell": "P&L!G4",
-      "label": "Revenue",
-      "delta": 11.5
-    },
-    {
-      "cell": "P&L!G5",
-      "label": "COGS",
-      "delta": 189.54
-    }
-  ],
   "causal_tree": {
     "cell": "P&L!G6",
     "label": "Gross profit",
@@ -135,7 +124,7 @@
         "value_after": 97.76,
         "delta": 189.54000000000002,
         "share_of_change": 0.9427974532431358,
-        "suspicious": false,
+        "suspicious": true,
         "children": [
           {
             "cell": "P&L!G4",
@@ -151,18 +140,29 @@
       }
     ]
   },
+  "contributions": [
+    {
+      "cell": "P&L!G4",
+      "label": "Revenue",
+      "delta": 11.5
+    },
+    {
+      "cell": "P&L!G5",
+      "label": "COGS",
+      "delta": 189.54
+    }
+  ],
   "hypotheses": [
     {
       "id": "hyp-1",
       "cell": "P&L!G5",
       "error_type": "sign_inconsistency",
-      "claim": "The formula lacks the negative sign present in neighboring cells, causing COGS to be positive instead of negative.",
+      "claim": "Formula =G4*Assumptions!$C$5 lacks the minus sign used by neighbouring COGS cells (e.g., P&L!F5 uses =-F4*Assumptions!$C$5), breaking the row pattern and causing the large positive contribution to gross profit.",
       "evidence_ids": [
         "ev-3",
-        "ev-6",
-        "ev-7",
+        "ev-4",
         "ev-8",
-        "ev-9"
+        "ev-10"
       ],
       "confidence": "high",
       "status": "confirmed"
@@ -184,14 +184,14 @@
     {
       "id": "ev-3",
       "cell": "P&L!G5",
-      "kind": "expected_pattern",
+      "kind": "anomaly",
       "text": "COGS contributes +189.54"
     },
     {
       "id": "ev-4",
-      "cell": "P&L!G6",
+      "cell": "P&L!G5",
       "kind": "expected_pattern",
-      "text": "P&L!G6 Gross profit 2025A = 285.76, formula =G4+G5"
+      "text": "P&L!G5 COGS 2025A = 97.76, formula =G4*Assumptions!$C$5"
     },
     {
       "id": "ev-5",
@@ -201,30 +201,36 @@
     },
     {
       "id": "ev-6",
-      "cell": "P&L!G5",
+      "cell": "P&L!G6",
       "kind": "expected_pattern",
-      "text": "P&L!G5 COGS 2025A = 97.76, formula =G4*Assumptions!$C$5"
+      "text": "P&L!G6 Gross profit 2025A = 285.76, formula =G4+G5"
     },
     {
       "id": "ev-7",
-      "cell": "P&L!G5",
-      "kind": "anomaly",
-      "text": "P&L!G5 uses =G4*Assumptions!$C$5, pattern =R[-1]C*Assumptions!R5C3; neighbour P&L!F5 uses pattern =-R[-1]C*Assumptions!R5C3; P&L!G5 breaks the pattern; the row uses =-R[-1]C*Assumptions!R5C3"
+      "cell": "P&L!F5",
+      "kind": "expected_pattern",
+      "text": "P&L!F5 COGS 2024A = -91.78, formula =-F4*Assumptions!$C$5"
     },
     {
       "id": "ev-8",
+      "cell": "P&L!G5",
+      "kind": "anomaly",
+      "text": "P&L!G5 uses =G4*Assumptions!$C$5, pattern =R[-1]C*Assumptions!R5C3; neighbour P&L!F5 uses pattern =-R[-1]C*Assumptions!R5C3 (=-F4*Assumptions!$C$5); P&L!G5 breaks the pattern; the row uses =-R[-1]C*Assumptions!R5C3"
+    },
+    {
+      "id": "ev-9",
+      "cell": "P&L!G6",
+      "kind": "expected_pattern",
+      "text": "P&L!G6: 84.72 -> 285.76 (+201.04)\nP&L!G4 Revenue: +11.5\nP&L!G5 COGS: +189.54"
+    },
+    {
+      "id": "ev-10",
       "cell": "P&L!G5",
       "kind": "expected_pattern",
       "text": "P&L!G5: no note"
     },
     {
-      "id": "ev-9",
-      "cell": "P&L!G5",
-      "kind": "expected_pattern",
-      "text": "Error: formula is not a valid tool, try one of [find_cells, get_cell, trace_precedents, trace_dependents, explain_change, compare_formulas, find_formula_outliers, get_cell_metadata]."
-    },
-    {
-      "id": "ev-10",
+      "id": "ev-11",
       "cell": "P&L!G5",
       "kind": "verification",
       "text": "P&L!G6 285.76 -> 90.24 in a sandbox copy after patching P&L!G5"
@@ -257,7 +263,7 @@
         "pattern_restored": true
       },
       "verdict": "confirmed",
-      "reason": "The patch changed P&L!G5 from =G4*Assumptions!$C$5 to =-G4*Assumptions!$C$5, matching the row pattern of negative multiplication. After the patch, P&L!G6 moved from 285.76 to 90.24, approaching the prior-period value of 84.72, indicating the anomaly is resolved. All dependents (P&L!G10, P&L!G11, Summary!G5, Summary!G6, Summary!H6) recalculated to values consistent with their formulas in the sandbox after patch, and deterministic_checks confirm anomaly resolved, dependents consistent, and pattern restored. No contradictory evidence is present."
+      "reason": "The patch corrected the sign in P&L!G5, making it follow the row pattern. The target P&L!G6 moved from 285.76 toward the prior-period value 84.72 (to 90.24). All dependents recalculated correctly and match their formulas."
     }
   ],
   "patch": {
@@ -266,134 +272,96 @@
     "new_formula": "=-G4*Assumptions!$C$5",
     "source": "agent"
   },
-  "report": "\n\nGross profit 2025A moved from 84.72 to 285.76 (ev-1). The formula in P&L!G5 lacked the negative sign present in neighboring cells, causing COGS to be positive instead of negative (ev-7). The patch changed P&L!G5 from =G4*Assumptions!$C$5 to =-G4*Assumptions!$C$5 (ev-10). After the patch, P&L!G6 moved from 285.76 to 90.24, approaching the prior\u2011period value of 84.72, and verification confirmed anomaly_resolved=true, dependents_consistent=true, pattern_restored=true (ev-10).",
-  "human_decision": null,
+  "report": "Gross profit 2025A moved from 84.72 to 285.76 (ev-1). Root cause found in P&L!G5: Formula =G4*Assumptions!$C$5 lacks the minus sign used by neighbouring COGS cells (e.g., P&L!F5 uses =-F4*Assumptions!$C$5), breaking the row pattern and causing the large positive contribution to gross profit. (evidence: ev-3, ev-4, ev-8, ev-10). The fix was tested: P&L!G6 285.76 -> 90.24 in a sandbox copy after patching P&L!G5 (ev-11).",
   "corrected_copy_id": null,
   "run_log": [
     {
       "role": "investigator",
       "model": "nvidia/nemotron-3-super-120b-a12b",
-      "input_tokens": 1982,
-      "output_tokens": 79,
-      "reasoning_tokens": 49,
-      "latency_ms": 1174.801
+      "input_tokens": 1988,
+      "output_tokens": 94,
+      "reasoning_tokens": 64,
+      "latency_ms": 1025.572
     },
     {
       "role": "investigator",
       "model": "nvidia/nemotron-3-super-120b-a12b",
-      "input_tokens": 2058,
-      "output_tokens": 88,
-      "reasoning_tokens": 58,
-      "latency_ms": 707.767
+      "input_tokens": 2068,
+      "output_tokens": 145,
+      "reasoning_tokens": 115,
+      "latency_ms": 1332.318
     },
     {
       "role": "investigator",
       "model": "nvidia/nemotron-3-super-120b-a12b",
-      "input_tokens": 2133,
-      "output_tokens": 39,
-      "reasoning_tokens": 9,
-      "latency_ms": 718.355
+      "input_tokens": 2143,
+      "output_tokens": 146,
+      "reasoning_tokens": 116,
+      "latency_ms": 1175.66
     },
     {
       "role": "investigator",
       "model": "nvidia/nemotron-3-super-120b-a12b",
-      "input_tokens": 2213,
-      "output_tokens": 177,
-      "reasoning_tokens": 127,
-      "latency_ms": 1262.377
+      "input_tokens": 2219,
+      "output_tokens": 203,
+      "reasoning_tokens": 173,
+      "latency_ms": 1332.261
     },
     {
       "role": "investigator",
       "model": "nvidia/nemotron-3-super-120b-a12b",
-      "input_tokens": 2370,
-      "output_tokens": 199,
-      "reasoning_tokens": 168,
-      "latency_ms": 1315.779
-    },
-    {
-      "role": "investigator",
-      "model": "nvidia/nemotron-3-super-120b-a12b",
-      "input_tokens": 2426,
-      "output_tokens": 177,
-      "reasoning_tokens": 125,
-      "latency_ms": 1201.303
-    },
-    {
-      "role": "investigator",
-      "model": "nvidia/nemotron-3-super-120b-a12b",
-      "input_tokens": 2540,
-      "output_tokens": 102,
-      "reasoning_tokens": 50,
-      "latency_ms": 993.032
-    },
-    {
-      "role": "investigator",
-      "model": "nvidia/nemotron-3-super-120b-a12b",
-      "input_tokens": 2654,
-      "output_tokens": 207,
-      "reasoning_tokens": 41,
-      "latency_ms": 1405.154
+      "input_tokens": 2300,
+      "output_tokens": 195,
+      "reasoning_tokens": 145,
+      "latency_ms": 1387.434
     },
     {
       "role": "investigator",
       "model": "nvidia/nemotron-3-super-120b-a12b",
       "input_tokens": 2469,
-      "output_tokens": 260,
-      "reasoning_tokens": 143,
-      "latency_ms": 1773.923
+      "output_tokens": 212,
+      "reasoning_tokens": 150,
+      "latency_ms": 1369.409
+    },
+    {
+      "role": "investigator",
+      "model": "nvidia/nemotron-3-super-120b-a12b",
+      "input_tokens": 2606,
+      "output_tokens": 191,
+      "reasoning_tokens": 160,
+      "latency_ms": 1399.657
+    },
+    {
+      "role": "investigator",
+      "model": "nvidia/nemotron-3-super-120b-a12b",
+      "input_tokens": 2662,
+      "output_tokens": 580,
+      "reasoning_tokens": 100,
+      "latency_ms": 2983.116
+    },
+    {
+      "role": "investigator",
+      "model": "nvidia/nemotron-3-super-120b-a12b",
+      "input_tokens": 2857,
+      "output_tokens": 212,
+      "reasoning_tokens": 56,
+      "latency_ms": 1361.584
     },
     {
       "role": "verifier",
       "model": "nvidia/nemotron-3-super-120b-a12b",
-      "input_tokens": 1406,
-      "output_tokens": 340,
-      "reasoning_tokens": 144,
-      "latency_ms": 1889.134
+      "input_tokens": 1791,
+      "output_tokens": 429,
+      "reasoning_tokens": 315,
+      "latency_ms": 2344.52
     },
     {
       "role": "explain",
-      "model": "nvidia/nemotron-3-super-120b-a12b",
-      "input_tokens": 1029,
-      "output_tokens": 2062,
-      "reasoning_tokens": 1892,
-      "latency_ms": 9149.712
-    }
-  ],
-  "tool_call_counts": [
-    7
-  ],
-  "node_log": [
-    {
-      "node": "load_sheet",
-      "latency_ms": 0.6897319981362671
-    },
-    {
-      "node": "map_model",
-      "latency_ms": 0.1154509955085814
-    },
-    {
-      "node": "locate",
-      "latency_ms": 4.3116610031574965
-    },
-    {
-      "node": "trace",
-      "latency_ms": 9.6851050038822
-    },
-    {
-      "node": "diagnose",
-      "latency_ms": 10723.152003993164
-    },
-    {
-      "node": "test",
-      "latency_ms": 1.0768650099635124
-    },
-    {
-      "node": "verify",
-      "latency_ms": 1898.3900059974985
-    },
-    {
-      "node": "explain",
-      "latency_ms": 9151.571436988888
+      "model": "nvidia/Nemotron-3_5-Lightning",
+      "input_tokens": 1051,
+      "output_tokens": 900,
+      "reasoning_tokens": 900,
+      "latency_ms": 3093.943
     }
   ],
   "attempts": 1
