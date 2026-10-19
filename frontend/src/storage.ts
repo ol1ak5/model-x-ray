@@ -1,6 +1,7 @@
 import type { InvestigationView, SheetWindow } from "./api";
 
 export const STORAGE_KEY = "model-x-ray:runs:v1";
+export const STORAGE_BYTES = 2_000_000;
 
 const VERSION = 1;
 const KEEP = 25;
@@ -53,24 +54,57 @@ function read(): Stored {
   }
 }
 
+function measure(state: Stored): number {
+  return JSON.stringify(state).length;
+}
+
+function oldestOther(state: Stored): StoredRun | null {
+  return state.runs
+    .filter((run) => run.id !== state.current)
+    .reduce<StoredRun | null>((oldest, run) => (oldest === null || run.updatedAt <= oldest.updatedAt ? run : oldest), null);
+}
+
+function slimmer(state: Stored): Stored | null {
+  const drop = oldestOther(state);
+  if (drop) return { ...state, runs: state.runs.filter((run) => run.id !== drop.id) };
+  const current = state.runs.find((run) => run.id === state.current);
+  if (current?.sheet) return { ...state, runs: state.runs.map((run) => (run.id === current.id ? { ...run, sheet: null } : run)) };
+  if (current?.view) return { ...state, runs: state.runs.map((run) => (run.id === current.id ? { ...run, view: null } : run)) };
+  return null;
+}
+
+function forget(storage: Storage): void {
+  try {
+    storage.removeItem(STORAGE_KEY);
+  } catch {
+    return;
+  }
+}
+
 function write(state: Stored): void {
   const storage = store();
   if (!storage) return;
-  let runs = state.runs.slice(0, KEEP);
+  let prepared: Stored = { ...state, runs: state.runs.slice(0, KEEP) };
   for (;;) {
-    try {
-      storage.setItem(STORAGE_KEY, JSON.stringify({ ...state, runs }));
-      return;
-    } catch {
-      if (runs.length === 0) {
-        try {
-          storage.removeItem(STORAGE_KEY);
-        } catch {
-          return;
-        }
+    if (measure(prepared) > STORAGE_BYTES) {
+      const smaller = slimmer(prepared);
+      if (smaller === null) {
+        forget(storage);
         return;
       }
-      runs = runs.slice(0, -1);
+      prepared = smaller;
+      continue;
+    }
+    try {
+      storage.setItem(STORAGE_KEY, JSON.stringify(prepared));
+      return;
+    } catch {
+      const smaller = slimmer(prepared);
+      if (smaller === null) {
+        forget(storage);
+        return;
+      }
+      prepared = smaller;
     }
   }
 }
