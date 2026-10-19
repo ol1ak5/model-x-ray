@@ -28,8 +28,6 @@ def aggregate(setup: str, set_name: str, **overrides) -> dict:
         "verdict_precision_mean": None,
         "verdict_recall_mean": None,
         "locate_exact_rate": 1.0,
-        "clarification_precision": 0.5,
-        "clarification_recall": 1.0,
         "trace_recall_mean": 1.0,
         "parse_share_mean": 1.0,
         "edge_precision_mean": 1.0,
@@ -104,9 +102,9 @@ def synthetic_results() -> dict:
         ],
         "aggregates": [
             aggregate("rules", "type1"),
-            aggregate("rules", "clean", root_cause_top1_rate=0.0, root_cause_top1_ci=[0.0, 0.79], false_alarm_rate=1.0, false_alarm_ci=[0.2, 1.0], clarification_precision=None, clarification_recall=None, verdict_precision_mean=None),
-            aggregate("super", "type1", root_cause_top1_rate=0.5, root_cause_top1_ci=[0.09, 0.91], fix_accuracy_mean=1.0, inconclusive_rate=0.0, inconclusive_ci=[0.0, 0.66], cost_usd_mean=0.012, input_tokens_mean=28000.0, latency_p50_ms=90000.0, latency_p95_ms=120000.0, verdict_precision_mean=1.0, verdict_recall_mean=1.0, clarification_precision=None, clarification_recall=None),
-            aggregate("super", "clean", root_cause_top1_rate=0.0, root_cause_top1_ci=[0.0, 0.79], fix_accuracy_mean=None, false_alarm_rate=0.0, false_alarm_ci=[0.0, 0.79], inconclusive_rate=0.0, inconclusive_ci=[0.0, 0.79], cost_usd_mean=0.012, input_tokens_mean=28000.0, latency_p50_ms=90000.0, latency_p95_ms=120000.0, clarification_precision=None, clarification_recall=None, verdict_precision_mean=None),
+            aggregate("rules", "clean", root_cause_top1_rate=0.0, root_cause_top1_ci=[0.0, 0.79], false_alarm_rate=1.0, false_alarm_ci=[0.2, 1.0], verdict_precision_mean=None),
+            aggregate("super", "type1", root_cause_top1_rate=0.5, root_cause_top1_ci=[0.09, 0.91], fix_accuracy_mean=1.0, inconclusive_rate=0.0, inconclusive_ci=[0.0, 0.66], cost_usd_mean=0.012, input_tokens_mean=28000.0, latency_p50_ms=90000.0, latency_p95_ms=120000.0, verdict_precision_mean=1.0, verdict_recall_mean=1.0),
+            aggregate("super", "clean", root_cause_top1_rate=0.0, root_cause_top1_ci=[0.0, 0.79], fix_accuracy_mean=None, false_alarm_rate=0.0, false_alarm_ci=[0.0, 0.79], inconclusive_rate=0.0, inconclusive_ci=[0.0, 0.79], cost_usd_mean=0.012, input_tokens_mean=28000.0, latency_p50_ms=90000.0, latency_p95_ms=120000.0, verdict_precision_mean=None),
         ],
         "confusion": {"rules": {"typed_value|typed_value": 2}, "super": {"typed_value|typed_value": 1, "wrong_reference|typed_value": 1}},
     }
@@ -121,8 +119,8 @@ def test_the_report_renders_every_section_from_fixed_results() -> None:
     assert "| rules | type1 | 2 | 100% [34%, 100%] | 0.00 | 0% | 100% | 0.3 / 0.4 s | $0.0000 |" in report
     assert "| super | type1 | 2 | 50% [9%, 91%] | 1.00 | 0% | 0% | 90.0 / 120.0 s | $0.0120 |" in report
     assert "| super | clean | 2 | 0% [0%, 79%] | - | 0% | 0% | 90.0 / 120.0 s | $0.0120 |" in report
-    assert "| rules | 100% | 0.00 / - | 1.00 | - | 1.00 | 0.90 |" in report
-    assert "| super | 100% | 0.50 / 1.00 | 1.00 | 1.00 / 1.00 | 1.00 | 0.90 |" in report
+    assert "| rules | 100% | - | 1.00 | - | 1.00 | 0.90 |" in report
+    assert "| super | 100% | 1.00 | 1.00 | 1.00 / 1.00 | 1.00 | 0.90 |" in report
     assert "| rules | diagnose | 50 |" in report
     assert "| super | diagnose | 70,000 |" in report
     assert "| super | verify | 15,000 |" in report

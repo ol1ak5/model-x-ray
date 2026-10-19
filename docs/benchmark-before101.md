@@ -1,6 +1,6 @@
 # Benchmark results
 
-174 variants, dataset seed 42, run 2026-10-11. Set-ups in this report: rules, nano, super, no-tools.
+174 variants, dataset seed 42, run 2026-10-19. Set-ups in this report: rules, nano, super, no-tools.
 
 304 of 696 investigations failed with errors; their rows carry an `error` field and are excluded from every table.
 
@@ -37,11 +37,11 @@
 
 Aggregated across all sets in this run.
 
-| Set-up | Locate exact | Clarification P / R | Trace recall | Verdict P / R | Parse share | Edge recall |
+| Set-up | Locate exact | Auto-pick accuracy | Trace recall | Verdict P / R | Parse share | Edge recall |
 |---|---|---|---|---|---|---|
-| rules | 100% | 1.00 / 1.00 | 1.00 | 1.00 / 0.78 | 1.00 | 0.99 |
-| nano | 100% | 1.00 / 1.00 | 1.00 | 0.98 / 0.50 | 1.00 | 0.98 |
-| super | 100% | 1.00 / 1.00 | 1.00 | 0.96 / 0.49 | 1.00 | 0.99 |
+| rules | 100% | 1.00 | 1.00 | 1.00 / 0.78 | 1.00 | 0.99 |
+| nano | 100% | 1.00 | 1.00 | 0.98 / 0.50 | 1.00 | 0.98 |
+| super | 100% | 1.00 | 1.00 | 0.96 / 0.49 | 1.00 | 0.99 |
 
 ## Latency and tokens per step
 
@@ -94,17 +94,17 @@ Aggregated across all sets in this run.
 |---|---|---|
 | nano | typed_value → typed_value | 13 |
 | nano | sign_inconsistency → sign_inconsistency | 5 |
-| nano | typed_value → range_inconsistency | 2 |
 | nano | period_inconsistency → period_inconsistency | 2 |
+| nano | typed_value → range_inconsistency | 2 |
 | nano | range_inconsistency → range_inconsistency | 1 |
-| nano | wrong_reference → period_inconsistency | 1 |
-| nano | typed_value → wrong_reference | 1 |
 | nano | typed_value → period_inconsistency | 1 |
 | nano | typed_value → sign_inconsistency | 1 |
+| nano | typed_value → wrong_reference | 1 |
+| nano | wrong_reference → period_inconsistency | 1 |
 | rules | typed_value → typed_value | 33 |
 | rules | typed_value → wrong_reference | 32 |
-| rules | typed_value → sign_inconsistency | 30 |
 | rules | typed_value → period_inconsistency | 30 |
+| rules | typed_value → sign_inconsistency | 30 |
 | rules | typed_value → range_inconsistency | 25 |
 | super | sign_inconsistency → sign_inconsistency | 26 |
 | super | typed_value → typed_value | 25 |
@@ -112,8 +112,8 @@ Aggregated across all sets in this run.
 | super | range_inconsistency → range_inconsistency | 14 |
 | super | wrong_reference → wrong_reference | 11 |
 | super | typed_value → wrong_reference | 3 |
-| super | wrong_reference → range_inconsistency | 2 |
 | super | sign_inconsistency → period_inconsistency | 2 |
+| super | wrong_reference → range_inconsistency | 2 |
 | super | typed_value → sign_inconsistency | 1 |
 
 ## Conclusion
@@ -122,4 +122,4 @@ Top-1 root-cause accuracy: type1 rules 100% (87%-100%), type2 super 48% (28%-68%
 
 ## Chart
 
-![Root-cause accuracy per set](benchmark.svg)
+![Root-cause accuracy per set](benchmark-before101.svg)

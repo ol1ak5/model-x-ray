@@ -29,20 +29,16 @@ def results_row(entry: dict) -> str:
 
 
 def step_row(setup: str, rows: list[dict]) -> str:
-    asked = [row for row in rows if row["locate_asked"]]
     ambiguous = [row for row in rows if row["locate_ambiguous"]]
-    clarified = [row for row in rows if row["locate_asked"] and row["locate_ambiguous"]]
     precisions = [row["verdict_precision"] for row in rows if row["verdict_precision"] is not None]
     recalls = [row["verdict_recall"] for row in rows if row["verdict_recall"] is not None]
     verdict = f"{rate2(mean_of(precisions))} / {rate2(mean_of(recalls))}" if precisions or recalls else "-"
-    clarification = (
-        f"{rate2(len(clarified) / len(asked) if asked else None)} / {rate2(len(clarified) / len(ambiguous) if ambiguous else None)}"
-    )
+    auto_pick = rate2(sum(1 for row in ambiguous if row["locate_exact"]) / len(ambiguous) if ambiguous else None)
     trace = rate2(mean_of([row["trace_recall"] for row in rows if row["trace_recall"] is not None]))
     parse = rate2(mean_of([row["parse_share"] for row in rows if row["parse_share"] is not None]))
     edge = rate2(mean_of([row["edge_recall"] for row in rows if row["edge_recall"] is not None]))
     exact = pct(mean_of([1.0 if row["locate_exact"] else 0.0 for row in rows]))
-    return f"| {setup} | {exact} | {clarification} | {trace} | {verdict} | {parse} | {edge} |"
+    return f"| {setup} | {exact} | {auto_pick} | {trace} | {verdict} | {parse} | {edge} |"
 
 
 def node_p50(rows: list[dict]) -> dict[str, float]:
@@ -197,7 +193,7 @@ def render_report(results: dict, chart_name: str = "benchmark.svg") -> str:
         "",
         "Aggregated across all sets in this run.",
         "",
-        "| Set-up | Locate exact | Clarification P / R | Trace recall | Verdict P / R | Parse share | Edge recall |",
+        "| Set-up | Locate exact | Auto-pick accuracy | Trace recall | Verdict P / R | Parse share | Edge recall |",
         "|---|---|---|---|---|---|---|",
     ]
     for setup in setups:
