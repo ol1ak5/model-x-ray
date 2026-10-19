@@ -52,7 +52,7 @@ GENERIC_FAILURE = "Something went wrong during the investigation. The team has t
 
 PUBLIC_FIELDS = ("spreadsheet_id", "question", "target_choice", "decisions", "model_map", "known_overrides", "past_findings", "target", "causal_tree", "contributions", "hypotheses", "evidence", "verifications", "patch", "report", "corrected_copy_id", "run_log", "attempts")
 
-CARRIED_LISTS = ("known_overrides", "past_findings", "contributions", "hypotheses", "evidence", "verifications", "run_log")
+CARRIED_LISTS = ("known_overrides", "past_findings", "contributions", "hypotheses", "evidence", "verifications", "run_log", "decisions")
 
 CARRIED_RECORDS = ("model_map", "target", "causal_tree", "patch")
 
