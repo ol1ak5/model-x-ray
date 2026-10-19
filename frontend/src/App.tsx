@@ -24,11 +24,14 @@ import type { Marks } from "./components/SheetGrid";
 import SheetSkeleton from "./components/SheetSkeleton";
 import Stage from "./components/Stage";
 import StepRail from "./components/StepRail";
+import { clearCurrent, currentRun, newRunId, saveRun } from "./storage";
 import { type Step, railOf } from "./steps";
 import { APPROVED, CELL_CHOICE, RUNNING, REVIEW, SHEET, fakeSteps } from "./test/fakeApi";
 import styles from "./App.module.css";
 
 type Phase = "idle" | "running" | "paused" | "done";
+
+type Run = { id: string; spreadsheetId: string; name: string; question: string; startedAt: number };
 
 const UNREACHABLE = "The Model X-Ray service could not be reached. Please try again.";
 
@@ -66,6 +69,7 @@ export default function App() {
   const [steps, setSteps] = useState<Step[]>(story ? fakeSteps(story) : []);
   const [view, setView] = useState<InvestigationView | null>(story === "workspace" ? REVIEW : story === "running" ? RUNNING : story === "done" ? APPROVED : story === "choice" ? CELL_CHOICE : null);
   const [sheet, setSheet] = useState<SheetWindow | null>(story === "workspace" || story === "running" || story === "done" ? SHEET : null);
+  const [check, setCheck] = useState<Run | null>(null);
   const [modelName, setModelName] = useState(story ? "My model.xlsx" : "");
   const [error, setError] = useState<string | null>(params?.get("error") ?? null);
   const [sheetError, setSheetError] = useState<string | null>(null);
@@ -82,6 +86,23 @@ export default function App() {
   );
 
   useEffect(() => {
+    if (story) return;
+    const saved = currentRun();
+    if (!saved) return;
+    setCheck({ id: saved.id, spreadsheetId: saved.spreadsheetId, name: saved.name, question: saved.question, startedAt: saved.startedAt });
+    setSteps(saved.steps);
+    setView(saved.view);
+    setSheet(saved.sheet);
+    setModelName(saved.name);
+    setPhase(saved.view ? (saved.view.status === "done" ? "done" : "paused") : "idle");
+  }, []);
+
+  useEffect(() => {
+    if (!check) return;
+    saveRun({ ...check, updatedAt: Date.now(), steps, view, sheet });
+  }, [check, steps, view, sheet]);
+
+  useEffect(() => {
     listSpreadsheets()
       .then(setDemos)
       .catch((reason: unknown) => setError(reason instanceof ApiError ? reason.message : UNREACHABLE));
@@ -93,7 +114,6 @@ export default function App() {
     getSheet(view.id)
       .then(setSheet)
       .catch((reason: unknown) => {
-        setSheet(null);
         setSheetError(reason instanceof ApiError ? reason.message : UNREACHABLE);
       });
   }, [targetKey]);
@@ -131,6 +151,7 @@ export default function App() {
     setSheetError(null);
     setModelName(name);
     setPhase("running");
+    setCheck({ id: newRunId(), spreadsheetId, question, name, startedAt: Date.now() });
     void run(startInvestigation(spreadsheetId, question, onEvent));
   }, []);
 
@@ -151,6 +172,8 @@ export default function App() {
     setError(null);
     setSheetError(null);
     setPhase("idle");
+    setCheck(null);
+    clearCurrent();
     const url = new URL(window.location.href);
     ["story", "static", "error"].forEach((key) => url.searchParams.delete(key));
     window.history.replaceState(null, "", url);
@@ -167,7 +190,6 @@ export default function App() {
         : phase === "running"
           ? "Scanning the model — every formula, read in a copy"
           : "Loading the model";
-
   const started = phase === "running" || steps.length > 0 || view !== null;
   const status =
     phase === "running"
