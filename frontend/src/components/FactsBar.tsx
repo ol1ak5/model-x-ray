@@ -67,9 +67,9 @@ export default function FactsBar({
       {view.causal_tree && <WireKey />}
 
       <div className={styles.trailing}>
-        {Object.keys(view.check_labels).length > 0 && (
+        {Object.keys(view.check_labels ?? {}).length > 0 && (
           <p className={styles.checks} aria-label="Deterministic checks">
-            {Object.entries(view.check_labels).map(([key, label]) => (
+            {Object.entries(view.check_labels ?? {}).map(([key, label]) => (
               <span key={key} className={styles.check} data-state={checks[key] ? "pass" : checks[key] === false ? "fail" : "wait"} title={label} />
             ))}
           </p>

@@ -109,6 +109,13 @@ def _pattern_restored(book: Workbook, patch: Patch, patched: Workbook) -> bool:
     return any(patched.formula_pattern(n) == pattern for n in formula_neighbours)
 
 
+CHECK_LABELS = {
+    "anomaly_resolved": "The repair removes the unusual movement",
+    "dependents_consistent": "Cells downstream still agree",
+    "pattern_restored": "The formula matches its row again",
+}
+
+
 def deterministic_checks(book: Workbook, state: InvestigationState, verification: Verification) -> dict[str, bool]:
     patch = state["patch"]
     before = verification.get("before", {})
