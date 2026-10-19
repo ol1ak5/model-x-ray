@@ -95,6 +95,22 @@ def test_an_edited_fix_is_tested_again_from_the_carried_state(demo_workbook_path
     assert engine_sandbox.created
 
 
+def test_a_state_stored_before_the_decision_log_still_continues(demo_workbook_path: Path, engine_sandbox: EngineSandbox, scripted_verdict) -> None:
+    _, view = paused_on_review(demo_workbook_path, engine_sandbox, scripted_verdict)
+    restarted = app_for(demo_workbook_path, engine_sandbox, scripted_verdict)
+    carried = browser_state(view)
+    del carried["decisions"]
+    edit = {"action": "edit", "reason": "use the budget growth", "patch": {"cell": "P&L!H7", "old_formula": "-45.2", "new_formula": "=G7*1.05"}, "state": carried}
+
+    again = restarted.post(f"/investigations/{view['id']}/resume", json=edit)
+
+    assert again.status_code == 200
+    body = again.json()
+    assert body["status"] == "needs_review"
+    assert body["decisions"] == []
+    assert body["report"]
+
+
 def test_a_state_the_server_did_not_write_is_refused(demo_workbook_path: Path, engine_sandbox: EngineSandbox, scripted_verdict) -> None:
     _, view = paused_on_review(demo_workbook_path, engine_sandbox, scripted_verdict)
     carried = browser_state(view)

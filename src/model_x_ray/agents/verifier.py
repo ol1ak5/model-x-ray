@@ -7,6 +7,7 @@ from langchain_core.runnables import Runnable
 from pydantic import BaseModel, Field
 
 from model_x_ray.llm import invoke_with_usage
+from model_x_ray.rules import scan_model, scan_tables
 from model_x_ray.prompts import load_prompt
 from model_x_ray.spreadsheet.engine import CellAddress, FormulaError, Workbook, is_number, make_ref, normalize_ref, split_ref
 from model_x_ray.state import InvestigationState, Patch, RunLog, Verification
@@ -62,10 +63,17 @@ def check_objection(book: Workbook, patch: Patch, after: dict[str, object], obje
     return False, f"the second model read {cell} as {stated}, but the recalculated copy gives {recalculated:.2f}"
 
 
+def safe_check(book: Workbook, patch: Patch, after: dict[str, object], objection: Objection) -> tuple[bool, str]:
+    try:
+        return check_objection(book, patch, after, objection)
+    except FormulaError:
+        return False, f"{objection.cell} could not be read in the model"
+
+
 def settle_verdict(verdict: Verdict, book: Workbook, patch: Patch, after: dict[str, object]) -> tuple[str, str, bool | None]:
     if verdict.verdict == "confirmed":
         return "confirmed", verdict.reason, None
-    results = [check_objection(book, patch, after, objection) for objection in verdict.objections]
+    results = [safe_check(book, patch, after, objection) for objection in verdict.objections]
     upheld = [finding for holds, finding in results if holds]
     if upheld:
         return "rejected", f"{verdict.reason.rstrip('.')}. Checked by the engine: {'; '.join(upheld)}.", True
@@ -89,9 +97,10 @@ def _matches(expected: object, actual: object) -> bool:
 
 def _dependent_matches(patched: Workbook, dependent: str, after: dict[str, object]) -> bool:
     try:
-        return _matches(patched.value(dependent), after.get(dependent))
+        value = patched.value(dependent)
     except Exception:
-        return False
+        return dependent in after and after[dependent] is None
+    return _matches(value, after.get(dependent))
 
 
 def _pattern_restored(book: Workbook, patch: Patch, patched: Workbook) -> bool:
@@ -102,11 +111,20 @@ def _pattern_restored(book: Workbook, patch: Patch, patched: Workbook) -> bool:
     neighbours = [
         make_ref(sheet, CellAddress(address.column + offset, address.row))
         for offset in (-2, -1, 1, 2)
+        if address.column + offset >= 1
     ]
     formula_neighbours = [n for n in neighbours if book.formula(n) is not None]
     if not formula_neighbours:
         return True
     return any(patched.formula_pattern(n) == pattern for n in formula_neighbours)
+
+
+def _column_pattern_restored(book: Workbook, patch: Patch, patched: Workbook) -> bool:
+    pattern = patched.formula_pattern(patch["cell"])
+    sheet, address = split_ref(patch["cell"])
+    neighbours = [make_ref(sheet, CellAddress(address.column, address.row + offset)) for offset in (-2, -1, 1, 2) if address.row + offset >= 1]
+    formula_neighbours = [n for n in neighbours if book.formula(n) is not None]
+    return pattern is not None and (not formula_neighbours or any(patched.formula_pattern(n) == pattern for n in formula_neighbours) or pattern.upper().startswith("=SUM("))
 
 
 CHECK_LABELS = {
@@ -125,6 +143,21 @@ def deterministic_checks(book: Workbook, state: InvestigationState, verification
     prior = target["prior_value"] if target else None
     target_before = before.get(target_ref) if target_ref else None
     target_after = after.get(target_ref) if target_ref else None
+    if target and target.get("mode") == "review":
+        patched_book = book.with_patch(patch["cell"], patch["new_formula"])
+        return {
+            "anomaly_resolved": not _matches(target_before, target_after),
+            "dependents_consistent": all(_dependent_matches(patched_book, dependent, after) for dependent in book.all_dependents(patch["cell"])),
+            "pattern_restored": True,
+        }
+    if target and target.get("mode") == "table":
+        patched_book = book.with_patch(patch["cell"], patch["new_formula"])
+        still_flagged = {f["cell"] for f in scan_tables(patched_book)}
+        return {
+            "anomaly_resolved": patch["cell"] not in still_flagged,
+            "dependents_consistent": all(_dependent_matches(patched_book, dependent, after) for dependent in book.all_dependents(patch["cell"])),
+            "pattern_restored": _pattern_restored(book, patch, patched_book) or _column_pattern_restored(book, patch, patched_book),
+        }
     anomaly_resolved = (
         isinstance(target_before, (int, float))
         and isinstance(target_after, (int, float))
@@ -133,6 +166,9 @@ def deterministic_checks(book: Workbook, state: InvestigationState, verification
         and abs(target_after - prior) < abs(target_before - prior)
     )
     patched = book.with_patch(patch["cell"], patch["new_formula"])
+    if not anomaly_resolved:
+        was_flagged = patch["cell"] in {o["cell"] for o in scan_model(book)}
+        anomaly_resolved = was_flagged and patch["cell"] not in {o["cell"] for o in scan_model(patched)}
     dependents_consistent = all(
         _dependent_matches(patched, dependent, after)
         for dependent in book.all_dependents(patch["cell"])
@@ -149,7 +185,7 @@ def _relevant_refs(book: Workbook, patch: Patch) -> list[str]:
     neighbours = [
         make_ref(sheet, CellAddress(address.column + offset, address.row))
         for offset in (-2, -1, 1, 2)
-        if book.raw(make_ref(sheet, CellAddress(address.column + offset, address.row))) is not None
+        if address.column + offset >= 1 and book.raw(make_ref(sheet, CellAddress(address.column + offset, address.row))) is not None
     ]
     return list(dict.fromkeys([patch["cell"], *neighbours, *book.all_dependents(patch["cell"])]))
 

@@ -6,7 +6,7 @@ from langgraph.types import Command
 from test_investigator import ScriptedDiagnosis
 
 from model_x_ray.graph import run_investigation
-from model_x_ray.spreadsheet.sandbox import XlsxSandbox
+from model_x_ray.spreadsheet.sandbox import XlsxSandbox, run_sandbox_test
 from model_x_ray.spreadsheet.source import XlsxSource
 from model_x_ray.spreadsheet.xlsx import load_xlsx
 
@@ -47,6 +47,23 @@ def test_a_typed_number_patch_is_written_as_a_number(demo_workbook_path: Path, t
     name = sandbox.write_corrected_copy("demo", {"cell": "P&L!F7", "old_formula": "-47.6", "new_formula": "-48.1", "source": "human"}, [["Cell"], ["P&L!F7"]])
 
     assert openpyxl.load_workbook(tmp_path / "corrected" / name)["P&L"]["F7"].value == -48.1
+
+
+def test_cells_that_already_fail_in_the_original_do_not_block_a_fix(tmp_path: Path) -> None:
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.title = "DCF"
+    sheet.append(["", "Year 1", "Year 2", "Year 3", "Year 4"])
+    sheet.append(["Revenue", 100, "=B2*1.1", 121, "=D2*1.1"])
+    sheet.append(["Horizon", 1, 1, 1, " "])
+    sheet.append(["Cash flow", "=B2*B3", "=C2*C3", "=D2*D3", "=E2*E3"])
+    workbook.save(tmp_path / "dcf.xlsx")
+    source = XlsxSource({"dcf": tmp_path / "dcf.xlsx"})
+
+    result = run_sandbox_test(source, XlsxSandbox(source, tmp_path / "corrected"), "dcf", {"cell": "DCF!D2", "old_formula": "121", "new_formula": "=C2*1.1", "source": "agent"})
+
+    assert result["before"]["DCF!E4"] is None and result["after"]["DCF!E4"] is None
+    assert result["after"]["DCF!D4"] == pytest.approx(121.0)
 
 
 def test_a_formula_patch_without_an_equals_sign_is_written_as_a_formula(demo_workbook_path: Path, tmp_path: Path) -> None:

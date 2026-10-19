@@ -146,8 +146,10 @@ class ScriptedDiagnosis(BaseChatModel):
     bound: list[str] = []
     briefs: list[str] = []
     turns: list[
-        tuple[list[str], str] | tuple[list[str], str, str] | tuple[list[str], str, str, str]
+        tuple[list[str], str | None] | tuple[list[str], str, str] | tuple[list[str], str, str, str]
     ] = [(["P&L!H7"], "P&L!H7")]
+    choice: int | None = None
+    reason: str = ""
 
     @property
     def _llm_type(self) -> str:
@@ -176,7 +178,9 @@ class ScriptedDiagnosis(BaseChatModel):
                 {"cell": cell, "error_type": error_type, "claim": f"{cell} {claim_text}", "confidence": "high"}
                 for cell in cells
             ],
-            "patch": {"cell": patch_cell, "new_formula": new_formula},
+            "patch": {"cell": patch_cell, "new_formula": new_formula} if patch_cell else None,
+            "choice": self.choice,
+            "reason": self.reason,
         }
         call = {"name": "Diagnosis", "args": args, "id": "conclude"}
         usage = {"input_tokens": 1200, "output_tokens": 150, "total_tokens": 1350}

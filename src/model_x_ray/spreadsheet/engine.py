@@ -421,6 +421,7 @@ class Workbook:
         self._sheets = sheets or list(dict.fromkeys(ref.rsplit("!", 1)[0] for ref in self._cells))
         self._metadata = {normalize_ref(ref): meta for ref, meta in (metadata or {}).items()}
         self._cache: dict[str, Value] = {}
+        self._failures: dict[str, FormulaError] = {}
         self._evaluating: set[str] = set()
         self._dependents: dict[str, list[str]] | None = None
         self._rows: dict[str, dict[int, list[int]]] = {}
@@ -503,8 +504,37 @@ class Workbook:
 
     def value(self, ref: str) -> Value:
         ref = normalize_ref(ref)
+        if ref in self._cache or self._evaluating:
+            return self._evaluate(ref)
+        try:
+            return self._evaluate(ref)
+        except RecursionError:
+            self._evaluating.clear()
+            self._warm(ref)
+            return self._evaluate(ref)
+
+    def _warm(self, ref: str) -> None:
+        stack = [(ref, False)]
+        seen: set[str] = set()
+        while stack:
+            cell, ready = stack.pop()
+            if ready:
+                try:
+                    self._evaluate(cell)
+                except (FormulaError, RecursionError):
+                    self._evaluating.clear()
+                continue
+            if cell in seen or cell in self._cache or self.formula(cell) is None:
+                continue
+            seen.add(cell)
+            stack.append((cell, True))
+            stack.extend((precedent, False) for precedent in self.precedents(cell) if precedent not in seen)
+
+    def _evaluate(self, ref: str) -> Value:
         if ref in self._cache:
             return self._cache[ref]
+        if ref in self._failures:
+            raise self._failures[ref]
         formula = self.formula(ref)
         if formula is None:
             return self._cells.get(ref)
@@ -513,6 +543,9 @@ class Workbook:
         self._evaluating.add(ref)
         try:
             result = FormulaEvaluator(self, ref, tokenize(formula)).evaluate()
+        except FormulaError as error:
+            self._failures[ref] = error
+            raise
         finally:
             self._evaluating.discard(ref)
         self._cache[ref] = result
@@ -524,8 +557,12 @@ class Workbook:
         if formula is None:
             return []
         sheet = ref.rsplit("!", 1)[0]
+        try:
+            tokens = tokenize(formula)
+        except FormulaError:
+            return []
         found = []
-        for token in tokenize(formula):
+        for token in tokens:
             if token.kind not in ("ref", "span", "name"):
                 continue
             try:
@@ -620,12 +657,14 @@ class Workbook:
 
     def _header(self, ref: str) -> tuple[int, str] | None:
         sheet, address = split_ref(normalize_ref(ref))
+        block = self._timeline_above(sheet, address)
+        if block:
+            return block[0], block[1][address.column]
         for row in range(address.row - 1, 0, -1):
             content = self._cells.get(make_ref(sheet, CellAddress(address.column, row)))
             if is_label_text(content):
                 return row, content
-        block = self._timeline_above(sheet, address)
-        return (block[0], block[1][address.column]) if block else None
+        return None
 
     def _sheet_rows(self, sheet: str) -> dict[int, list[int]]:
         if sheet not in self._rows:
@@ -705,6 +744,9 @@ class Workbook:
         if not above or address.column not in above[-1][1]:
             return None
         return above[-1]
+
+    def timelines(self, sheet: str) -> list[tuple[int, dict[int, str]]]:
+        return list(self._timeline(sheet))
 
     def in_timeline(self, ref: str) -> bool:
         sheet, address = split_ref(normalize_ref(ref))
@@ -887,7 +929,10 @@ class FormulaEvaluator:
                 return self.settled(arguments[1]) if len(arguments) > 1 else True
             return self.settled(arguments[2]) if len(arguments) > 2 else False
         values = [self.settled(argument) for argument in arguments]
-        return getattr(self, f"call_{name.lower().replace('.', '_')}")(values)
+        try:
+            return getattr(self, f"call_{name.lower().replace('.', '_')}")(values)
+        except (IndexError, TypeError, ValueError, OverflowError, ZeroDivisionError) as error:
+            raise FormulaError(f"#VALUE! {name} cannot be calculated with these arguments in {self.ref}") from error
 
     def information(self, name: str, argument: Value | list[Value] | Failure) -> Value:
         if isinstance(argument, Failure):

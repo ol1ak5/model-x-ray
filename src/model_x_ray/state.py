@@ -1,5 +1,5 @@
 import operator
-from typing import Annotated, Literal, TypedDict
+from typing import Annotated, Literal, NotRequired, TypedDict
 
 from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
@@ -13,6 +13,10 @@ class TargetCell(TypedDict):
     value: float
     prior_cell: str
     prior_value: float
+    mode: NotRequired[str]
+    finding: NotRequired[str]
+    expected_formula: NotRequired[str | None]
+    other_findings: NotRequired[list[dict]]
 
 
 class RowRole(TypedDict):
@@ -90,6 +94,7 @@ class Verification(TypedDict):
     checks: dict[str, bool]
     verdict: Literal["confirmed", "rejected", "inconclusive"]
     reason: str
+    error: NotRequired[str]
 
 
 class Evidence(TypedDict):
@@ -133,6 +138,16 @@ def merge_verifications(left: list[Verification], right: list[Verification]) -> 
     return list(merged.values())
 
 
+class Decision(TypedDict):
+    cell: str | None
+    decided_by: Literal["model", "model_own", "rule_corrected", "rule", "none"]
+    fix: str | None
+    model_fix: str | None
+    rule_would_have: str | None
+    reason: str
+    candidates: int
+
+
 class InvestigationState(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
     spreadsheet_id: str
@@ -151,6 +166,7 @@ class InvestigationState(TypedDict):
     run_log: Annotated[list[RunLog], operator.add]
     node_log: Annotated[list[NodeLog], operator.add]
     tool_call_counts: Annotated[list[int], operator.add]
+    decisions: Annotated[list[Decision], operator.add]
     attempts: int
     report: str | None
     human_decision: HumanDecision | None

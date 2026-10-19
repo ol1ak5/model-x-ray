@@ -1,0 +1,34 @@
+{
+ "seed": 42,
+ "test_share": 0.2,
+ "tune": [
+  "capbudg",
+  "ddm2st",
+  "ddm3st",
+  "divginzu",
+  "dividends",
+  "eqexret",
+  "evavaln",
+  "fcfe2st",
+  "fcfe3st",
+  "fcfevsddm",
+  "fcff2st",
+  "fcffeva",
+  "fcffgen",
+  "fcffginzu",
+  "fcffneg",
+  "fcffsimpleginzu",
+  "growthbreakdown",
+  "higrowth",
+  "implprem",
+  "lboval",
+  "normearn"
+ ],
+ "test": [
+  "fcfeginzu",
+  "fcff3st",
+  "fcffginzulambda",
+  "fcffvsfcfe",
+  "reval"
+ ]
+}

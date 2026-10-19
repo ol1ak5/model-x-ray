@@ -1,4 +1,6 @@
 import operator
+import re
+from collections import Counter
 from collections.abc import Callable
 from typing import Annotated, Literal, TypedDict
 
@@ -15,7 +17,7 @@ from model_x_ray.causal import render_causal_tree
 from model_x_ray.llm import invoke_with_usage, model_name_of
 from model_x_ray.prompts import load_prompt
 from model_x_ray.rules import breaks_row_pattern
-from model_x_ray.spreadsheet.engine import Workbook, normalize_ref, split_ref
+from model_x_ray.spreadsheet.engine import CellAddress, FormulaError, Workbook, make_ref, normalize_ref, split_ref
 from model_x_ray.state import Evidence, InvestigationState, RunLog
 
 MAX_TOOL_CALLS = 8
@@ -37,6 +39,8 @@ class ProposedPatch(BaseModel):
 class Diagnosis(BaseModel):
     hypotheses: list[ProposedHypothesis]
     patch: ProposedPatch | None
+    choice: int | None = None
+    reason: str = ""
 
 
 class InvestigatorState(TypedDict):
@@ -49,7 +53,7 @@ class InvestigatorState(TypedDict):
 def build_investigator(llm: BaseChatModel, tools: list[BaseTool], max_tool_calls: int = MAX_TOOL_CALLS) -> CompiledStateGraph:
     model = llm.bind_tools(tools) if tools else llm
     structured = llm.with_structured_output(Diagnosis, method="function_calling")
-    tool_node = ToolNode(tools)
+    tool_node = ToolNode(tools, handle_tool_errors=True)
     system = SystemMessage(content=load_prompt("investigator"))
     model_name = model_name_of(llm)
 
@@ -99,11 +103,23 @@ def build_investigator(llm: BaseChatModel, tools: list[BaseTool], max_tool_calls
     return builder.compile()
 
 
+def target_line(target: dict) -> str:
+    ref = f"{target['sheet']}!{target['cell']}"
+    if target.get("mode") == "review":
+        return f"Target: {ref} ({target['label']}) = {target['value']}. This is the model's main result and no rule flagged a cell. Review the logic of the formulas behind it (signs, missing or extra terms, wrong inputs, units) and propose a fix only if one is clearly wrong."
+    if target.get("mode") == "table":
+        line = f"Target: {ref} ({target['label']}) = {target['value']}. This block is a table, not a time series: compare the cell with the cells around it, not with a prior period. Finding: {target['finding']}."
+        if target.get("expected_formula"):
+            line += f" The pattern suggests {target['expected_formula']}, which gives {target['prior_value']}."
+        return line
+    return f"Target: {ref} ({target['label']} {target['period']}) = {target['value']}, prior period {target['prior_cell']} = {target['prior_value']}"
+
+
 def investigation_brief(state: InvestigationState) -> str:
     target = state["target"]
     lines = [
         f"Question: {state['question']}",
-        f"Target: {target['sheet']}!{target['cell']} ({target['label']} {target['period']}) = {target['value']}, prior period {target['prior_cell']} = {target['prior_value']}",
+        target_line(target),
     ]
     lines += [f"Marked intentional by a reviewer, do not propose: {o['cell']} ({o['reason']})" for o in state.get("known_overrides", [])]
     lines += [f"Fixed before on this model: {f['cell']} {f['error_type']}, {f['old_formula']} -> {f['new_formula']}" for f in state.get("past_findings", [])]
@@ -127,6 +143,14 @@ ANOMALY_MARKERS = ("breaks the pattern", "typed value where the row uses", "refe
 
 def full_ref(ref: str, sheet: str) -> str:
     return normalize_ref(ref) if "!" in ref else normalize_ref(f"{sheet}!{ref}")
+
+
+def readable_ref(ref: str, sheet: str) -> bool:
+    try:
+        full_ref(ref, sheet)
+    except FormulaError:
+        return False
+    return True
 
 
 def old_formula(book: Workbook, cell: str) -> str:
@@ -158,6 +182,23 @@ def row_formula_suggestion(book: Workbook, cell: str) -> str | None:
     if len(winners) != 1:
         return None
     return book.shifted_formula(sorted(by_pattern[winners[0]])[0], cell)
+
+
+def as_formula(content: object) -> object:
+    if isinstance(content, str) and not content.startswith("=") and re.search(r"[A-Za-z]{1,3}\$?[0-9]+|[A-Za-z_]+\(", content):
+        return "=" + content.lstrip()
+    return content
+
+
+def column_formula_suggestion(book: Workbook, cell: str) -> str | None:
+    sheet, address = split_ref(normalize_ref(cell))
+    for offset in (1, -1, 2, -2):
+        neighbour = make_ref(sheet, CellAddress(address.column, address.row - offset))
+        above_or_below = make_ref(sheet, CellAddress(address.column, address.row + offset))
+        pattern = book.formula_pattern(neighbour) if book.formula(neighbour) else None
+        if pattern is not None and book.formula(above_or_below) and book.formula_pattern(above_or_below) == pattern:
+            return book.shifted_formula(neighbour, cell)
+    return None
 
 
 def evidence_cells(name: str, args: dict, content: str, sheet: str) -> list[str]:
@@ -219,9 +260,41 @@ def sheet_as_text(book: Workbook) -> str:
     return "\n".join(lines)
 
 
+MAX_CANDIDATES = 6
+
+
+def tested_candidates(book: Workbook, state: InvestigationState) -> list[dict]:
+    target = state["target"]
+    tried = {h["cell"] for h in state.get("hypotheses", []) if h["status"] != "open"}
+    intentional = {o["cell"] for o in state.get("known_overrides", [])}
+    own = [{"cell": f"{target['sheet']}!{target['cell']}", "reason": target["finding"], "fix": target.get("expected_formula")}] if target.get("mode") == "table" else []
+    candidates: list[dict] = []
+    for finding in [*own, *target.get("other_findings", [])]:
+        cell, fix = finding["cell"], finding.get("fix")
+        if not fix or cell in tried or cell in intentional or any(c["cell"] == cell for c in candidates):
+            continue
+        try:
+            before, after = book.value(cell), book.with_patch(cell, fix).value(cell)
+        except (FormulaError, RecursionError):
+            continue
+        candidates.append({"number": len(candidates) + 1, "cell": cell, "reason": finding["reason"], "fix": fix, "before": before, "after": after})
+        if len(candidates) == MAX_CANDIDATES:
+            break
+    return candidates
+
+
+def candidates_brief(candidates: list[dict]) -> str:
+    if not candidates:
+        return ""
+    lines = ["Engine-tested candidate fixes (each was applied to a copy and recalculated). Choose the one that fixes a genuine error by its number, or none if every difference is intentional:"]
+    lines += [f"  {c['number']}. {c['cell']}: {c['reason']} -> {c['fix']} (value {c['before']} -> {c['after']})" for c in candidates]
+    return "\n".join(lines)
+
+
 def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_text: bool = False) -> Callable[[InvestigationState], dict]:
     def diagnose(state: InvestigationState) -> dict:
-        brief = investigation_brief(state)
+        candidates = tested_candidates(book, state)
+        brief = "\n".join(part for part in (investigation_brief(state), candidates_brief(candidates)) if part)
         if plain_text:
             brief = f"{brief}\n\nThe whole model, read as text:\n{sheet_as_text(book)}"
         result = investigator.invoke({"messages": [HumanMessage(content=brief)]})
@@ -233,7 +306,7 @@ def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_t
         currently_open = sum(1 for h in state.get("hypotheses", []) if h["status"] == "open")
         budget = max(0, MAX_OPEN_HYPOTHESES - currently_open)
         intentional = {o["cell"] for o in state.get("known_overrides", [])}
-        proposed = [h for h in diagnosis.hypotheses if full_ref(h.cell, sheet) not in intentional][:budget]
+        proposed = [h for h in diagnosis.hypotheses if readable_ref(h.cell, sheet) and full_ref(h.cell, sheet) not in intentional][:budget]
         first_number = len(state.get("hypotheses", [])) + 1
         hypotheses = []
         for i, h in enumerate(proposed):
@@ -248,12 +321,44 @@ def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_t
                 "status": "open",
             })
         patch = None
-        if diagnosis.patch is not None and full_ref(diagnosis.patch.cell, sheet) not in intentional:
+        rule = candidates[0] if candidates else None
+        decision = {"cell": None, "decided_by": "none", "fix": None, "model_fix": None, "rule_would_have": f"{rule['cell']} {rule['fix']}" if rule else None, "reason": diagnosis.reason, "candidates": len(candidates)}
+        chosen = next((c for c in candidates if c["number"] == diagnosis.choice), None)
+        if chosen is not None:
+            patch = {"cell": chosen["cell"], "old_formula": old_formula(book, chosen["cell"]), "new_formula": chosen["fix"], "source": "agent"}
+            decision |= {"cell": chosen["cell"], "decided_by": "model", "fix": chosen["fix"]}
+            if chosen["cell"] not in {h["cell"] for h in [*state.get("hypotheses", []), *hypotheses]}:
+                hypotheses.append({
+                    "id": f"hyp-{first_number + len(hypotheses)}", "cell": chosen["cell"], "error_type": "wrong_reference", "claim": chosen["reason"],
+                    "evidence_ids": [e["id"] for e in all_evidence if e["cell"] == chosen["cell"]], "confidence": "high", "status": "open",
+                })
+        elif diagnosis.patch is not None and readable_ref(diagnosis.patch.cell, sheet) and full_ref(diagnosis.patch.cell, sheet) not in intentional:
             patch_cell = full_ref(diagnosis.patch.cell, sheet)
-            new_formula = diagnosis.patch.new_formula
+            model_formula = as_formula(diagnosis.patch.new_formula)
+            new_formula = model_formula
             if book.formula(patch_cell) is None or breaks_row_pattern(book, patch_cell):
-                new_formula = row_formula_suggestion(book, patch_cell) or new_formula
+                new_formula = row_formula_suggestion(book, patch_cell) or column_formula_suggestion(book, patch_cell) or new_formula
             patch = {"cell": patch_cell, "old_formula": old_formula(book, patch_cell), "new_formula": new_formula, "source": "agent"}
-        return {"hypotheses": hypotheses, "evidence": new_evidence, "patch": patch, "run_log": result.get("run_log", []), "tool_call_counts": [result.get("tool_calls_used", 0)]}
+            decision |= {"cell": patch_cell, "decided_by": "model_own" if new_formula == model_formula else "rule_corrected", "fix": new_formula, "model_fix": str(model_formula)}
+        target = state["target"]
+        if patch is None and (target.get("mode") == "table" or target.get("other_findings")):
+            tried = {h["cell"] for h in state.get("hypotheses", []) if h["status"] != "open"}
+            own = [{"cell": f"{target['sheet']}!{target['cell']}", "reason": target["finding"], "fix": target.get("expected_formula")}] if target.get("mode") == "table" else []
+            findings = [*own, *target.get("other_findings", [])]
+            untried = [f for f in findings if f.get("fix") and f["cell"] not in tried and f["cell"] not in intentional]
+            if untried:
+                proposed_cells = {h["cell"] for h in hypotheses}
+                open_cells = {h["cell"] for h in state.get("hypotheses", []) if h["status"] == "open"}
+                for finding in untried[:budget]:
+                    if finding["cell"] in proposed_cells or finding["cell"] in open_cells:
+                        continue
+                    hypotheses.append({
+                        "id": f"hyp-{first_number + len(hypotheses)}", "cell": finding["cell"], "error_type": "wrong_reference",
+                        "claim": finding["reason"], "evidence_ids": [e["id"] for e in all_evidence if e["cell"] == finding["cell"]], "confidence": "medium", "status": "open",
+                    })
+                first = untried[0]
+                patch = {"cell": first["cell"], "old_formula": old_formula(book, first["cell"]), "new_formula": first["fix"], "source": "agent"}
+                decision |= {"cell": first["cell"], "decided_by": "rule", "fix": first["fix"]}
+        return {"hypotheses": hypotheses, "evidence": new_evidence, "patch": patch, "decisions": [decision], "run_log": result.get("run_log", []), "tool_call_counts": [result.get("tool_calls_used", 0)]}
 
     return diagnose
