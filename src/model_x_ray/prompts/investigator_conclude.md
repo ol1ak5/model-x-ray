@@ -10,3 +10,5 @@ For each hypothesis, give the cell, exactly one error type, a one-sentence claim
 Then propose a patch for the highest-ranked hypothesis only: the cell and the exact formula that should replace its current formula or value. The corrected formula must follow the formula pattern already observed in neighbouring cells; do not invent a formula. If the highest-ranked hypothesis is not supported strongly enough to determine a corrected formula, provide no patch.
 
 If no genuine error is supported, return no hypotheses and no patch.
+
+When the brief lists engine-tested candidate fixes, your job is to judge them, not to write formulas. Each candidate was already applied to a copy and recalculated. Decide which one fixes a genuine error and return its number in `choice`, with one sentence in `reason` saying why (the evidence, the label, the note, the model's purpose). Leave `choice` empty, and say why in `reason`, when every candidate is a deliberate difference such as a base year, a terminal year, a one-off adjustment or a value a note explains. Write your own patch only when no candidate fits the error you found; it will be tested more strictly.

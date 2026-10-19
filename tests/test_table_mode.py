@@ -181,3 +181,47 @@ def test_when_the_first_finding_cannot_be_proven_the_next_one_is_tried(tmp_path:
     assert final["target"]["cell"] == "B8"
     assert final["patch"]["cell"] != "Costs!B8"
     assert final["patch"]["cell"] in {f["cell"] for f in final["target"]["other_findings"]}
+
+
+def run_trading(tmp_path: Path, investigator, verdict=None):
+    from uuid import uuid4
+
+    from conftest import ScriptedVerdict
+
+    from model_x_ray.benchmark.runner import Setup, build_setup_graph, drive_graph
+    from model_x_ray.spreadsheet.sandbox import XlsxSandbox
+    from model_x_ray.spreadsheet.source import XlsxSource
+
+    path = write_trading_sheets(tmp_path / "trading.xlsx")
+    setup = Setup(name="scripted", kind="investigator", model="scripted-investigator", verifier="scripted-verifier")
+    judge = verdict or ScriptedVerdict()
+    source = XlsxSource({"trading": path})
+    graph = build_setup_graph(setup, source, XlsxSandbox(source, tmp_path / "corrected"), "trading", lambda model_id: judge if model_id == "scripted-verifier" else investigator)
+    return drive_graph(graph, {"spreadsheet_id": "trading", "question": ""}, {"configurable": {"thread_id": uuid4().hex}})
+
+
+def test_the_model_judges_engine_tested_candidates_and_its_choice_is_recorded(tmp_path: Path) -> None:
+    from test_investigator import ScriptedDiagnosis
+
+    investigator = ScriptedDiagnosis(turns=[([], None)], choice=2, reason="the deal value should be volume times price like the rows around it")
+    final = run_trading(tmp_path, investigator)
+
+    assert "Engine-tested candidate fixes" in investigator.briefs[0]
+    assert "  1. Costs!B8:" in investigator.briefs[0]
+    decision = final["decisions"][0]
+    assert decision["decided_by"] == "model" and decision["candidates"] >= 2
+    assert decision["cell"] != "Costs!B8"
+    assert decision["rule_would_have"].startswith("Costs!B8")
+    assert final["patch"]["cell"] == decision["cell"]
+    assert final["verifications"][-1]["verdict"] == "confirmed"
+    assert "Nemotron chose this fix among" in final["report"] and "volume times price" in final["report"]
+
+
+def test_when_the_model_chooses_nothing_the_rule_decides_and_the_record_says_so(tmp_path: Path) -> None:
+    from test_investigator import ScriptedDiagnosis
+
+    final = run_trading(tmp_path, ScriptedDiagnosis(turns=[([], None)]))
+
+    assert final["decisions"][0]["decided_by"] == "rule"
+    assert final["patch"]["cell"] == "Costs!B8"
+    assert "the rule's fix was tested" in final["report"]

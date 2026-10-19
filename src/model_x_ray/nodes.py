@@ -402,11 +402,25 @@ def narrative_brief(state: InvestigationState, hypothesis: Hypothesis | None, ve
     return "\n".join(lines)
 
 
+def decision_note(state: InvestigationState) -> str:
+    patch = state.get("patch")
+    decision = next((d for d in reversed(state.get("decisions", [])) if patch and d["cell"] == patch["cell"]), None)
+    if decision is None:
+        return ""
+    reason = f": {decision['reason'].rstrip('.')}." if decision["reason"] else "."
+    return {
+        "model": f"Nemotron chose this fix among {decision['candidates']} engine-tested candidates{reason}",
+        "model_own": f"Nemotron proposed this fix itself{reason}",
+        "rule_corrected": f"Nemotron proposed {decision['model_fix']}; the engine replaced it with the row's formula {decision['fix']}.",
+        "rule": "Nemotron chose no candidate, so the rule's fix was tested.",
+    }.get(decision["decided_by"], "")
+
+
 def with_choice(state: InvestigationState, update: dict) -> dict:
     choice = state.get("target_choice")
-    if not choice:
-        return update
-    return {**update, "report": f"{choice['why']} {update['report']}"}
+    report = f"{choice['why']} {update['report']}" if choice else update["report"]
+    note = decision_note(state) if update["report"].startswith("Root cause") or "Root cause found" in update["report"] else ""
+    return {**update, "report": f"{report} {note}".strip()}
 
 
 def make_explain_node(llm: BaseChatModel | None = None) -> Callable[[InvestigationState], dict]:

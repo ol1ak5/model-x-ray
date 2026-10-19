@@ -17,7 +17,7 @@ from model_x_ray.causal import render_causal_tree
 from model_x_ray.llm import invoke_with_usage, model_name_of
 from model_x_ray.prompts import load_prompt
 from model_x_ray.rules import breaks_row_pattern
-from model_x_ray.spreadsheet.engine import CellAddress, Workbook, make_ref, normalize_ref, split_ref
+from model_x_ray.spreadsheet.engine import CellAddress, FormulaError, Workbook, make_ref, normalize_ref, split_ref
 from model_x_ray.state import Evidence, InvestigationState, RunLog
 
 MAX_TOOL_CALLS = 8
@@ -39,6 +39,8 @@ class ProposedPatch(BaseModel):
 class Diagnosis(BaseModel):
     hypotheses: list[ProposedHypothesis]
     patch: ProposedPatch | None
+    choice: int | None = None
+    reason: str = ""
 
 
 class InvestigatorState(TypedDict):
@@ -250,9 +252,41 @@ def sheet_as_text(book: Workbook) -> str:
     return "\n".join(lines)
 
 
+MAX_CANDIDATES = 6
+
+
+def tested_candidates(book: Workbook, state: InvestigationState) -> list[dict]:
+    target = state["target"]
+    tried = {h["cell"] for h in state.get("hypotheses", []) if h["status"] != "open"}
+    intentional = {o["cell"] for o in state.get("known_overrides", [])}
+    own = [{"cell": f"{target['sheet']}!{target['cell']}", "reason": target["finding"], "fix": target.get("expected_formula")}] if target.get("mode") == "table" else []
+    candidates: list[dict] = []
+    for finding in [*own, *target.get("other_findings", [])]:
+        cell, fix = finding["cell"], finding.get("fix")
+        if not fix or cell in tried or cell in intentional or any(c["cell"] == cell for c in candidates):
+            continue
+        try:
+            before, after = book.value(cell), book.with_patch(cell, fix).value(cell)
+        except (FormulaError, RecursionError):
+            continue
+        candidates.append({"number": len(candidates) + 1, "cell": cell, "reason": finding["reason"], "fix": fix, "before": before, "after": after})
+        if len(candidates) == MAX_CANDIDATES:
+            break
+    return candidates
+
+
+def candidates_brief(candidates: list[dict]) -> str:
+    if not candidates:
+        return ""
+    lines = ["Engine-tested candidate fixes (each was applied to a copy and recalculated). Choose the one that fixes a genuine error by its number, or none if every difference is intentional:"]
+    lines += [f"  {c['number']}. {c['cell']}: {c['reason']} -> {c['fix']} (value {c['before']} -> {c['after']})" for c in candidates]
+    return "\n".join(lines)
+
+
 def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_text: bool = False) -> Callable[[InvestigationState], dict]:
     def diagnose(state: InvestigationState) -> dict:
-        brief = investigation_brief(state)
+        candidates = tested_candidates(book, state)
+        brief = "\n".join(part for part in (investigation_brief(state), candidates_brief(candidates)) if part)
         if plain_text:
             brief = f"{brief}\n\nThe whole model, read as text:\n{sheet_as_text(book)}"
         result = investigator.invoke({"messages": [HumanMessage(content=brief)]})
@@ -279,12 +313,25 @@ def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_t
                 "status": "open",
             })
         patch = None
-        if diagnosis.patch is not None and full_ref(diagnosis.patch.cell, sheet) not in intentional:
+        rule = candidates[0] if candidates else None
+        decision = {"cell": None, "decided_by": "none", "fix": None, "model_fix": None, "rule_would_have": f"{rule['cell']} {rule['fix']}" if rule else None, "reason": diagnosis.reason, "candidates": len(candidates)}
+        chosen = next((c for c in candidates if c["number"] == diagnosis.choice), None)
+        if chosen is not None:
+            patch = {"cell": chosen["cell"], "old_formula": old_formula(book, chosen["cell"]), "new_formula": chosen["fix"], "source": "agent"}
+            decision |= {"cell": chosen["cell"], "decided_by": "model", "fix": chosen["fix"]}
+            if chosen["cell"] not in {h["cell"] for h in [*state.get("hypotheses", []), *hypotheses]}:
+                hypotheses.append({
+                    "id": f"hyp-{first_number + len(hypotheses)}", "cell": chosen["cell"], "error_type": "wrong_reference", "claim": chosen["reason"],
+                    "evidence_ids": [e["id"] for e in all_evidence if e["cell"] == chosen["cell"]], "confidence": "high", "status": "open",
+                })
+        elif diagnosis.patch is not None and full_ref(diagnosis.patch.cell, sheet) not in intentional:
             patch_cell = full_ref(diagnosis.patch.cell, sheet)
-            new_formula = as_formula(diagnosis.patch.new_formula)
+            model_formula = as_formula(diagnosis.patch.new_formula)
+            new_formula = model_formula
             if book.formula(patch_cell) is None or breaks_row_pattern(book, patch_cell):
                 new_formula = row_formula_suggestion(book, patch_cell) or column_formula_suggestion(book, patch_cell) or new_formula
             patch = {"cell": patch_cell, "old_formula": old_formula(book, patch_cell), "new_formula": new_formula, "source": "agent"}
+            decision |= {"cell": patch_cell, "decided_by": "model_own" if new_formula == model_formula else "rule_corrected", "fix": new_formula, "model_fix": str(model_formula)}
         target = state["target"]
         if patch is None and (target.get("mode") == "table" or target.get("other_findings")):
             tried = {h["cell"] for h in state.get("hypotheses", []) if h["status"] != "open"}
@@ -303,6 +350,7 @@ def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_t
                     })
                 first = untried[0]
                 patch = {"cell": first["cell"], "old_formula": old_formula(book, first["cell"]), "new_formula": first["fix"], "source": "agent"}
-        return {"hypotheses": hypotheses, "evidence": new_evidence, "patch": patch, "run_log": result.get("run_log", []), "tool_call_counts": [result.get("tool_calls_used", 0)]}
+                decision |= {"cell": first["cell"], "decided_by": "rule", "fix": first["fix"]}
+        return {"hypotheses": hypotheses, "evidence": new_evidence, "patch": patch, "decisions": [decision], "run_log": result.get("run_log", []), "tool_call_counts": [result.get("tool_calls_used", 0)]}
 
     return diagnose

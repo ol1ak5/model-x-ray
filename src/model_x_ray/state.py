@@ -138,6 +138,16 @@ def merge_verifications(left: list[Verification], right: list[Verification]) -> 
     return list(merged.values())
 
 
+class Decision(TypedDict):
+    cell: str | None
+    decided_by: Literal["model", "model_own", "rule_corrected", "rule", "none"]
+    fix: str | None
+    model_fix: str | None
+    rule_would_have: str | None
+    reason: str
+    candidates: int
+
+
 class InvestigationState(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
     spreadsheet_id: str
@@ -156,6 +166,7 @@ class InvestigationState(TypedDict):
     run_log: Annotated[list[RunLog], operator.add]
     node_log: Annotated[list[NodeLog], operator.add]
     tool_call_counts: Annotated[list[int], operator.add]
+    decisions: Annotated[list[Decision], operator.add]
     attempts: int
     report: str | None
     human_decision: HumanDecision | None
