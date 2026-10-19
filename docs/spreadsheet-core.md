@@ -14,6 +14,7 @@ Issues: #5 (reading, dependency graph, tools), #6 (sandbox). Design context: `do
 | `spreadsheet/sandbox.py` | `Sandbox` protocol (`create_copy`, `apply_patch`, `read_values`, `discard`), `SandboxWithWrite` (adds `write_corrected_copy`), `GoogleSandbox`, `XlsxSandbox`, `run_sandbox_test`, `a1_range`, `build_google_services` |
 | `rules.py` | `find_formula_outliers(range)` — the pattern rules, independent of LangChain so the rules-only baseline (#16) can reuse them |
 | `causal.py` | `explain_change` (one-input-at-a-time contributions) and `build_causal_tree` (the `CausalNode` dict, suspicious branches marked) |
+| `rules.py` | `row_outliers` / `model_outliers` (pattern and hardcode outliers over a set of cells), `row_cells` + `breaks_row_pattern` (a cell judged against every period cell in its row), `scan_model` (whole-model sweep), `is_period_cell` |
 | `tools.py` | The read-only investigation API the Investigator and the nodes call: `find_cells`, `get_cell`, `trace_precedents`, `trace_dependents`, `explain_change`, `compare_formulas`, `find_formula_outliers`, `get_cell_metadata`, plus `make_read_only_tools(book)` which wraps them as LangChain tools |
 
 The Google Sheets API reader (#5) and sandbox (#6) will produce the same `Workbook`, so the tools and nodes do not depend on where the model came from.

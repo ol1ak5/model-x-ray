@@ -16,6 +16,7 @@ from model_x_ray.benchmark.runner import (
     run_variant,
 )
 from model_x_ray.benchmark.rules import make_rules_diagnose_node
+from model_x_ray.benchmark.report import render_report
 from model_x_ray.benchmark.wilson import wilson
 from model_x_ray.dataset import generate
 from model_x_ray.spreadsheet.engine import Workbook
@@ -241,6 +242,38 @@ def test_wilson_intervals_bracket_every_observed_rate() -> None:
     assert wilson(0, 0) == (0.0, 1.0)
     low, high = wilson(0, 10)
     assert low == 0.0 and 0.0 < high < 0.3
+
+
+def test_the_runner_captures_failed_investigations_without_losing_the_rest(tmp_path: Path) -> None:
+    root = dataset(tmp_path)
+    broken = Setup(name="broken", kind="investigator", model="missing-model", verifier="missing-model")
+
+    def broken_factory(model_id: str):
+        raise RuntimeError("model unavailable")
+
+    results = run_benchmark(root, [broken], factory=broken_factory)
+
+    errors = [row for row in results["rows"] if "error" in row]
+    assert len(errors) == 14
+    assert errors[0]["error"] == "RuntimeError: model unavailable"
+    assert all(row["setup"] == "broken" and row["set"] and isinstance(row["variant_index"], int) for row in errors)
+    assert results["meta"]["errors"] == 14
+    assert results["aggregates"] == []
+    report = render_report(results)
+    assert "14 of 14 investigations failed" in report
+
+
+def test_the_runner_produces_identical_results_when_variants_run_in_parallel(tmp_path: Path) -> None:
+    root = dataset(tmp_path)
+
+    serial = run_benchmark(root, [SETUP_RULES])
+    parallel = run_benchmark(root, [SETUP_RULES], workers=3)
+
+    key = lambda row: (row["set"], row["variant_index"])
+    assert [key(row) for row in parallel["rows"]] == [key(row) for row in serial["rows"]]
+    assert [row["root_cause_top1"] for row in parallel["rows"]] == [row["root_cause_top1"] for row in serial["rows"]]
+    assert [row["confusion"] for row in parallel["rows"]] == [row["confusion"] for row in serial["rows"]]
+    assert [(a["setup"], a["set"]) for a in parallel["aggregates"]] == [(a["setup"], a["set"]) for a in serial["aggregates"]]
 
 
 def test_build_setup_graph_rejects_an_unknown_setup() -> None:

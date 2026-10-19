@@ -64,3 +64,13 @@ def test_cells_that_already_fail_in_the_original_do_not_block_a_fix(tmp_path: Pa
 
     assert result["before"]["DCF!E4"] is None and result["after"]["DCF!E4"] is None
     assert result["after"]["DCF!D4"] == pytest.approx(121.0)
+
+
+def test_a_formula_patch_without_an_equals_sign_is_written_as_a_formula(demo_workbook_path: Path, tmp_path: Path) -> None:
+    source = XlsxSource({"demo": demo_workbook_path})
+    sandbox = XlsxSandbox(source, tmp_path / "corrected")
+    name = sandbox.write_corrected_copy("demo", {"cell": "P&L!H7", "old_formula": "-45.2", "new_formula": "-G7*Assumptions!$C$7", "source": "human"}, [["Cell"], ["P&L!H7"]])
+
+    fixed = load_xlsx(tmp_path / "corrected" / name)
+    assert fixed.formula("P&L!H7") == "=-G7*Assumptions!$C$7"
+    assert isinstance(fixed.value("P&L!H8"), float)

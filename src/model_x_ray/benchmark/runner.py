@@ -1,7 +1,9 @@
 import json
 import time
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from uuid import uuid4
 
@@ -282,6 +284,8 @@ def mean_of(values: list[float]) -> float | None:
 def aggregate(rows: list[dict]) -> list[dict]:
     groups: dict[tuple[str, str], list[dict]] = {}
     for row in rows:
+        if is_error_row(row):
+            continue
         groups.setdefault((row["setup"], row["set"]), []).append(row)
     entries = []
     for (setup, set_name), group in sorted(groups.items()):
@@ -328,11 +332,27 @@ def aggregate(rows: list[dict]) -> list[dict]:
 def confusion(rows: list[dict]) -> dict[str, dict[str, int]]:
     table: dict[str, dict[str, int]] = {}
     for row in rows:
-        if not row["confusion"]:
+        if is_error_row(row) or not row.get("confusion"):
             continue
         counts = table.setdefault(row["setup"], {})
         counts[row["confusion"]] = counts.get(row["confusion"], 0) + 1
     return table
+
+
+def is_error_row(row: dict) -> bool:
+    return "error" in row
+
+
+def guarded(task: Callable[[], dict], label: dict) -> dict:
+    try:
+        return task()
+    except Exception as error:
+        return {**label, "error": f"{type(error).__name__}: {error}"}
+
+
+def run_job(job: tuple[Callable[[], dict], dict]) -> dict:
+    task, label = job
+    return guarded(task, label)
 
 
 def run_benchmark(
@@ -340,19 +360,37 @@ def run_benchmark(
     setups: list[Setup],
     output: Path | None = None,
     factory: Callable[[str], BaseChatModel] | None = None,
+    workers: int = 1,
 ) -> dict:
     manifest = json.loads((root / "manifest.json").read_text())
     base_path = root / "base.xlsx"
     base = load_xlsx(base_path) if base_path.is_file() else None
-    rows: list[dict] = []
+    tasks: list[tuple[Callable[[], dict], dict]] = []
     for variant in manifest["variants"]:
         ground_truth = json.loads((root / variant["ground_truth"]).read_text())
         for setup in setups:
             source = XlsxSource({"variant": root / variant["file"]})
             output_dir = root / "corrected" / setup.name / variant["set"]
             sandbox = XlsxSandbox(source, output_dir)
-            rows.append(run_variant(setup, source, sandbox, "variant", ground_truth, factory, output_dir, base=base))
-    results = {"rows": rows, "aggregates": aggregate(rows), "confusion": confusion(rows)}
+            task = partial(run_variant, setup, source, sandbox, "variant", ground_truth, factory, output_dir, base=base)
+            label = {"setup": setup.name, "set": ground_truth["set"], "variant_index": ground_truth["variant_index"]}
+            tasks.append((task, label))
+    if workers > 1:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            rows = list(pool.map(run_job, tasks))
+    else:
+        rows = [run_job(job) for job in tasks]
+    results = {
+        "meta": {
+            "variants": len(manifest["variants"]),
+            "seed": manifest.get("seed"),
+            "setups": [setup.name for setup in setups],
+            "errors": sum(1 for row in rows if is_error_row(row)),
+        },
+        "rows": rows,
+        "aggregates": aggregate(rows),
+        "confusion": confusion(rows),
+    }
     if output is not None:
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(json.dumps(results, indent=2, sort_keys=True) + "\n")

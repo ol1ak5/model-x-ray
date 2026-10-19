@@ -28,8 +28,18 @@ def row_fix(book: Workbook, ref: str) -> str | None:
     return book.shifted_formula(source, ref)
 
 
-def scan_model(book: Workbook) -> list[dict[str, str]]:
-    cells = [ref for ref in book.cells() if is_period_cell(book, ref) and PERIOD_LIKE.search(book.column_header(ref) or "")]
+def row_cells(book: Workbook, ref: str) -> list[str]:
+    sheet, address = split_ref(ref)
+    return [
+        candidate
+        for candidate in book.cells()
+        if split_ref(candidate)[0] == sheet
+        and split_ref(candidate)[1].row == address.row
+        and is_period_cell(book, candidate)
+    ]
+
+
+def model_outliers(book: Workbook, cells: list[str]) -> list[dict[str, str]]:
     edges: dict[tuple[str, int], tuple[int, int]] = {}
     for ref in cells:
         sheet, address = split_ref(ref)
@@ -46,6 +56,14 @@ def scan_model(book: Workbook) -> list[dict[str, str]]:
                 continue
         found.append(outlier)
     return found
+
+
+def breaks_row_pattern(book: Workbook, ref: str) -> bool:
+    return normalize_ref(ref) in {outlier["cell"] for outlier in model_outliers(book, row_cells(book, ref))}
+
+
+def scan_model(book: Workbook) -> list[dict[str, str]]:
+    return model_outliers(book, [ref for ref in book.cells() if is_period_cell(book, ref) and PERIOD_LIKE.search(book.column_header(ref) or "")])
 
 
 def row_outliers(book: Workbook, refs: list[str]) -> list[dict[str, str]]:
