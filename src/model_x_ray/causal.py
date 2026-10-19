@@ -1,7 +1,7 @@
 import re
 
-from model_x_ray.rules import find_formula_outliers
-from model_x_ray.spreadsheet.engine import CellAddress, FormulaError, Workbook, column_letters, is_number, make_ref, normalize_ref, split_ref
+from model_x_ray.rules import breaks_row_pattern
+from model_x_ray.spreadsheet.engine import CellAddress, FormulaError, Workbook, is_number, make_ref, normalize_ref, split_ref
 from model_x_ray.state import CausalNode, Contribution
 
 
@@ -42,14 +42,8 @@ def _from_ref(book: Workbook, ref: str, from_period: str, to_period: str) -> str
         return None
 
 
-def _suspicious(book: Workbook, ref: str, from_period: str, to_period: str) -> bool:
-    sheet, address = split_ref(ref)
-    grid = _grid(book, sheet, from_period, to_period)
-    if grid is None:
-        return False
-    low, high = sorted(grid)
-    row_range = f"{sheet}!{column_letters(low)}{address.row}:{column_letters(high)}{address.row}"
-    return ref in {o["cell"] for o in find_formula_outliers(book, row_range)}
+def _suspicious(book: Workbook, ref: str) -> bool:
+    return breaks_row_pattern(book, ref)
 
 
 def _node(book: Workbook, ref: str, from_period: str, to_period: str, root_delta: float) -> CausalNode | None:
@@ -73,7 +67,7 @@ def _node(book: Workbook, ref: str, from_period: str, to_period: str, root_delta
         "value_after": value_after,
         "delta": delta,
         "share_of_change": delta / root_delta if root_delta else 0.0,
-        "suspicious": _suspicious(book, ref, from_period, to_period),
+        "suspicious": _suspicious(book, ref),
         "children": children,
     }
 
