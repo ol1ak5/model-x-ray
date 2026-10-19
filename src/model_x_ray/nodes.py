@@ -51,17 +51,12 @@ def find_candidates(question: str) -> list[TargetCell]:
 
 
 def locate(state: InvestigationState) -> dict:
-    candidates = find_candidates(state["question"])
+    candidates = find_candidates(state["question"]) or STUB_CELLS[:1]
     if len(candidates) == 1:
-        return {"target": candidates[0], "cell_choice": None}
+        return {"target": candidates[0], "target_choice": None}
     refs = [f"{c['sheet']}!{c['cell']}" for c in candidates]
-    return {"target": None, "cell_choice": {"question": "Which cell do you mean?", "candidates": refs}}
-
-
-def choose_target(state: InvestigationState) -> dict:
-    choice = interrupt(state["cell_choice"])
-    chosen = next(c for c in STUB_CELLS if f"{c['sheet']}!{c['cell']}" == choice["ref"])
-    return {"target": chosen, "cell_choice": None}
+    why = f"{len(refs)} cells match ({', '.join(refs)}); I investigated {refs[0]}, the source the other cells link to."
+    return {"target": candidates[0], "target_choice": {"candidates": refs, "chosen": refs[0], "why": why}}
 
 
 def trace(state: InvestigationState) -> dict:
@@ -266,6 +261,10 @@ def make_verify_node(llm: BaseChatModel | None, source: SpreadsheetSource) -> Ca
 
 
 def explain(state: InvestigationState) -> dict:
+    return with_choice(state, stub_report(state))
+
+
+def stub_report(state: InvestigationState) -> dict:
     if state["verifications"][-1]["verdict"] == "confirmed":
         return {"report": f"Root cause found in {state['patch']['cell']}."}
     return {"report": "Inconclusive: no hypothesis survived verification."}
@@ -374,8 +373,18 @@ def narrative_brief(state: InvestigationState, hypothesis: Hypothesis | None, ve
     return "\n".join(lines)
 
 
+def with_choice(state: InvestigationState, update: dict) -> dict:
+    choice = state.get("target_choice")
+    if not choice:
+        return update
+    return {**update, "report": f"{choice['why']} {update['report']}"}
+
+
 def make_explain_node(llm: BaseChatModel | None = None) -> Callable[[InvestigationState], dict]:
     def explain_node(state: InvestigationState) -> dict:
+        return with_choice(state, explain_report(state))
+
+    def explain_report(state: InvestigationState) -> dict:
         if not state.get("hypotheses"):
             return {"report": no_error_report(state)}
         verifications = state.get("verifications", [])

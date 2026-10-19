@@ -6,11 +6,10 @@ import "./styles/base.css";
 import { THEME, VARIANT } from "./theme";
 import FactsBar from "./components/FactsBar";
 import Stage from "./components/Stage";
-import CellChoice from "./components/CellChoice";
 import Alert from "./components/Alert";
 import Button from "./components/Button";
 import Chip from "./components/Chip";
-import { SHEET, REVIEW, CELL_CHOICE, APPROVED, REJECTED, RUNNING, STEPS } from "./test/fakeApi";
+import { SHEET, REVIEW, APPROVED, REJECTED, RUNNING, STEPS } from "./test/fakeApi";
 import StepRail from "./components/StepRail";
 import { railOf } from "./steps";
 import styles from "./preview.module.css";
@@ -37,8 +36,6 @@ function Section({ label, children }: { label: string; children: ReactNode }) {
 }
 
 export default function Preview() {
-  const pause = CELL_CHOICE.pause && "question" in CELL_CHOICE.pause ? CELL_CHOICE.pause : null;
-
   return (
     <main className={styles.page}>
       <header className={styles.header}>
@@ -80,10 +77,6 @@ export default function Preview() {
 
       <Section label="facts — rejected">
         <FactsBar view={REJECTED} onDecide={() => {}} onEvidence={() => {}} />
-      </Section>
-
-      <Section label="cell choice — ambiguous question">
-        {pause && <CellChoice pause={pause} onChoose={() => {}} />}
       </Section>
 
       <Section label="primitives">

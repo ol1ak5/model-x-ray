@@ -8,7 +8,6 @@ graph TD;
 	load_sheet(load_sheet)
 	map_model(map_model)
 	locate(locate)
-	choose_target(choose_target)
 	trace(trace)
 	test(test)
 	verify(verify)
@@ -18,15 +17,13 @@ graph TD;
 	diagnose(diagnose)
 	__end__([<p>__end__</p>]):::last
 	__start__ --> load_sheet;
-	choose_target --> trace;
 	diagnose --> test;
 	explain --> human_review;
 	human_review -. &nbsp;reject&nbsp; .-> __end__;
 	human_review -. &nbsp;approve&nbsp; .-> apply_fix;
 	human_review -. &nbsp;edit&nbsp; .-> test;
 	load_sheet --> map_model;
-	locate -. &nbsp;ask&nbsp; .-> choose_target;
-	locate -. &nbsp;found&nbsp; .-> trace;
+	locate --> trace;
 	map_model --> locate;
 	test --> verify;
 	trace --> diagnose;

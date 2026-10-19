@@ -20,21 +20,6 @@ export const SHEET = sheet as unknown as SheetWindow;
 
 export const REJECTED: InvestigationView = { ...REVIEW, status: "done", pause: null, corrected_copy_id: null };
 
-export const CELL_CHOICE: InvestigationView = {
-  ...REVIEW,
-  status: "needs_cell",
-  pause: { question: "Which cell do you mean?", candidates: ["P&L!G6", "Summary!D10"] },
-  target: null,
-  contributions: [],
-  causal_tree: null,
-  hypotheses: [],
-  evidence: [],
-  verifications: [],
-  patch: null,
-  report: null,
-  corrected_copy_id: null,
-};
-
 export const TESTED: InvestigationView = {
   ...REVIEW,
   status: "running",
@@ -69,7 +54,7 @@ export const RUNNING: InvestigationView = {
 };
 
 export function fakeSteps(story: string): { step: string; label: string }[] {
-  const count = story === "starting" ? 0 : story === "choice" ? 3 : story === "running" ? 5 : STEPS.length;
+  const count = story === "starting" ? 0 : story === "running" ? 5 : STEPS.length;
   return STEPS.slice(0, count).map(([step, label]) => ({ step, label }));
 }
 

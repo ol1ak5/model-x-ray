@@ -30,7 +30,7 @@ Seeded generation ⇒ reproducible. Ground truth JSON next to each variant: plan
 
 ## Per-step metrics (each node its own metric)
 
-`load_sheet` edge precision/recall · `map_model` label accuracy · `locate` exact match + clarification P/R · `trace` planted-cell recall (expect 100%) · `diagnose` top-1/top-3, error-type accuracy, false alarms, tool calls of budget 8 · `test` sandbox success + value match · `verify` verdict P/R on right *and* wrong patches · `explain` every cited cell exists and quoted number matches.
+`load_sheet` edge precision/recall · `map_model` label accuracy · `locate` exact match + auto-pick accuracy on ambiguous questions · `trace` planted-cell recall (expect 100%) · `diagnose` top-1/top-3, error-type accuracy, false alarms, tool calls of budget 8 · `test` sandbox success + value match · `verify` verdict P/R on right *and* wrong patches · `explain` every cited cell exists and quoted number matches.
 
 End-to-end: root-cause accuracy, fix accuracy, false-alarm rate, inconclusive rate, attempts, latency p50/p95, cost.
 

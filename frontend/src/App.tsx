@@ -15,7 +15,6 @@ import {
 import Alert from "./components/Alert";
 import Boundary from "./components/Boundary";
 import Button from "./components/Button";
-import CellChoice from "./components/CellChoice";
 import Chip from "./components/Chip";
 import FactsBar from "./components/FactsBar";
 import Hero from "./components/Hero";
@@ -26,7 +25,7 @@ import Stage from "./components/Stage";
 import StepRail from "./components/StepRail";
 import { clearCurrent, currentRun, newRunId, saveRun } from "./storage";
 import { type Step, railOf } from "./steps";
-import { APPROVED, CELL_CHOICE, RUNNING, REVIEW, SHEET, fakeSteps } from "./test/fakeApi";
+import { APPROVED, RUNNING, REVIEW, SHEET, fakeSteps } from "./test/fakeApi";
 import styles from "./App.module.css";
 
 type Phase = "idle" | "running" | "paused" | "done";
@@ -58,7 +57,6 @@ function marksOf(view: InvestigationView): Marks {
 
 const MemoStage = memo(Stage);
 const MemoFacts = memo(FactsBar);
-const MemoCellChoice = memo(CellChoice);
 const MemoRail = memo(StepRail);
 
 export default function App() {
@@ -67,7 +65,7 @@ export default function App() {
   const [demos, setDemos] = useState<Spreadsheet[]>([]);
   const [phase, setPhase] = useState<Phase>(story === "starting" || story === "running" ? "running" : story === "done" ? "done" : story ? "paused" : "idle");
   const [steps, setSteps] = useState<Step[]>(story ? fakeSteps(story) : []);
-  const [view, setView] = useState<InvestigationView | null>(story === "workspace" ? REVIEW : story === "running" ? RUNNING : story === "done" ? APPROVED : story === "choice" ? CELL_CHOICE : null);
+  const [view, setView] = useState<InvestigationView | null>(story === "workspace" ? REVIEW : story === "running" ? RUNNING : story === "done" ? APPROVED : null);
   const [sheet, setSheet] = useState<SheetWindow | null>(story === "workspace" || story === "running" || story === "done" ? SHEET : null);
   const [check, setCheck] = useState<Run | null>(null);
   const [modelName, setModelName] = useState(story ? "My model.xlsx" : "");
@@ -119,7 +117,7 @@ export default function App() {
   }, [targetKey]);
 
   function stopped(current: InvestigationView | null): Phase {
-    return current && (current.status === "needs_review" || current.status === "needs_cell") ? "paused" : "idle";
+    return current && current.status === "needs_review" ? "paused" : "idle";
   }
 
   function onEvent(event: ProgressEvent) {
@@ -156,7 +154,7 @@ export default function App() {
   }, []);
 
   const resume = useCallback(
-    (answer: { ref: string } | Decision) => {
+    (answer: Decision) => {
       if (!view) return;
       setError(null);
       setPhase("running");
@@ -185,22 +183,18 @@ export default function App() {
   const stageNote =
     sheetError !== null
       ? "The model could not be shown"
-      : view?.status === "needs_cell"
-        ? "Waiting for you to pick the cell"
-        : phase === "running"
+      : phase === "running"
           ? "Scanning the model — every formula, read in a copy"
           : "Loading the model";
   const started = phase === "running" || steps.length > 0 || view !== null;
   const status =
     phase === "running"
       ? { label: "Checking…", tone: "blue" as const }
-      : phase === "paused" && view?.status === "needs_cell"
-        ? { label: "Needs your input", tone: "amber" as const }
-        : phase === "paused"
-          ? { label: "Review needed", tone: "amber" as const }
-          : phase === "done"
-            ? { label: "Done", tone: "green" as const }
-            : { label: "Stopped", tone: "neutral" as const };
+      : phase === "paused"
+        ? { label: "Review needed", tone: "amber" as const }
+        : phase === "done"
+          ? { label: "Done", tone: "green" as const }
+          : { label: "Stopped", tone: "neutral" as const };
 
   return (
     <div className={styles.page}>
@@ -246,11 +240,6 @@ export default function App() {
                 )}
               </div>
             </div>
-            {view && view.status === "needs_cell" && view.pause && "question" in view.pause && (
-              <div className={styles.choice}>
-                <MemoCellChoice pause={view.pause} onChoose={(ref) => resume({ ref })} />
-              </div>
-            )}
             {view && <MemoFacts view={view} onDecide={resume} onEvidence={showEvidence} />}
           </Boundary>
         </main>

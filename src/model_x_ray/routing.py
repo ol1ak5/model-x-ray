@@ -3,10 +3,6 @@ from model_x_ray.state import InvestigationState
 MAX_ATTEMPTS = 3
 
 
-def route_after_locate(state: InvestigationState) -> str:
-    return "found" if state.get("target") else "ask"
-
-
 def route_after_verify(state: InvestigationState) -> str:
     if state["verifications"][-1]["verdict"] == "confirmed":
         return "confirmed"

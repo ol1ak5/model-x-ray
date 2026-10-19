@@ -2,7 +2,7 @@
 
 Implementation: `src/model_x_ray/api.py`. Tests: `tests/test_api.py`. Issue: #73.
 
-The API wraps the investigation graph so the React app (#74) can start an investigation, show its two pauses (which cell, approve the fix) and resume them.
+The API wraps the investigation graph so the React app (#74) can start an investigation, show its one pause (approve, edit or reject the fix) and resume it.
 
 ## Running it locally
 
@@ -85,15 +85,15 @@ On the planted benchmark models the scan lists exactly the planted cells, includ
 Every endpoint answers with the same JSON, built by `investigation_view` from the graph's checkpoint:
 
 - `id`: also the LangGraph `thread_id`, so one investigation is one thread.
-- `status`: `needs_cell` (paused in `choose_target`), `needs_review` (paused in `human_review`) or `done`.
-- `pause`: the value the graph passed to `interrupt()`: the question and candidate cells, or the report and patch to approve. `null` when not paused.
-- The public state fields: `spreadsheet_id`, `question`, `model_map`, `known_overrides`, `past_findings`, `target`, `causal_tree`, `contributions`, `hypotheses`, `evidence`, `verifications`, `patch`, `report`, `corrected_copy_id`, `run_log`, `attempts`. LangChain messages are never sent. These are also the fields a browser can hand back as `state` to continue an investigation the server has forgotten.
+- `status`: `needs_review` (paused in `human_review`) or `done`.
+- `pause`: the value the graph passed to `interrupt()`: the report and patch to approve. `null` when not paused.
+- The public state fields: `spreadsheet_id`, `question`, `target_choice` (the candidates, the chosen cell and why), `model_map`, `known_overrides`, `past_findings`, `target`, `causal_tree`, `contributions`, `hypotheses`, `evidence`, `verifications`, `patch`, `report`, `corrected_copy_id`, `run_log`, `attempts`. LangChain messages are never sent. These are also the fields a browser can hand back as `state` to continue an investigation the server has forgotten.
 
 ## Continuing without a thread
 
 `resume` looks the id up in the process that started the investigation. When the request also carries the `state` the browser kept, that lookup is not needed: the server builds a small continuation graph over the carried state and the decision, with the same nodes and the same checks, and runs only the nodes after the review. `approve` runs `apply_fix` alone, `reject` runs no model at all, `edit` runs `test → verify → explain` and pauses for review again. `/{id}/sheet` and `/{id}/corrected` still resolve through the process, which is why the browser keeps its own sheet window (`docs/persistence.md`).
 
-The state is untrusted input. `carried_state` keeps only the fields an investigation carries, requires the spreadsheet id and the question, and answers `400` for a list or an object of the wrong shape. The workbook is never taken from the state but loaded from the spreadsheet id, so an uploaded model has to still be on the server. A cell choice (`{"ref": ...}`) is the one pause a carried state cannot redo, because it carries no decision: it needs the process that asked the question, and #138 removes that pause.
+The state is untrusted input. `carried_state` keeps only the fields an investigation carries, requires the spreadsheet id and the question, and answers `400` for a list or an object of the wrong shape. The workbook is never taken from the state but loaded from the spreadsheet id, so an uploaded model has to still be on the server. A cell choice is no longer part of the API: `locate` picks the cell itself and records the choice in `target_choice`.
 
 ## Errors
 

@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import App from "../App";
-import { APPROVED, CELL_CHOICE, REJECTED, REVIEW, RUNNING, STEPS, TESTED, fakeApi, steps } from "./fakeApi";
+import { APPROVED, REJECTED, REVIEW, RUNNING, STEPS, TESTED, fakeApi, steps } from "./fakeApi";
 
 afterEach(() => {
   window.history.replaceState(null, "", "/");
@@ -68,21 +68,16 @@ describe("an investigation in the browser", () => {
     });
   });
 
-  test("asks which cell is meant, then remembers a rejection marked intentional", async () => {
+  test("goes straight to the review, then remembers a rejection marked intentional", async () => {
     const api = fakeApi(
-      [...steps("load_sheet", "map_model", "locate"), ["view", CELL_CHOICE]],
-      [
-        [...steps("trace", "diagnose", "test", "verify", "explain"), ["view", REVIEW]],
-        [...steps("human_review"), ["view", REJECTED]],
-      ],
+      [...steps("load_sheet", "map_model", "locate", "trace", "diagnose", "test", "verify", "explain"), ["view", REVIEW]],
+      [[...steps("human_review"), ["view", REJECTED]]],
     );
     vi.stubGlobal("fetch", api.fetch);
     const user = await checkDemo();
     expect(api.sent.find((request) => request.url.endsWith("/investigations/stream"))?.body).toEqual({ spreadsheet_id: "demo", question: "" });
+    expect(screen.queryByRole("group", { name: "Which cell do you mean?" })).not.toBeInTheDocument();
 
-    const choice = await screen.findByRole("group", { name: "Which cell do you mean?" });
-    await user.click(within(choice).getByRole("button", { name: "Summary!D10" }));
-    expect(lastResume(api)?.body).toMatchObject({ ref: "Summary!D10" });
     const facts = await screen.findByRole("region", { name: "Investigation facts" });
     await user.type(within(facts).getByLabelText("Reason"), "Opex frozen per budget meeting");
     await user.click(within(facts).getByLabelText("Never flag again"));
@@ -164,21 +159,6 @@ describe("an investigation in the browser", () => {
     const frame = screen.getByRole("region", { name: "Sheet" });
     expect(frame).toHaveAttribute("aria-busy", "true");
     expect(within(frame).getByText("Scanning the model — every formula, read in a copy")).toBeInTheDocument();
-  });
-
-  test("keeps the model frame and the steps on screen while the agent asks which cell is meant", async () => {
-    const api = fakeApi([...steps("load_sheet", "map_model", "locate"), ["view", CELL_CHOICE]]);
-    vi.stubGlobal("fetch", api.fetch);
-    await checkDemo();
-
-    expect(await screen.findByRole("group", { name: "Which cell do you mean?" })).toBeInTheDocument();
-    const rail = within(screen.getByRole("region", { name: "Investigation steps" }));
-    const rows = rail.getAllByRole("listitem");
-    expect(rows.map((row) => row.getAttribute("data-tone"))).toEqual(["done", "done", "done", "active", "pending", "pending", "pending", "pending"]);
-    expect(rows[3].getAttribute("data-tone")).toBe("active");
-
-    const frame = screen.getByRole("region", { name: "Sheet" });
-    expect(within(frame).getByText("Waiting for you to pick the cell")).toBeInTheDocument();
   });
 
   test("explains the investigation step by step, with what each step found", async () => {

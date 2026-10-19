@@ -34,12 +34,12 @@ from langgraph.store.memory import InMemoryStore          # long-term memory (te
 
 Add the dependency: `uv add langgraph langchain-openai langgraph-checkpoint-sqlite`.
 
-## Human-in-the-loop (design: both pauses use this)
+## Human-in-the-loop (design: the one pause, human_review, uses this)
 
 Old `interrupt_before=` / `NodeInterrupt` patterns are deprecated. Inside a node:
 
 ```python
-decision = interrupt({"question": question, "candidates": candidates})
+decision = interrupt({"report": state["report"], "patch": state.get("patch")})
 ```
 
 The graph pauses; resume from the client with:

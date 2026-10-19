@@ -59,7 +59,7 @@ function finding(key: string, view: InvestigationView | null): string | null {
 
 export function railOf(view: InvestigationView | null, steps: Step[], running: boolean): RailStep[] {
   const arrived = new Map(steps.map((item) => [item.step, item.label]));
-  const settled = view !== null && !running && view.status !== "needs_cell";
+  const settled = view !== null && !running;
   const proven = (key: string) => view !== null && finding(key, view) !== null;
   const next = PIPELINE.find((entry) => !arrived.has(entry.key) && !proven(entry.key) && !settled)?.key ?? null;
 
