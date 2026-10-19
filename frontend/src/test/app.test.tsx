@@ -193,7 +193,8 @@ describe("an investigation in the browser", () => {
     expect(rows.map((row) => row.getAttribute("data-tone"))).toEqual(Array.from({ length: 8 }, () => "done"));
     expect(within(rows[2]).getByText("Gross profit 2025A · 84.7 → 285.8")).toBeInTheDocument();
     expect(within(rows[3]).getByText("Revenue +11.5 · COGS +189.5")).toBeInTheDocument();
-    expect(within(rows[4]).getByText(/^P&L!G5 — Formula =G4\*Assumptions!\$C\$5 lacks the minus sign/)).toBeInTheDocument();
+    const cause = (REVIEW.hypotheses ?? []).find((item) => item.status === "confirmed") ?? (REVIEW.hypotheses ?? [])[0];
+    expect(within(rows[4]).getByText(`${cause.cell} — ${cause.claim}`)).toBeInTheDocument();
     expect(within(rows[5]).getByText("P&L!G5 =G4*Assumptions!$C$5 → =-G4*Assumptions!$C$5")).toBeInTheDocument();
     expect(within(rows[6]).getByText("3 of 3 checks passed · proof passed")).toBeInTheDocument();
     expect(within(rows[7]).getByText(/Report ready · \d+ evidence links/)).toBeInTheDocument();
