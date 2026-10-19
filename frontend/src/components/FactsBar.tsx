@@ -45,6 +45,7 @@ export default function FactsBar({
   const [reason, setReason] = useState("");
   const [intentional, setIntentional] = useState(false);
   const [formula, setFormula] = useState(view.patch?.new_formula ?? "");
+  const [downloaded, setDownloaded] = useState(false);
 
   const target = view.target;
   const verification = view.verifications?.at(-1) ?? null;
@@ -137,9 +138,16 @@ export default function FactsBar({
       {view.status === "done" && (
         <p className={styles.closed}>
           {view.corrected_copy_id ? (
-            <>
-              Fix applied to a new copy. <a href={correctedFileUrl(view.id)}>Download corrected model</a>
-            </>
+            downloaded ? (
+              <>The corrected model went to your downloads, and the copy is no longer on the server.</>
+            ) : (
+              <>
+                Fix applied to a new copy.{" "}
+                <a href={correctedFileUrl(view.id)} onClick={() => setDownloaded(true)}>
+                  Download corrected model
+                </a>
+              </>
+            )
           ) : (
             "Closed without changes. Your decision is saved."
           )}
