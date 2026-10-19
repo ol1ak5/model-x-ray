@@ -54,13 +54,19 @@ Deliberately small, matching standard financial models:
 
 - Numbers, percentages (`50%`), text in quotes, `TRUE` / `FALSE`
 - References: `A1`, `$C$7`, ranges `A1:A3`, other sheets `Assumptions!C7` and quoted names `'P&L'!H8`
+- Whole rows and columns: `70:70`, `$8:$8`, `B:B`, clipped to the cells the sheet uses; their formula pattern keeps the row (or column) and is stable across a row of copies
+- Defined names: a workbook name such as `growth` (`Inputs!$B$2`) or `dates_row` (`Acc!$8:$8`) reads its range; an unknown name is `#NAME?`
+- Error literals written in a formula (`=#REF!`, `Sheet!#REF!`) raise that error, so `IFERROR` can catch them
 - Operators: `+ - * / ^`, unary minus, `&` (join text), comparisons `= <> < > <= >=`, parentheses
 - Maths: `SUM`, `AVERAGE`, `MIN`, `MAX`, `ROUND` (half away from zero, as in Excel and Google Sheets), `ABS`, `SUMPRODUCT` (equal-size ranges, text counts as 0), `ROUNDDOWN` (toward zero), `INT` (down to the next whole number, so `INT(-8.9)` is -9), `MOD(number, divisor)` (takes the divisor's sign, as in Excel; a zero divisor is `#DIV/0!`), `POWER(number, power)` (same as `^`: zero to a negative power is `#DIV/0!`, a negative number to a fractional power is `#NUM!`)
-- Logic: `IF`, `IFERROR`, `AND`, `OR`, `NOT`
+- Logic: `IF`, `IFERROR`, `AND`, `OR`, `NOT`, `CHOOSE(index, values...)` (evaluates only the chosen value; an index with no value is `#VALUE!`)
+- Information: `ISERROR`, `ISNUMBER`, `ISTEXT`, `ISBLANK` (an error argument gives `TRUE` for ISERROR and `FALSE` for the others)
+- Counting and ranking: `COUNT` (numbers and dates), `COUNTA` (anything not empty), `LARGE(range, k)`, `SMALL(range, k)` (`#NUM!` when k is outside the numbers)
+- Exponentials and statistics: `EXP`, `LN` (`#NUM!` for zero or less), `NORMSDIST(z)` and `NORM.S.DIST(z, cumulative)`
 - Conditional sums and counts: `SUMIF(range, criteria, [sum_range])`, `SUMIFS(sum_range, criteria_range1, criteria1, ...)`, `COUNTIF(range, criteria)`, `COUNTIFS(criteria_range1, criteria1, ...)`. A criteria is a value (`"Data Center"`, `5`) or a comparison in text (`">10"`, `"<>US"`, `"="` for blanks); with several pairs, a row counts only when it meets all of them. Ranges of different sizes raise a formula error.
-- Lookups: `INDEX(range, row, [column])`, `MATCH(value, range, [type])` with type `0` (exact) or `1` (default: largest value not above the target, range sorted ascending), `VLOOKUP(value, table, column, [approximate])` (approximate by default, as in Excel), `XLOOKUP(value, lookup, results, [if_not_found])` (exact match)
+- Lookups: `INDEX(range, row, [column])`, `MATCH(value, range, [type])` with type `0` (exact) or `1` (default: largest value not above the target, range sorted ascending), `VLOOKUP(value, table, column, [approximate])` (approximate by default, as in Excel), `HLOOKUP(value, table, row, [approximate])` (the same along the first row), `XLOOKUP(value, lookup, results, [if_not_found])` (exact match)
 - Dates: `EOMONTH(start, months)`, `EDATE(start, months)` (same day, clamped to the month's end), `YEAR`, `MONTH`, `DAY`, `DATE(year, month, day)` (months and days may overflow, as in Excel).
-- Valuation: `NPV(rate, values...)` (first value discounted one period), `XNPV(rate, values, dates)` (365-day year from the first date), `XIRR(values, dates, [guess])` (the rate that sets XNPV to zero: Newton's method from the guess, 10% by default, with a bisection fallback; `#NUM!` without both a positive and a negative flow or when no rate exists), `PPMT(rate, period, periods, present_value, [future_value], [type])` (the principal part of a loan payment; type 1 means payments at the start of each period; a period outside 1 to periods is `#NUM!`). PPMT and XIRR are checked against the examples in Microsoft's documentation. Dates are Excel serial numbers (days since 30 Dec 1899); a date typed in a cell is loaded as ISO text (so it can still be a column header) and turns into its serial number when a formula uses it as a number.
+- Valuation: `NPV(rate, values...)` (first value discounted one period), `XNPV(rate, values, dates)` (365-day year from the first date), `IRR(values, [guess])` (periodic flows), `PMT(rate, periods, present_value, [future_value], [type])`, `XIRR(values, dates, [guess])` (the rate that sets XNPV to zero: Newton's method from the guess, 10% by default, with a bisection fallback; `#NUM!` without both a positive and a negative flow or when no rate exists), `PPMT(rate, period, periods, present_value, [future_value], [type])` (the principal part of a loan payment; type 1 means payments at the start of each period; a period outside 1 to periods is `#NUM!`). PPMT and XIRR are checked against the examples in Microsoft's documentation. Dates are Excel serial numbers (days since 30 Dec 1899); a date typed in a cell is loaded as ISO text (so it can still be a column header) and turns into its serial number when a formula uses it as a number.
 - Excel's `_xlfn.` prefix (how Excel stores newer functions such as `XLOOKUP` in the file) is ignored.
 
 Errors behave like Excel's where it matters for models. `IF` evaluates only the branch it returns, so `=IF(G8=0,0,H8/G8)` works when `G8` is 0. `IFERROR` returns its fallback when the first argument fails with a formula error (division by zero, a lookup that finds nothing, text used as a number). It never hides an unsupported function or a circular reference, because those mean the engine cannot calculate the model, not that the model has an error. A lookup with no match raises `FormulaError("#N/A: ...")`; an `INDEX` outside its range raises `FormulaError("#REF: ...")`.
@@ -108,3 +114,14 @@ Tests use `EngineSandbox` (`tests/conftest.py`), which records the corrected-cop
 ## Testing
 
 `tests/conftest.py` writes a small demo model to a real `.xlsx` file: an Assumptions sheet and a P&L where Opex 2027 (`P&L!H7`) is typed over instead of following the growth formula. The tests load it through `load_xlsx` and check values, the broken link to `Assumptions!C7`, the patched recalculation (EBITDA 2027 52.0 becomes 44.7, growth 29.9% becomes 11.7%), relative patterns, labels, notes, functions, quoted sheet names, and the clear errors.
+
+## Coverage on public models
+
+Measured locally with `load_xlsx` and `Workbook.value` on every formula, no LLM involved. The files are downloaded for the measurement and never committed.
+
+| Corpus | Files | Fully computed | Formula cells computed |
+|---|---|---|---|
+| Aswath Damodaran's public valuation spreadsheets (NYU Stern) | 73 | 47 | 85.4% |
+| Enron Errors Corpus (Schmitz and Jannach, 2016) | 57 | 31 | 92.9% |
+
+Each file loads and evaluates in under a second. 35 of the Enron corpus's 36 real error cells evaluate. What still fails: circular references (iterative calculation, used by Damodaran's lease converters and project-finance debt schedules), links to other workbooks, `OFFSET`, `TRANSPOSE`, Data Tables, and VBA functions.
