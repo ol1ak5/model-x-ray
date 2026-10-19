@@ -140,11 +140,34 @@ class GoogleSandbox:
         return copy_id
 
 
-def cell_content(text: str) -> float | str:
+def is_number_text(text: str) -> bool:
     try:
-        return float(text)
+        float(text)
     except ValueError:
-        return text
+        return False
+    return True
+
+
+def normalized_formula(text: str) -> str:
+    stripped = text.strip()
+    if stripped.startswith("=") or is_number_text(stripped):
+        return stripped
+    return f"={stripped}"
+
+
+def cell_content(text: str) -> float | str:
+    normalized = normalized_formula(text)
+    return float(normalized) if is_number_text(normalized) else normalized
+
+
+def patched_book(book: Workbook, patch: Patch) -> Workbook:
+    return book.with_patch(patch["cell"], cell_content(patch["new_formula"]))
+
+
+def check_patch(book: Workbook, patch: Patch) -> None:
+    patched = patched_book(book, patch)
+    for ref in affected_cells(book, patch["cell"]):
+        patched.value(ref)
 
 
 class XlsxSandbox:
@@ -162,7 +185,7 @@ class XlsxSandbox:
         return copy_id
 
     def apply_patch(self, copy_id: str, patch: Patch) -> None:
-        self._copies[copy_id] = self._copies[copy_id].with_patch(patch["cell"], cell_content(patch["new_formula"]))
+        self._copies[copy_id] = patched_book(self._copies[copy_id], patch)
 
     def read_values(self, copy_id: str, cells: list[str]) -> dict[str, object]:
         return {cell: self._copies[copy_id].value(cell) for cell in cells}

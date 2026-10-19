@@ -108,7 +108,7 @@ Three steps need judgment, so three agents. Everything else is a plain Python no
 | Agent | Model | Tools | Job |
 |---|---|---|---|
 | Investigator | Nemotron 3 Super | Read-only only | Hypothesis-driven loop inside a subgraph with its own private messages. Decides what to investigate next, tells real errors from deliberate overrides, ranks hypotheses, proposes a minimal patch |
-| Verifier | Nemotron 3 Super, adversarial prompt | None (receives a fixed evidence package) | Assumes the diagnosis is wrong and looks for evidence that invalidates it. Never sees the Investigator's reasoning |
+| Verifier | Nemotron 3 Super, adversarial prompt | None (receives a fixed evidence package) | Assumes the diagnosis is wrong and looks for evidence that invalidates it. Never sees the Investigator's reasoning. A rejection must list its claims (`formula`, `value`, `note`), and the engine checks each one before the verdict counts (see Verifier claims below) |
 | Model mapper | Nemotron Super | None | One structured-output call per sheet revision to build the semantic map |
 
 Model assignment is provisional until the tool-calling spike (#4) reports results. A separate "hypothesis planner" agent is deliberately not added: planning stays inside the Investigator unless the benchmark shows that splitting it improves accuracy.
@@ -136,6 +136,8 @@ PROPOSE        top hypothesis + minimal patch
 | Diagnose-verify attempts | 3 | Bounded retry loop |
 
 Budgets are enforced in code, not trusted from the model: a batch of parallel tool calls is truncated at the remaining budget and the overflow calls get a `Tool budget exhausted.` tool message instead of executing, so `tool_calls_used` never exceeds the limit; each diagnosis is cut to the remaining open-hypothesis budget — at most 3 open at a time, counting the ones a retry still carries — in model order before entering state, and the brief states the live `Open hypotheses: n/3` count so the model can rank against it.
+
+The exact text of the proposed formula is not trusted either. When the patch lands on a cell that is a typed value or that breaks its row's pattern, `row_formula_suggestion` replaces the model's formula with the one the row's majority pattern produces for that cell (`shifted_formula` from the nearest agreeing neighbour). The rule only takes a formula derived from the model itself, and only when the row's formulas agree on one pattern; with a tie it leaves the model's text alone. It is the same property the Verifier's `pattern_restored` check demands, so a good diagnosis is no longer lost to a formula the model wrote by hand — on the served demo model a patch proposed as `=G4*1.05` for `P&L!G5` becomes `=-G4*Assumptions!$C$5` and passes.
 
 ### Confidence levels
 
@@ -260,7 +262,9 @@ EBITDA 2027  +30%
 
 After a confirmed fix the same tree is shown again with the patched values ("EBITDA +30% becomes +4%, pattern restored"), so the before/after story is visual.
 
-Implementation (`src/model_x_ray/causal.py`): `explain_change(book, ref, from_period, to_period)` recomputes each input's contribution by patching the input cells to their prior-period values one at a time (never the LLM); contributions sum to the observed change for formulas linear in their inputs. `build_causal_tree(book, ...)` builds the `CausalNode` dict directly (JSON-serializable for the UI): each cell's `value_before` is its prior-period column cell, `suspicious` is set when `find_formula_outliers` flags the cell in its row's period range, and recursion follows the dependency graph (inputs outside the period grid — constants, prior-year actuals — are not branches). Before/after trees are just this function called on the original and the patched `Workbook`.
+Implementation (`src/model_x_ray/causal.py`): `explain_change(book, ref, from_period, to_period)` recomputes each input's contribution by patching the input cells to their prior-period values one at a time (never the LLM); contributions sum to the observed change for formulas linear in their inputs. `build_causal_tree(book, ...)` builds the `CausalNode` dict directly (JSON-serializable for the UI): each cell's `value_before` is its prior-period column cell, `suspicious` is set by `rules.breaks_row_pattern`, and recursion follows the dependency graph (inputs outside the period grid — constants, prior-year actuals — are not branches). Before/after trees are just this function called on the original and the patched `Workbook`.
+
+`breaks_row_pattern` compares a cell with **every period cell in its row**, not only the two columns being compared. That matters on the models the demo generates: with `2024A → 2025A` only two columns are in play, so a row holds a single formula on each side and `find_formula_outliers` cannot tell which of the two is the odd one out. Scanning the whole row gives the row its majority pattern (`=-R[-1]C*Assumptions!R5C3` from the other four years), which is what flags the planted sign slip in `P&L!G5` — before this, a sign flip between two adjacent columns was invisible to the tree and the Investigator only had the brief's question to go on.
 
 ## Error types in scope
 
@@ -279,6 +283,22 @@ The rule scanner and the tool set are extensible to further model-risk patterns 
 ## Human in the loop
 
 There is one pause: **approve** in `human_review`, always, before anything is written. It uses `interrupt()` inside the node and resumes with `Command(resume=...)`, which replaces the older `interrupt_before` and `NodeInterrupt` patterns. The agent never stops to ask which cell a question means: it decides, says so in the report, and the reviewer overrules it by rejecting the fix.
+
+An edited fix is checked before it is accepted, in `checked_patch` (`api.py`) using `check_patch` from the sandbox: the candidate is written into the workbook in memory and the patched cell plus everything downstream is evaluated, so a formula that cannot be calculated is refused with 422 and a sentence naming the cell, while the investigation stays paused at `human_review` for another try. The same pass normalizes what a person types (`normalized_formula`): `-G4*Assumptions!$C$5` becomes `=-G4*Assumptions!$C$5` and `-45.2` stays a number, because a patch cell holds a number or a formula, never text — that is exactly the "Text used as a number" error the tool exists to find. If an agent's patch turns out to be uncalculable, `test` catches the `FormulaError` and records an empty verification instead of failing the run, which sends it down the bounded retry route.
+
+## Verifier claims
+
+Language models judge logic well but get arithmetic wrong. In a live demo the Verifier rejected a correct fix by claiming that EBITDA no longer equalled gross profit plus operating expenses, while 90.24 + (-60.20) = 30.04 matched the recalculated copy; the same fix was confirmed on another run. So the Verifier keeps the judgment and the engine keeps the numbers.
+
+`Verdict.objections` lists one claim per reason for a rejection; `settle_verdict` (`agents/verifier.py`) checks each against the patched workbook:
+
+| Claim | The Verifier says | The engine checks | The claim holds when |
+|---|---|---|---|
+| `formula` | a cell no longer equals its formula | recalculates the cell on the patched copy and compares it with the sandbox value | the two really differ |
+| `value` | a cell's value after the fix is wrong or implausible (a business judgment) | reads the cell on the patched copy | the number the Verifier relied on is the true one, so the judgment stands on real numbers |
+| `note` | a cell note shows the original was deliberate | reads the note | the note exists |
+
+A rejection stands only if at least one claim holds, and its reason then ends with "Checked by the engine: ...". A rejection whose claims all fail, or that names none, is overruled: the fix is confirmed with a reason that says which claim the engine disproved ("the recalculated copy gives P&L!G10 = 30.04, which matches its formula =G6+G9"). The verification record's checks gain `verifier_claims_hold`. This only runs after every deterministic check has passed, because a failed check already rejects the fix without consulting the Verifier.
 
 ## Memory
 
@@ -301,16 +321,18 @@ A plain rejection (without `intentional`) writes nothing: "not convinced" is not
 
 | Use | Model ID | Context | Price per 1M tokens (in / out) |
 |---|---|---|---|
-| Investigator, Verifier, `locate` | `nvidia/nemotron-3-super-120b-a12b` | 262K | $0.30 / $0.90 |
-| Fast small-model candidate (was the mapper until 11 Oct) | `nvidia/Nemotron-3_5-Lightning` | 1M | $0.06 / $0.24 |
-| Model mapper (fallback), small-model comparison | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | 262K | $0.06 / $0.24 |
+| Investigator, Verifier, `locate`, mapper | `nvidia/nemotron-3-super-120b-a12b` | 262K | $0.30 / $0.90 |
+| Report writer (`explain`) | `nvidia/Nemotron-3_5-Lightning` | 1M | $0.06 / $0.24 |
+| Small-model comparison / benchmark set-up | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | 262K | $0.06 / $0.24 |
 | Optional: hardest verification, strongest benchmark attacker | `nvidia/Nemotron-3-Ultra-550b-a55b` | 1M | $1.00 / $3.00 |
 
 IDs, context and prices were confirmed with `GET /v1/models` on 6 Oct 2026; all four list `tools` and `reasoning` in `supported_features`. IDs are case-sensitive. Lightning passed every tool-calling and structured-output check in #4 and was the fastest model, so it was the provisional mapper. On 11 Oct 2026 a real 63-line project-finance model showed its limit: Lightning wrote its reasoning as text and hit the 8,192-token output limit without calling the tool, even when told to answer only through the tool, while Super returned all 63 lines and 24 periods in 7 seconds with about 1,900 output tokens. The mapper role moved to Super; the map is cached per file revision, so the cost is paid once per file. A failed map never stops an investigation (`model_map` stays empty). Structured output uses `with_structured_output(..., method="function_calling")`, because the catalog lists no JSON-schema mode.
 
+The report writer moved from Super to Lightning on 18 Oct 2026: on a real run Super spent 9.1 s and 2,062 output tokens on a 3-to-6-sentence report (the prompt is short, the model reasons), which was the largest single wait in the pipeline after the Investigator. Lightning writes prose from a fixed brief — no tools, no structured output — and the report is checked against the brief before it is shown: if the narrative is empty or cites an id that is not in the evidence, the node keeps the deterministic report instead, so a faster writer can never lose a citation. `explain` also carries the only `max_tokens` cap in the registry (`ROLE_MAX_TOKENS`, 900), because the answer is a paragraph.
+
 All run on Nebius Token Factory through LangChain's `ChatOpenAI` with `base_url=https://api.tokenfactory.nebius.com/v1/` and `NEBIUS_API_KEY` from `.env`. The regional `https://api.tokenfactory.us-central1.nebius.com/v1/` also works but lists fewer models (18 vs 25).
 
-Role-to-model mapping lives in one registry in `llm.py` (`ROLE_MODELS`): `investigator`, `verifier` and `locate` → Super, `mapper` → Super, `explain` → Super. `build_chat_model(role=...)` resolves a role and is overridable from `.env` with `NEBIUS_MODEL_<ROLE>` (empty means the built-in default); `build_chat_model(model=...)` pins an explicit id, which makes the four-way comparison in `docs/evaluation.md` configuration only. The client sets `timeout=120s` and `max_retries=3` (the OpenAI SDK's exponential backoff covers rate limits and transient errors), and raises a `ValueError` naming the missing variable when `NEBIUS_API_KEY` or `NEBIUS_BASE_URL` is unset. Every LLM call goes through `invoke_with_usage`, which attaches a `UsageRecorder` callback and returns the result together with `RunLog` entries — role, model, input, output and reasoning tokens, latency. The Investigator's `think`/`conclude` and the Verifier append them to `state["run_log"]`, so evaluators get token and latency records without LangSmith.
+Role-to-model mapping lives in one registry in `llm.py` (`ROLE_MODELS`): `investigator`, `verifier`, `locate` and `mapper` → Super, `explain` → Lightning. `build_chat_model(role=...)` resolves a role and is overridable from `.env` with `NEBIUS_MODEL_<ROLE>` (empty means the built-in default); `build_chat_model(model=...)` pins an explicit id, which makes the four-way comparison in `docs/evaluation.md` configuration only. The client sets `timeout=120s` and `max_retries=3` (the OpenAI SDK's exponential backoff covers rate limits and transient errors), and raises a `ValueError` naming the missing variable when `NEBIUS_API_KEY` or `NEBIUS_BASE_URL` is unset. Every LLM call goes through `invoke_with_usage`, which attaches a `UsageRecorder` callback and returns the result together with `RunLog` entries — role, model, input, output and reasoning tokens, latency. The Investigator's `think`/`conclude` and the Verifier append them to `state["run_log"]`, so evaluators get token and latency records without LangSmith.
 
 ## Evaluation
 

@@ -4,17 +4,75 @@ from typing import Literal
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import Runnable
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from model_x_ray.llm import invoke_with_usage
 from model_x_ray.prompts import load_prompt
-from model_x_ray.spreadsheet.engine import CellAddress, Workbook, make_ref, split_ref
+from model_x_ray.spreadsheet.engine import CellAddress, FormulaError, Workbook, is_number, make_ref, normalize_ref, split_ref
 from model_x_ray.state import InvestigationState, Patch, RunLog, Verification
+
+
+class Objection(BaseModel):
+    kind: Literal["formula", "value", "note"] = Field(
+        description="formula: the cell does not equal its formula after the fix; value: the cell's value after the fix is wrong or implausible; note: a cell note shows the original content was intentional"
+    )
+    cell: str = Field(description="The cell the claim is about, for example P&L!H8")
+    stated_value: float | None = Field(default=None, description="The number you read for this cell after the fix, for formula and value claims")
+    explanation: str
 
 
 class Verdict(BaseModel):
     verdict: Literal["confirmed", "rejected"]
     reason: str
+    objections: list[Objection] = Field(default_factory=list, description="Required when rejecting: every claim behind the rejection, so the engine can check it")
+
+
+def _close(left: float, right: float) -> bool:
+    return abs(left - right) <= max(0.01, 1e-3 * abs(right))
+
+
+def _value_or_none(book: Workbook, ref: str) -> float | None:
+    try:
+        value = book.value(ref)
+    except FormulaError:
+        return None
+    return float(value) if is_number(value) else None
+
+
+def check_objection(book: Workbook, patch: Patch, after: dict[str, object], objection: Objection) -> tuple[bool, str]:
+    sheet = patch["cell"].rsplit("!", 1)[0]
+    cell = normalize_ref(objection.cell if "!" in objection.cell else f"{sheet}!{objection.cell}")
+    patched = book.with_patch(patch["cell"], patch["new_formula"])
+    if objection.kind == "note":
+        note = book.note(cell)
+        return (True, f"{cell} has the note '{note}'") if note else (False, f"{cell} has no note")
+    recalculated = _value_or_none(patched, cell)
+    if recalculated is None:
+        return False, f"{cell} has no number after the fix"
+    if objection.kind == "formula":
+        sandbox = after.get(cell)
+        disagrees = is_number(sandbox) and not _close(float(sandbox), recalculated)
+        formula = patched.formula(cell) or "a typed value"
+        if disagrees:
+            return True, f"the copy shows {cell} = {float(sandbox):.2f} but its formula {formula} gives {recalculated:.2f}"
+        return False, f"the recalculated copy gives {cell} = {recalculated:.2f}, which matches its formula {formula}"
+    if objection.stated_value is not None and _close(objection.stated_value, recalculated):
+        return True, f"{cell} is {recalculated:.2f} after the fix, as stated"
+    stated = "no number" if objection.stated_value is None else f"{objection.stated_value:.2f}"
+    return False, f"the second model read {cell} as {stated}, but the recalculated copy gives {recalculated:.2f}"
+
+
+def settle_verdict(verdict: Verdict, book: Workbook, patch: Patch, after: dict[str, object]) -> tuple[str, str, bool | None]:
+    if verdict.verdict == "confirmed":
+        return "confirmed", verdict.reason, None
+    results = [check_objection(book, patch, after, objection) for objection in verdict.objections]
+    upheld = [finding for holds, finding in results if holds]
+    if upheld:
+        return "rejected", f"{verdict.reason.rstrip('.')}. Checked by the engine: {'; '.join(upheld)}.", True
+    if not results:
+        return "confirmed", "The second model rejected the fix without a claim the engine could check, and every code check passed, so the fix stands.", False
+    findings = "; ".join(finding for _, finding in results)
+    return "confirmed", f"The second model objected, but the engine disproved each claim: {findings}. Every code check passed, so the fix stands.", False
 
 
 def build_verifier(llm: BaseChatModel) -> Runnable:

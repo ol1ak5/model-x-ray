@@ -47,3 +47,13 @@ def test_a_typed_number_patch_is_written_as_a_number(demo_workbook_path: Path, t
     name = sandbox.write_corrected_copy("demo", {"cell": "P&L!F7", "old_formula": "-47.6", "new_formula": "-48.1", "source": "human"}, [["Cell"], ["P&L!F7"]])
 
     assert openpyxl.load_workbook(tmp_path / "corrected" / name)["P&L"]["F7"].value == -48.1
+
+
+def test_a_formula_patch_without_an_equals_sign_is_written_as_a_formula(demo_workbook_path: Path, tmp_path: Path) -> None:
+    source = XlsxSource({"demo": demo_workbook_path})
+    sandbox = XlsxSandbox(source, tmp_path / "corrected")
+    name = sandbox.write_corrected_copy("demo", {"cell": "P&L!H7", "old_formula": "-45.2", "new_formula": "-G7*Assumptions!$C$7", "source": "human"}, [["Cell"], ["P&L!H7"]])
+
+    fixed = load_xlsx(tmp_path / "corrected" / name)
+    assert fixed.formula("P&L!H7") == "=-G7*Assumptions!$C$7"
+    assert isinstance(fixed.value("P&L!H8"), float)

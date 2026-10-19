@@ -52,6 +52,7 @@ Verified 8 Oct 2026. Do not assume tooling that is not there — re-check the tr
 - Smoke check: `uv run model-x-ray`.
 - Frontend: `scripts/dev.sh` runs the API and the Vite dev server together (http://localhost:8000 + http://localhost:5173, bun install and bun run when bun is present, npm otherwise); frontend tests: `npm --prefix frontend test` or `cd frontend && bun run test`. The frontend uses bun/npm, not uv.
 - Run the API locally: `uv run tools/generate_dataset.py --output models --per-set 2` once, then `scripts/serve.sh` (http://localhost:8000/docs).
+- Re-record the demo stories against a running API: `uv run tools/export_demo_run.py --review <id> --done <id>` (reads `GET /investigations/{id}` and `/sheet`, writes `frontend/src/test/recorded/*.json`, spends no credits).
 - Graph picture: `scripts/export_graph.sh` (writes `docs/investigation-graph.mmd` and `.png`; re-run after any change to nodes or edges — a test fails if the committed diagram is stale).
 - Tool-calling measurement (live, about 3 cents): `scripts/measure_tool_calling.sh`.
 - Benchmark: `uv run tools/benchmark.py --setups rules` (offline, free, generates the dataset if missing) or `scripts/benchmark.sh` (all four set-ups; the LLM ones spend Token Factory credits; writes `docs/benchmark-results.json`).
