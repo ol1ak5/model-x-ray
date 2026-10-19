@@ -39,7 +39,7 @@ export default function SheetGrid({ sheet, marks, title, showFormulaBar = true, 
         </div>
       )}
       <div className={styles.scroll}>
-        <table className={styles.grid} style={{ minWidth: `${(96 + sheet.columns.length * 64) / 16}rem` }}>
+        <table className={styles.grid} style={{ minWidth: `${(96 + sheet.columns.length * (Object.keys(marks.after).length > 0 ? 136 : 64)) / 16}rem` }}>
           <colgroup>
             <col className={styles.colRow} />
             <col className={styles.colLabel} />
