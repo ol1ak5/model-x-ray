@@ -1,8 +1,8 @@
 {
-  "id": "79b2746dad0d4e6ea45c49b415ef95cc",
+  "id": "b49bf7b8dd964499956d342de11141c8",
   "status": "needs_review",
   "pause": {
-    "report": "Gross profit 2025A moved from 84.72 to 285.76 (ev-1). Root cause found in P&L!G5: Formula =G4*Assumptions!$C$5 lacks the minus sign used by neighbouring COGS cells (e.g., P&L!F5 uses =-F4*Assumptions!$C$5), breaking the row pattern and causing the large positive contribution to gross profit. (evidence: ev-3, ev-4, ev-8, ev-10). The fix was tested: P&L!G6 285.76 -> 90.24 in a sandbox copy after patching P&L!G5 (ev-11).",
+    "report": "Gross profit 2025A moved from 84.72 to 285.76 (ev-1). Root cause found in P&L!G5: P&L!G5 lacks the minus sign present in the row pattern (= -G4*Assumptions!$C$5) causing COGS to flip sign. (evidence: ev-3, ev-4, ev-5, ev-6). The fix was tested: P&L!G6 285.76 -> 90.24 in a sandbox copy after patching P&L!G5 (ev-7). Nemotron chose this fix among 2 engine-tested candidates: Candidate fix 1 restores the minus sign matching the row pattern, correcting the sign inconsistency that caused the abnormal COGS change.",
     "patch": {
       "cell": "P&L!G5",
       "old_formula": "=G4*Assumptions!$C$5",
@@ -18,6 +18,17 @@
   "spreadsheet_id": "demo",
   "question": "Check the model: Gross profit 2025A depends on P&L!G5, whose reference pattern differs from the row: the row uses =-R[-1]C*Assumptions!R5C3.",
   "target_choice": null,
+  "decisions": [
+    {
+      "cell": "P&L!G5",
+      "decided_by": "model",
+      "fix": "=-G4*Assumptions!$C$5",
+      "model_fix": null,
+      "rule_would_have": "P&L!G5 =-G4*Assumptions!$C$5",
+      "reason": "Candidate fix 1 restores the minus sign matching the row pattern, correcting the sign inconsistency that caused the abnormal COGS change.",
+      "candidates": 2
+    }
+  ],
   "model_map": {
     "rows": [
       {
@@ -96,7 +107,19 @@
     "period": "2025A",
     "value": 285.76,
     "prior_cell": "F6",
-    "prior_value": 84.72
+    "prior_value": 84.72,
+    "other_findings": [
+      {
+        "cell": "P&L!G5",
+        "reason": "reference pattern differs from the row: the row uses =-R[-1]C*Assumptions!R5C3",
+        "fix": "=-G4*Assumptions!$C$5"
+      },
+      {
+        "cell": "P&L!I6",
+        "reason": "typed value where the row uses =R[-2]C+R[-1]C",
+        "fix": "=I4+I5"
+      }
+    ]
   },
   "causal_tree": {
     "cell": "P&L!G6",
@@ -157,12 +180,12 @@
       "id": "hyp-1",
       "cell": "P&L!G5",
       "error_type": "sign_inconsistency",
-      "claim": "Formula =G4*Assumptions!$C$5 lacks the minus sign used by neighbouring COGS cells (e.g., P&L!F5 uses =-F4*Assumptions!$C$5), breaking the row pattern and causing the large positive contribution to gross profit.",
+      "claim": "P&L!G5 lacks the minus sign present in the row pattern (= -G4*Assumptions!$C$5) causing COGS to flip sign.",
       "evidence_ids": [
         "ev-3",
         "ev-4",
-        "ev-8",
-        "ev-10"
+        "ev-5",
+        "ev-6"
       ],
       "confidence": "high",
       "status": "confirmed"
@@ -195,42 +218,18 @@
     },
     {
       "id": "ev-5",
-      "cell": "P&L!G4",
-      "kind": "expected_pattern",
-      "text": "P&L!G4 Revenue 2025A = 188.0, typed value, no formula, no note"
-    },
-    {
-      "id": "ev-6",
-      "cell": "P&L!G6",
-      "kind": "expected_pattern",
-      "text": "P&L!G6 Gross profit 2025A = 285.76, formula =G4+G5"
-    },
-    {
-      "id": "ev-7",
-      "cell": "P&L!F5",
-      "kind": "expected_pattern",
-      "text": "P&L!F5 COGS 2024A = -91.78, formula =-F4*Assumptions!$C$5"
-    },
-    {
-      "id": "ev-8",
-      "cell": "P&L!G5",
-      "kind": "anomaly",
-      "text": "P&L!G5 uses =G4*Assumptions!$C$5, pattern =R[-1]C*Assumptions!R5C3; neighbour P&L!F5 uses pattern =-R[-1]C*Assumptions!R5C3 (=-F4*Assumptions!$C$5); P&L!G5 breaks the pattern; the row uses =-R[-1]C*Assumptions!R5C3"
-    },
-    {
-      "id": "ev-9",
-      "cell": "P&L!G6",
-      "kind": "expected_pattern",
-      "text": "P&L!G6: 84.72 -> 285.76 (+201.04)\nP&L!G4 Revenue: +11.5\nP&L!G5 COGS: +189.54"
-    },
-    {
-      "id": "ev-10",
       "cell": "P&L!G5",
       "kind": "expected_pattern",
       "text": "P&L!G5: no note"
     },
     {
-      "id": "ev-11",
+      "id": "ev-6",
+      "cell": "P&L!G5",
+      "kind": "expected_pattern",
+      "text": "P&L!G5: -91.78 -> 97.76 (+189.54000000000002)\nP&L!G4 Revenue: +5.980000000000004"
+    },
+    {
+      "id": "ev-7",
       "cell": "P&L!G5",
       "kind": "verification",
       "text": "P&L!G6 285.76 -> 90.24 in a sandbox copy after patching P&L!G5"
@@ -263,7 +262,7 @@
         "pattern_restored": true
       },
       "verdict": "confirmed",
-      "reason": "The patch corrected the sign in P&L!G5, making it follow the row pattern. The target P&L!G6 moved from 285.76 toward the prior-period value 84.72 (to 90.24). All dependents recalculated correctly and match their formulas."
+      "reason": "The patch corrected the sign of G5 to match the row pattern, making G6 move toward the prior-period value without inversion, and all dependents recalculate correctly."
     }
   ],
   "patch": {
@@ -272,96 +271,64 @@
     "new_formula": "=-G4*Assumptions!$C$5",
     "source": "agent"
   },
-  "report": "Gross profit 2025A moved from 84.72 to 285.76 (ev-1). Root cause found in P&L!G5: Formula =G4*Assumptions!$C$5 lacks the minus sign used by neighbouring COGS cells (e.g., P&L!F5 uses =-F4*Assumptions!$C$5), breaking the row pattern and causing the large positive contribution to gross profit. (evidence: ev-3, ev-4, ev-8, ev-10). The fix was tested: P&L!G6 285.76 -> 90.24 in a sandbox copy after patching P&L!G5 (ev-11).",
+  "report": "Gross profit 2025A moved from 84.72 to 285.76 (ev-1). Root cause found in P&L!G5: P&L!G5 lacks the minus sign present in the row pattern (= -G4*Assumptions!$C$5) causing COGS to flip sign. (evidence: ev-3, ev-4, ev-5, ev-6). The fix was tested: P&L!G6 285.76 -> 90.24 in a sandbox copy after patching P&L!G5 (ev-7). Nemotron chose this fix among 2 engine-tested candidates: Candidate fix 1 restores the minus sign matching the row pattern, correcting the sign inconsistency that caused the abnormal COGS change.",
   "corrected_copy_id": null,
   "run_log": [
     {
       "role": "investigator",
       "model": "nvidia/nemotron-3-super-120b-a12b",
-      "input_tokens": 1988,
-      "output_tokens": 94,
-      "reasoning_tokens": 64,
-      "latency_ms": 1025.572
+      "input_tokens": 2150,
+      "output_tokens": 177,
+      "reasoning_tokens": 147,
+      "latency_ms": 1758.988
     },
     {
       "role": "investigator",
       "model": "nvidia/nemotron-3-super-120b-a12b",
-      "input_tokens": 2068,
-      "output_tokens": 145,
-      "reasoning_tokens": 115,
-      "latency_ms": 1332.318
+      "input_tokens": 2230,
+      "output_tokens": 108,
+      "reasoning_tokens": 77,
+      "latency_ms": 1025.58
     },
     {
       "role": "investigator",
       "model": "nvidia/nemotron-3-super-120b-a12b",
-      "input_tokens": 2143,
-      "output_tokens": 146,
-      "reasoning_tokens": 116,
-      "latency_ms": 1175.66
+      "input_tokens": 2286,
+      "output_tokens": 192,
+      "reasoning_tokens": 130,
+      "latency_ms": 1352.724
     },
     {
       "role": "investigator",
       "model": "nvidia/nemotron-3-super-120b-a12b",
-      "input_tokens": 2219,
-      "output_tokens": 203,
-      "reasoning_tokens": 173,
-      "latency_ms": 1332.261
+      "input_tokens": 2430,
+      "output_tokens": 95,
+      "reasoning_tokens": 91,
+      "latency_ms": 1038.521
     },
     {
       "role": "investigator",
       "model": "nvidia/nemotron-3-super-120b-a12b",
-      "input_tokens": 2300,
-      "output_tokens": 195,
-      "reasoning_tokens": 145,
-      "latency_ms": 1387.434
-    },
-    {
-      "role": "investigator",
-      "model": "nvidia/nemotron-3-super-120b-a12b",
-      "input_tokens": 2469,
-      "output_tokens": 212,
-      "reasoning_tokens": 150,
-      "latency_ms": 1369.409
-    },
-    {
-      "role": "investigator",
-      "model": "nvidia/nemotron-3-super-120b-a12b",
-      "input_tokens": 2606,
-      "output_tokens": 191,
-      "reasoning_tokens": 160,
-      "latency_ms": 1399.657
-    },
-    {
-      "role": "investigator",
-      "model": "nvidia/nemotron-3-super-120b-a12b",
-      "input_tokens": 2662,
-      "output_tokens": 580,
-      "reasoning_tokens": 100,
-      "latency_ms": 2983.116
-    },
-    {
-      "role": "investigator",
-      "model": "nvidia/nemotron-3-super-120b-a12b",
-      "input_tokens": 2857,
-      "output_tokens": 212,
-      "reasoning_tokens": 56,
-      "latency_ms": 1361.584
+      "input_tokens": 2352,
+      "output_tokens": 406,
+      "reasoning_tokens": 231,
+      "latency_ms": 2735.119
     },
     {
       "role": "verifier",
       "model": "nvidia/nemotron-3-super-120b-a12b",
       "input_tokens": 1791,
-      "output_tokens": 429,
-      "reasoning_tokens": 315,
-      "latency_ms": 2344.52
+      "output_tokens": 294,
+      "reasoning_tokens": 225,
+      "latency_ms": 1945.6
     },
     {
       "role": "explain",
       "model": "nvidia/Nemotron-3_5-Lightning",
-      "input_tokens": 1051,
-      "output_tokens": 900,
-      "reasoning_tokens": 900,
-      "latency_ms": 3093.943
+      "input_tokens": 740,
+      "output_tokens": 1400,
+      "reasoning_tokens": 1400,
+      "latency_ms": 4530.327
     }
   ],
   "attempts": 1
