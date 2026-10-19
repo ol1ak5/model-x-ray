@@ -54,9 +54,9 @@ describe("a run kept in the browser", () => {
     await user.click(within(facts).getByRole("button", { name: "Approve fix" }));
 
     expect(await screen.findByRole("link", { name: "Download corrected model" })).toBeInTheDocument();
-    expect(sentTo(api, "/resume/stream")).toEqual({
+    expect(sentTo(api, "/resume/stream")).toMatchObject({
       url: `http://localhost:8000/investigations/${REVIEW.id}/resume/stream`,
-      body: { action: "approve", reason: "typed opex" },
+      body: { action: "approve", reason: "typed opex", state: { id: REVIEW.id, status: "needs_review" } },
     });
   });
 

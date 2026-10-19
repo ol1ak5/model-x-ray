@@ -30,12 +30,14 @@ Measured size for the demo model: `view` 11 KB and `sheet` 6 KB, so about 17 KB 
 | Endpoint | Change |
 |---|---|
 | `POST /investigations`, `/investigations/stream` | unchanged: run the graph, answer the view and the steps |
-| `POST /investigations/{id}/resume` | keeps its path but its body gains the carried state; it no longer resumes a live LangGraph thread, it continues from a state the browser hands back |
-| `GET /investigations/{id}/sheet` | comes from the carried state, or from the model the browser names, never from a stored investigation |
+| `POST /investigations/{id}/resume` | keeps its path; its body gains the carried state, and a request with that state continues from it even when this process never saw the id |
+| `GET /investigations/{id}/sheet` | still resolved through the process. The browser keeps the window it was shown, so a continuation brings its own sheet |
 
-The continuation is small and fully determined by the decision: `approve` runs only `apply_fix` and answers the corrected file's bytes, `reject` runs no model at all, `edit` runs `test → verify → explain` and pauses again. The first pause (choosing a cell) continues the same way. That is a handful of nodes over a state the request carries, so nothing needs a live thread and the served app needs no checkpointer at all (tests keep the in-memory one).
+The continuation is small and fully determined by the decision: `approve` runs only `apply_fix` and answers the corrected file's bytes, `reject` runs no model at all, `edit` runs `test → verify → explain` and pauses again. That is `run_continuation` in `graph.py`: the same nodes and the same checks as the full graph, compiled from an entry point after the review, so nothing needs a live thread and the served app needs no checkpointer at all (tests keep the in-memory one).
 
-The API must treat that state as untrusted input: check its shape before running a node over it.
+The API treats that state as untrusted input: `carried_state` keeps only the fields an investigation carries, requires the spreadsheet id and the question, refuses a list or an object of the wrong shape with `400`, and loads the workbook from the spreadsheet id instead of trusting anything in the state.
+
+Two things a carried state cannot do. The cell-choice pause carries no decision, so it still needs the process that asked the question (#138 removes that pause). An uploaded model is only on the server while its file is, so a continuation needs the upload to still be there (or the file re-sent); a demo model is read from the models folder every time.
 
 Why not the other two obvious carriers:
 
@@ -56,7 +58,7 @@ Measured before the decision, on the real workbook and the real SQLite checkpoin
 
 ## Still open
 
-- The server half (#143): the browser keeps the run today, but a restored *paused* check can only be answered while the same process still holds its thread, because `resume` looks the id up in `create_app`'s `graphs`. Continuing from the carried state is what makes the restore survive a restart.
 - Whether the agent's own memory (model maps, overrides, past fixes) also moves into the browser (#144). It would fix the cross-visitor leak above and make memory private by construction, at the cost of the agent no longer learning anything for the next visitor.
 - Whether the usage cap moves to the browser as well; it is the only remaining reason for server-side state, and an in-memory cap is enough for one container.
-- A way for a visitor to clear their history and their memory from the UI. Deleting an entry and dropping a foreign value already work in the store (`deleteRun`, `clearRuns`); nothing calls them yet.
+- A way for a visitor to clear their history and their memory from the UI. The store already has `deleteRun` and `clearRuns`; nothing calls them yet.
+- `/{id}/sheet` and `/{id}/corrected` still resolve through the process, so a visitor who reloads the sheet (rather than keeping the window the browser stored) needs the process that ran the investigation.

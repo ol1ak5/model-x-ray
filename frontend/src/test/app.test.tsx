@@ -62,7 +62,10 @@ describe("an investigation in the browser", () => {
     await user.click(within(facts).getByRole("button", { name: "Approve fix" }));
 
     expect(await screen.findByRole("link", { name: "Download corrected model" })).toHaveAttribute("href", `http://localhost:8000/investigations/${APPROVED.id}/corrected`);
-    expect(lastResume(api)).toEqual({ url: `http://localhost:8000/investigations/${REVIEW.id}/resume/stream`, body: { action: "approve", reason: "sign slip on COGS" } });
+    expect(lastResume(api)).toMatchObject({
+      url: `http://localhost:8000/investigations/${REVIEW.id}/resume/stream`,
+      body: { action: "approve", reason: "sign slip on COGS", state: { id: REVIEW.id, status: "needs_review" } },
+    });
   });
 
   test("asks which cell is meant, then remembers a rejection marked intentional", async () => {
@@ -79,14 +82,14 @@ describe("an investigation in the browser", () => {
 
     const choice = await screen.findByRole("group", { name: "Which cell do you mean?" });
     await user.click(within(choice).getByRole("button", { name: "Summary!D10" }));
-    expect(lastResume(api)?.body).toEqual({ ref: "Summary!D10" });
+    expect(lastResume(api)?.body).toMatchObject({ ref: "Summary!D10" });
     const facts = await screen.findByRole("region", { name: "Investigation facts" });
     await user.type(within(facts).getByLabelText("Reason"), "Opex frozen per budget meeting");
     await user.click(within(facts).getByLabelText("Never flag again"));
     await user.click(within(facts).getByRole("button", { name: "Reject" }));
 
     expect(await screen.findByText("Closed without changes. Your decision is saved.")).toBeInTheDocument();
-    expect(lastResume(api)?.body).toEqual({ action: "reject", reason: "Opex frozen per budget meeting", intentional: true });
+    expect(lastResume(api)?.body).toMatchObject({ action: "reject", reason: "Opex frozen per budget meeting", intentional: true });
     expect(screen.queryByRole("link", { name: "Download corrected model" })).not.toBeInTheDocument();
   });
 
@@ -104,7 +107,7 @@ describe("an investigation in the browser", () => {
     await user.type(within(facts).getByLabelText("Reason"), "use the budget growth");
     await user.click(within(facts).getByRole("button", { name: "Test my fix" }));
 
-    expect(lastResume(api)?.body).toEqual({
+    expect(lastResume(api)?.body).toMatchObject({
       action: "edit",
       reason: "use the budget growth",
       patch: { cell: "P&L!G5", old_formula: "=G4*Assumptions!$C$5", new_formula: "=-G4*Assumptions!$C$4" },
@@ -129,10 +132,11 @@ describe("an investigation in the browser", () => {
     await user.click(within(facts).getByRole("button", { name: "Test my fix" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("starts with =");
-    expect(api.sent.at(-1)?.body).toEqual({
+    expect(api.sent.at(-1)?.body).toMatchObject({
       action: "edit",
       reason: "",
       patch: { cell: "P&L!G5", old_formula: "=G4*Assumptions!$C$5", new_formula: "=SUMX(G4)" },
+      state: { id: REVIEW.id },
     });
     expect(screen.getByRole("region", { name: "Sheet" })).toBeInTheDocument();
     expect(screen.getByText("Review needed")).toBeInTheDocument();
