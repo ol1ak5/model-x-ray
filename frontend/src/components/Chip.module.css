@@ -1,0 +1,43 @@
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1875rem 0.5rem;
+  border: 1px solid color-mix(in srgb, currentColor 40%, transparent);
+  border-radius: var(--radius-s);
+  font-family: var(--sans);
+  font-size: 0.625rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.neutral {
+  color: var(--muted);
+}
+
+.green {
+  color: var(--accent);
+}
+
+.red {
+  color: var(--danger);
+}
+
+.amber {
+  color: var(--warn);
+}
+
+.blue {
+  color: var(--info);
+}
+
+.pulse {
+  animation: pulse 2s var(--ease) infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.45;
+  }
+}

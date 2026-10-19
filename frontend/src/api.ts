@@ -39,9 +39,9 @@ export type Verification = {
   hypothesis_id: string;
   before: Record<string, number>;
   after: Record<string, number>;
-  checks: Record<string, boolean>;
-  verdict: "confirmed" | "rejected" | "inconclusive";
-  reason: string;
+  checks?: Record<string, boolean>;
+  verdict?: "confirmed" | "rejected" | "inconclusive";
+  reason?: string;
 };
 
 export type Patch = { cell: string; old_formula: string; new_formula: string; source: "agent" | "human" };
@@ -51,9 +51,18 @@ export type Override = { cell: string; content: string; reason: string };
 export type CellChoicePause = { question: string; candidates: string[] };
 export type ReviewPause = { report: string; patch: Patch | null };
 
+export type ModelMap = {
+  rows: { label: string; kind: string }[];
+  columns: { period: string; kind: string }[];
+};
+
+export type Finding = { cell: string; error_type: string; old_formula: string; new_formula: string };
+
+export type Contribution = { cell: string; label: string; delta: number };
+
 export type InvestigationView = {
   id: string;
-  status: "needs_cell" | "needs_review" | "done";
+  status: "running" | "needs_cell" | "needs_review" | "done";
   pause: CellChoicePause | ReviewPause | null;
   question: string | null;
   target: TargetCell | null;
@@ -65,6 +74,15 @@ export type InvestigationView = {
   report: string | null;
   corrected_copy_id: string | null;
   known_overrides: Override[] | null;
+  past_findings: Finding[] | null;
+  model_map: ModelMap | null;
+  contributions: Contribution[] | null;
+  cell_choice: { question: string; candidates: string[] } | null;
+  human_decision: Decision | null;
+  tool_call_counts: number[] | null;
+  node_log: { node: string; latency_ms: number }[] | null;
+  attempts: number | null;
+  check_labels: Record<string, string>;
   run_log: { role: string; model: string | null; input_tokens: number | null; output_tokens: number | null; latency_ms: number }[] | null;
 };
 

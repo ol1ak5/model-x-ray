@@ -22,7 +22,7 @@ from pydantic import BaseModel
 from model_x_ray.graph import run_continuation, run_investigation
 from model_x_ray.rules import is_period_cell
 from model_x_ray.spreadsheet.engine import FormulaError, UnsupportedFormulaError, Workbook, column_letters, is_number, split_ref
-from model_x_ray.spreadsheet.sandbox import SandboxWithWrite
+from model_x_ray.spreadsheet.sandbox import SandboxWithWrite, check_patch, normalized_formula
 from model_x_ray.spreadsheet.source import SpreadsheetSource
 from model_x_ray.spreadsheet.xlsx import load_xlsx
 
@@ -42,6 +42,8 @@ STEP_LABELS = {
 }
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+
+LOCAL_DEV_ORIGIN = r"http://(localhost|127\.0\.0\.1)(:\d+)?"
 
 XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -150,6 +152,27 @@ def friendly_error(error: Exception) -> tuple[int, str]:
     return 500, GENERIC_FAILURE
 
 
+def checked_patch(source: SpreadsheetSource, spreadsheet_id: str, requested: dict[str, Any]) -> dict[str, str]:
+    cell = str(requested.get("cell", "")).strip()
+    formula = str(requested.get("new_formula", "")).strip()
+    if not cell or not formula:
+        raise HTTPException(422, "An edited fix needs a cell and a number or formula")
+    patch = {
+        "cell": cell,
+        "old_formula": str(requested.get("old_formula", "")),
+        "new_formula": normalized_formula(formula),
+        "source": "human",
+    }
+    try:
+        check_patch(source.load(spreadsheet_id), patch)
+    except (FormulaError, UnsupportedFormulaError) as error:
+        raise HTTPException(
+            422,
+            f"That fix does not work in {cell}: {error}. Enter a number, or a formula that starts with =.",
+        ) from error
+    return patch
+
+
 MAX_GRID_ROWS = 40
 
 
@@ -203,7 +226,7 @@ def investigation_view(graph: CompiledStateGraph, investigation_id: str) -> dict
 
 def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: AgentModels, checkpointer: BaseCheckpointSaver, cap: UsageCap, allowed_origins: list[str] | None = None, store: BaseStore | None = None, upload_dir: Path | None = None) -> FastAPI:
     app = FastAPI(title="Model X-Ray")
-    app.add_middleware(CORSMiddleware, allow_origins=allowed_origins or [], allow_methods=["GET", "POST"], allow_headers=["Content-Type"])
+    app.add_middleware(CORSMiddleware, allow_origins=allowed_origins or [], allow_origin_regex=LOCAL_DEV_ORIGIN, allow_methods=["GET", "POST"], allow_headers=["Content-Type"])
     graphs: dict[str, CompiledStateGraph] = {}
     uploads: set[str] = set()
 
@@ -257,14 +280,24 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
 
     def resumable(investigation_id: str, request: ResumeRequest) -> tuple[CompiledStateGraph, Any]:
         if investigation_id in graphs:
-            return paused_graph(investigation_id), Command(resume=request.model_dump(exclude_none=True, exclude={"state"}))
+            graph = paused_graph(investigation_id)
+            return graph, Command(resume=resume_payload(graph, investigation_id, request))
         if request.state is None:
             raise HTTPException(404, f"No investigation {investigation_id!r}")
         decision = decision_of(request)
         carried = carried_state(request.state)
+        if decision.get("patch"):
+            decision["patch"] = checked_patch(source, carried["spreadsheet_id"], decision["patch"])
         graph = continue_graph(carried["spreadsheet_id"])
         graphs[investigation_id] = graph
         return graph, {**carried, "human_decision": decision}
+
+    def resume_payload(graph: CompiledStateGraph, investigation_id: str, request: ResumeRequest) -> dict[str, Any]:
+        payload = request.model_dump(exclude_none=True)
+        if payload.get("patch"):
+            values = graph.get_state({"configurable": {"thread_id": investigation_id}}).values
+            payload["patch"] = checked_patch(source, values["spreadsheet_id"], payload["patch"])
+        return payload
 
     @app.get("/health")
     def health() -> dict:
