@@ -8,6 +8,8 @@ from model_x_ray.spreadsheet.xlsx import load_xlsx
 class SpreadsheetSource(Protocol):
     def ids(self) -> list[str]: ...
 
+    def add(self, spreadsheet_id: str, path: Path) -> None: ...
+
     def load(self, spreadsheet_id: str) -> Workbook: ...
 
     def list_sheets(self, spreadsheet_id: str) -> list[str]: ...
@@ -36,6 +38,10 @@ class XlsxSource:
 
     def ids(self) -> list[str]:
         return sorted(self._files)
+
+    def add(self, spreadsheet_id: str, path: Path) -> None:
+        self._files[spreadsheet_id] = path
+        self._cache.pop(spreadsheet_id, None)
 
     def path_of(self, spreadsheet_id: str) -> Path:
         self.load(spreadsheet_id)

@@ -56,6 +56,7 @@ def test_compare_formulas_explains_that_the_planted_cell_breaks_its_row(demo_wor
     assert "P&L!H7 is a typed value (-45.2) with no formula" in broken
     assert book.formula_pattern("P&L!G7") in broken
     assert "breaks the pattern" in broken
+    assert "the row's formula at P&L!H7 is =G7*(1+Assumptions!$C$7)" in broken
 
     matching = compare_formulas(book, "P&L!H6", ["P&L!G6"])
     assert book.formula_pattern("P&L!H6") in matching

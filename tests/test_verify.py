@@ -120,7 +120,7 @@ def test_verify_goes_inconclusive_when_every_attempt_is_rejected(
 def test_verify_cannot_confirm_a_patch_that_fails_the_deterministic_checks(
     demo_workbook_path: Path, engine_sandbox, scripted_verdict,
 ) -> None:
-    model = ScriptedDiagnosis(turns=[(["P&L!H7"], "P&L!H7", "=H6+G7")])
+    model = ScriptedDiagnosis(turns=[(["P&L!G4"], "P&L!G4", "=F4*1.1", "wrong_reference")])
     scripted_verdict.verdicts = [("confirmed", "trust the fix")]
     graph = run_investigation(
         model, "demo", XlsxSource({"demo": demo_workbook_path}), engine_sandbox, verifier=scripted_verdict,
@@ -139,7 +139,7 @@ def test_verify_cannot_confirm_a_patch_that_fails_the_deterministic_checks(
     assert "deterministic checks failed" in record["reason"]
     assert "pattern_restored" in record["reason"]
     assert state["hypotheses"][0]["status"] == "rejected"
-    assert "P&L!H7 (typed value), because the fix did not remove the unusual change and the fix did not match the formulas next to it." in state["report"]
+    assert "P&L!G4 (wrong reference), because the fix did not remove the unusual change and the fix did not match the formulas next to it." in state["report"]
     assert scripted_verdict.human == []
 
 

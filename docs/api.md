@@ -17,10 +17,11 @@ The first command fills `models/` with the clean base model and planted-error va
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `MODEL_X_RAY_MODELS_DIR` | `models` | Folder with the `.xlsx` models users can investigate |
+| `MODEL_X_RAY_MODELS_DIR` | `demo_models` | Folder with the demo models anyone can try (the repo ships `demo_models/demo.xlsx`, a synthetic model with three mixed planted errors); point it at `models/` to expose the benchmark set locally |
+| `MODEL_X_RAY_UPLOAD_DIR` | `uploads` | Where uploaded models are saved |
 | `MODEL_X_RAY_OUTPUT_DIR` | `corrected` | Where approved corrected copies are saved |
 | `MODEL_X_RAY_CHECKPOINTS` | `checkpoints.db` | SQLite checkpointer file (Postgres on Supabase in the deployed app, #72) |
-| `MODEL_X_RAY_ALLOWED_ORIGINS` | `http://localhost:5173` | Comma-separated web addresses allowed to call the API from a browser (CORS): the React dev server, then the Vercel URL |
+| `MODEL_X_RAY_ALLOWED_ORIGINS` | `http://localhost:5173` | Comma-separated web addresses allowed to call the API from a browser (CORS): the React dev server, then the Vercel URL. Any `localhost` port is allowed on top of this list, so a dev server that had to fall back to `5174` (or `4173` after a preview build) still works; the deployed URL must be listed here |
 | `MODEL_X_RAY_MEMORY` | `memory.db` | SQLite long-term memory: model maps, intentional overrides, past fixes (Postgres on Supabase in the deployed app, #72) |
 | `DEMO_MAX_PER_VISITOR` / `DEMO_MAX_PER_DAY` | `5` / `100` | The usage cap |
 
@@ -37,12 +38,13 @@ Models come from the role registry: Super for the Investigator, Verifier and loc
 
 | Method and path | Body | Answer |
 |---|---|---|
-| `POST /investigations` | `{"spreadsheet_id", "question"}` | `201` and the investigation view |
+| `POST /investigations` | `{"spreadsheet_id", "question"}`; `question` is optional | `201` and the investigation view. Without a question the agent checks the whole model (see below) |
 | `GET /health` | | `{"status": "ok"}` for the host's health check |
-| `GET /spreadsheets` | | The models that can be investigated: `[{"id", "sheets"}]` |
+| `GET /spreadsheets` | | The demo models: `[{"id", "sheets"}]`. Uploads are never listed, so one visitor never sees another's file |
+| `POST /spreadsheets?name=My%20model.xlsx` | The raw `.xlsx` bytes | `201` and `{"id", "name", "sheets"}`; `.xlsx` only, up to 10 MB, checked by opening it; the saved name is generated, so a name like `../x.xlsx` cannot escape the folder |
 | `GET /investigations/{id}` | | The investigation view |
 | `GET /investigations/{id}/corrected` | | The corrected `.xlsx` after approval (404 before) |
-| `POST /investigations/{id}/resume` | A cell choice `{"ref": "P&L!H8"}` or a decision `{"action": "approve" \| "edit" \| "reject", "reason", "patch", "intentional"}` (`intentional: true` with `reject` remembers the cell as deliberate, see `docs/agent-architecture.md` §Memory) | The investigation view after the graph continued |
+| `POST /investigations/{id}/resume` | A cell choice `{"ref": "P&L!H8"}` or a decision `{"action": "approve" \| "edit" \| "reject", "reason", "patch", "intentional"}` (`intentional: true` with `reject` remembers the cell as deliberate, see `docs/agent-architecture.md` §Memory). An `edit` patch is normalized and calculated before it is accepted: `-G4*Assumptions!$C$5` becomes `=-G4*Assumptions!$C$5`, a plain number stays a number, and a formula that cannot be calculated in that cell answers `422` with a sentence naming the cell, leaving the investigation paused at `human_review` | The investigation view after the graph continued |
 | `POST /investigations/stream` | Same as `POST /investigations` | A live stream of progress events, then the view |
 | `POST /investigations/{id}/resume/stream` | Same as `resume` | A live stream of progress events, then the view |
 
@@ -65,6 +67,16 @@ data: {"id": "...", "status": "needs_review", ...}
 - The last event is `view` (the same JSON as the other endpoints) or `error` (`{"status", "detail"}`, see Errors).
 - Streaming uses `POST` because starting and resuming carry a body and do the work; the browser reads the stream with `fetch` and a stream reader (`EventSource` only supports `GET`). This replaces the `GET /investigations/{id}/events` sketched in #73.
 - Checks that can fail before anything runs (the usage cap, an unknown spreadsheet, an unknown id) answer with a normal HTTP error instead of a stream.
+
+## Checking a model without a question
+
+The main use is "check my model": no question needed. `locate` then calls `check_target` (`agents/locator.py`):
+
+1. `scan_model` (`rules.py`) looks at every cell under a period header with a line label and flags the ones that break their row: a typed number with a formula to its left in the same row (a hardcode among formulas; typed history on the left of the forecasts is normal and never flagged), or a formula whose reference pattern differs from the row's. Side columns without a period (constants, sums, units) are ignored.
+2. The flagged cell with the most dependents wins; the target is the closest labelled period cell it moves (a typed Opex is investigated through EBITDA), and the question records why: "Check the model: EBITDA 2027E depends on P&L!H7, which is a typed value where the row uses ...".
+3. When nothing breaks a pattern, the target is the model's main output (the calculated line with the most inputs, ratios excluded) in its largest relative move, and a clean model ends with "No error found" and its drivers.
+
+On the planted benchmark models the scan lists exactly the planted cells, including mixed errors. One run investigates one target; the other flagged cells are listed for a follow-up run (see #103).
 
 ## The investigation view
 

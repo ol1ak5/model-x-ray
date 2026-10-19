@@ -68,9 +68,9 @@ def test_the_rules_setup_finds_the_planted_cell_end_to_end_without_any_llm(tmp_p
     assert final["report"].startswith("No confirmed error.")
     assert "Nothing was changed" in final["report"]
     assert final["corrected_copy_id"] is None
-    assert events["locate_asked"] is True
+    assert events["locate_asked"] is False
     assert {entry["node"] for entry in final["node_log"]} >= {
-        "load_sheet", "map_model", "locate", "choose_target", "trace", "diagnose",
+        "load_sheet", "map_model", "locate", "trace", "diagnose",
         "test", "verify", "explain", "human_review", "apply_fix",
     }
     assert all(entry["latency_ms"] >= 0 for entry in final["node_log"])
@@ -126,7 +126,7 @@ def test_the_scripted_investigator_fixes_a_planted_variant_and_scores_full_metri
     assert row["verdict_precision"] == 1.0
     assert row["verdict_recall"] == 1.0
     assert row["locate_exact"] is True
-    assert row["locate_asked"] is True
+    assert row["locate_asked"] is False
     assert row["trace_recall"] == 1.0
     assert row["sandbox_ok"] is True
     assert row["citations_valid"] is True
@@ -185,7 +185,7 @@ def test_the_runner_writes_rows_and_aggregates_with_wilson_intervals(tmp_path: P
     assert entry["cost_usd_mean"] == 0.0
     assert entry["hypothesis_revisions_mean"] >= 0
     assert entry["parse_share_mean"] == 1.0
-    assert entry["clarification_precision"] == 0.5
+    assert entry["clarification_precision"] == 1.0
     assert entry["clarification_recall"] == 1.0
     type2 = next(a for a in results["aggregates"] if a["setup"] == "rules" and a["set"] == "type2")
     assert type2["clarification_precision"] == 1.0

@@ -58,3 +58,23 @@ def test_the_corrected_file_can_be_downloaded_after_approval(demo_workbook_path:
     saved = tmp_path / "downloaded.xlsx"
     saved.write_bytes(download.content)
     assert openpyxl.load_workbook(saved)["P&L"]["H7"].value == "=G7*(1+Assumptions!$C$7)"
+
+
+def test_the_sheet_around_the_target_is_returned_for_the_grid_view(demo_workbook_path: Path, scripted_verdict, tmp_path: Path) -> None:
+    source = XlsxSource({"demo": demo_workbook_path})
+    models = AgentModels(llm=ScriptedDiagnosis(turns=[(["P&L!H7"], "P&L!H7")]), verifier=scripted_verdict)
+    client = TestClient(create_app(source, XlsxSandbox(source, tmp_path / "corrected"), models, InMemorySaver(), UsageCap(per_visitor=10, total=100)))
+
+    body = client.post("/investigations", json={"spreadsheet_id": "demo"}).json()
+    sheet = client.get(f"/investigations/{body['id']}/sheet").json()
+
+    assert sheet["sheet"] == "P&L"
+    assert sheet["header_row"] == 3
+    assert [c["header"] for c in sheet["columns"]] == ["2025A", "2026E", "2027E"]
+    assert [c["letter"] for c in sheet["columns"]] == ["F", "G", "H"]
+    opex = next(row for row in sheet["rows"] if row["label"] == "Opex")
+    assert opex["row"] == 7
+    assert [cell["ref"] for cell in opex["cells"]] == ["P&L!F7", "P&L!G7", "P&L!H7"]
+    assert opex["cells"][2] == {"ref": "P&L!H7", "value": -45.2, "formula": None}
+    assert opex["cells"][1]["formula"] == "=F7*(1+Assumptions!$C$7)"
+    assert client.get("/investigations/nope/sheet").status_code == 404

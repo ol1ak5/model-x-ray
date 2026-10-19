@@ -14,7 +14,8 @@ from pydantic import BaseModel
 from model_x_ray.causal import render_causal_tree
 from model_x_ray.llm import invoke_with_usage, model_name_of
 from model_x_ray.prompts import load_prompt
-from model_x_ray.spreadsheet.engine import Workbook, normalize_ref
+from model_x_ray.rules import breaks_row_pattern
+from model_x_ray.spreadsheet.engine import Workbook, normalize_ref, split_ref
 from model_x_ray.state import Evidence, InvestigationState, RunLog
 
 MAX_TOOL_CALLS = 8
@@ -46,7 +47,7 @@ class InvestigatorState(TypedDict):
 
 
 def build_investigator(llm: BaseChatModel, tools: list[BaseTool], max_tool_calls: int = MAX_TOOL_CALLS) -> CompiledStateGraph:
-    model = llm.bind_tools(tools)
+    model = llm.bind_tools(tools) if tools else llm
     structured = llm.with_structured_output(Diagnosis, method="function_calling")
     tool_node = ToolNode(tools)
     system = SystemMessage(content=load_prompt("investigator"))
@@ -135,6 +136,28 @@ def old_formula(book: Workbook, cell: str) -> str:
     if isinstance(raw, str) and raw.startswith("="):
         return raw
     return str(raw)
+
+
+def row_formula_suggestion(book: Workbook, cell: str) -> str | None:
+    cell = normalize_ref(cell)
+    sheet, address = split_ref(cell)
+    by_pattern: dict[str, list[str]] = {}
+    for ref in book.cells():
+        ref_sheet, ref_address = split_ref(ref)
+        if ref_sheet != sheet or ref_address.row != address.row or ref == cell:
+            continue
+        pattern = book.formula_pattern(ref)
+        if pattern is None:
+            continue
+        by_pattern.setdefault(pattern, []).append(ref)
+    if not by_pattern:
+        return None
+    counts = {pattern: len(refs) for pattern, refs in by_pattern.items()}
+    best = max(counts.values())
+    winners = [pattern for pattern, count in counts.items() if count == best]
+    if len(winners) != 1:
+        return None
+    return book.shifted_formula(sorted(by_pattern[winners[0]])[0], cell)
 
 
 def evidence_cells(name: str, args: dict, content: str, sheet: str) -> list[str]:
@@ -227,7 +250,10 @@ def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_t
         patch = None
         if diagnosis.patch is not None and full_ref(diagnosis.patch.cell, sheet) not in intentional:
             patch_cell = full_ref(diagnosis.patch.cell, sheet)
-            patch = {"cell": patch_cell, "old_formula": old_formula(book, patch_cell), "new_formula": diagnosis.patch.new_formula, "source": "agent"}
+            new_formula = diagnosis.patch.new_formula
+            if book.formula(patch_cell) is None or breaks_row_pattern(book, patch_cell):
+                new_formula = row_formula_suggestion(book, patch_cell) or new_formula
+            patch = {"cell": patch_cell, "old_formula": old_formula(book, patch_cell), "new_formula": new_formula, "source": "agent"}
         return {"hypotheses": hypotheses, "evidence": new_evidence, "patch": patch, "run_log": result.get("run_log", []), "tool_call_counts": [result.get("tool_calls_used", 0)]}
 
     return diagnose

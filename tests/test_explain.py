@@ -1,6 +1,7 @@
 import re
 from pathlib import Path
 
+from conftest import ScriptedNarrative
 from langgraph.types import Command
 from test_investigator import OutlierScanner, ScriptedDiagnosis
 
@@ -60,6 +61,98 @@ def test_explain_cites_only_ids_that_resolve_in_state(
     assert "ev-4" in cited, "the sandbox proof backs the fix"
     assert state["evidence"][3]["text"] == "P&L!H8 52.01 -> 44.73 in a sandbox copy after patching P&L!H7"
     assert report.endswith(".")
+
+
+def test_a_confirmed_run_is_explained_by_the_narrative_model_with_valid_citations(
+    demo_workbook_path: Path, engine_sandbox, scripted_verdict,
+) -> None:
+    model = ScriptedDiagnosis(turns=[(["P&L!H7"], "P&L!H7")])
+    narrative = ScriptedNarrative(
+        text="EBITDA 2027E moved from 40.03 to 52.01 (ev-1). "
+        "The Opex cell held a typed number where the row uses formulas (ev-3). "
+        "Patching it to the row formula brought the result back in the sandbox (ev-4)."
+    )
+    graph = run_investigation(
+        model, "demo", XlsxSource({"demo": demo_workbook_path}), engine_sandbox,
+        verifier=scripted_verdict, explainer=narrative,
+    )
+    config = {"configurable": {"thread_id": "narrative-confirmed"}}
+
+    graph.invoke({"spreadsheet_id": "demo", "question": QUESTION}, config)
+    state = graph.get_state(config).values
+
+    assert state["report"] == narrative.text
+    assert set(re.findall(r"ev-\d+", state["report"])) <= {e["id"] for e in state["evidence"]}
+    assert len(narrative.briefs) == 1
+    brief = narrative.briefs[0]
+    assert QUESTION in brief
+    target = state["target"]
+    assert f"{target['prior_value']}" in brief and f"{target['value']}" in brief
+    assert "P&L!H7" in brief
+    assert "anomaly_resolved" in brief and "pattern_restored" in brief
+    for record in state["evidence"]:
+        assert record["id"] in brief and record["text"] in brief
+    assert "run_log" not in brief and "attempts" not in brief
+
+
+def test_an_unknown_citation_falls_back_to_the_deterministic_report(
+    demo_workbook_path: Path, engine_sandbox, scripted_verdict,
+) -> None:
+    model = ScriptedDiagnosis(turns=[(["P&L!H7"], "P&L!H7")])
+    narrative = ScriptedNarrative(text="EBITDA jumped because of the weather (ev-99). Ask the desk about it (ev-4).")
+    graph = run_investigation(
+        model, "demo", XlsxSource({"demo": demo_workbook_path}), engine_sandbox,
+        verifier=scripted_verdict, explainer=narrative,
+    )
+    config = {"configurable": {"thread_id": "narrative-unknown-id"}}
+
+    graph.invoke({"spreadsheet_id": "demo", "question": QUESTION}, config)
+    state = graph.get_state(config).values
+
+    report = state["report"]
+    assert narrative.text not in report
+    assert "Root cause found in P&L!H7" in report
+    cited = re.findall(r"ev-\d+", report)
+    assert cited and set(cited) <= {e["id"] for e in state["evidence"]}
+
+
+def test_a_narrative_without_citations_falls_back_to_the_deterministic_report(
+    demo_workbook_path: Path, engine_sandbox, scripted_verdict,
+) -> None:
+    model = ScriptedDiagnosis(turns=[(["P&L!H7"], "P&L!H7")])
+    narrative = ScriptedNarrative(text="The fix looks right and the numbers now add up nicely.")
+    graph = run_investigation(
+        model, "demo", XlsxSource({"demo": demo_workbook_path}), engine_sandbox,
+        verifier=scripted_verdict, explainer=narrative,
+    )
+    config = {"configurable": {"thread_id": "narrative-no-citations"}}
+
+    graph.invoke({"spreadsheet_id": "demo", "question": QUESTION}, config)
+    state = graph.get_state(config).values
+
+    report = state["report"]
+    assert narrative.text not in report
+    assert "Root cause found in P&L!H7" in report
+    assert re.findall(r"ev-\d+", report), "the deterministic report still cites its evidence"
+
+
+def test_an_unconfirmed_run_never_calls_the_narrative_model(
+    demo_workbook_path: Path, engine_sandbox, scripted_verdict,
+) -> None:
+    model = ScriptedDiagnosis(turns=[(["P&L!H7"], "P&L!H7")])
+    scripted_verdict.verdicts = [("rejected", "the numbers do not hold")]
+    narrative = ScriptedNarrative(text="Anything the model would have said.")
+    graph = run_investigation(
+        model, "demo", XlsxSource({"demo": demo_workbook_path}), engine_sandbox,
+        verifier=scripted_verdict, explainer=narrative,
+    )
+    config = {"configurable": {"thread_id": "narrative-unconfirmed"}}
+
+    graph.invoke({"spreadsheet_id": "demo", "question": QUESTION}, config)
+    state = graph.get_state(config).values
+
+    assert state["report"].startswith("No confirmed error.")
+    assert narrative.briefs == []
 
 
 def test_a_clean_answer_says_no_error_found_and_names_the_drivers_with_evidence(
