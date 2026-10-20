@@ -1,6 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type { CausalNode, InvestigationView, SheetWindow } from "../api";
+import { kindOf } from "../format";
 import SheetGrid, { type Marks } from "./SheetGrid";
 import styles from "./Stage.module.css";
 
@@ -38,8 +39,9 @@ function signed(value: number): string {
   return `${value < 0 ? "-" : "+"}${text}`;
 }
 
-function reasonOf(edge: Edge, claim: string | null, errorType: string | null): { detail: string | null; claim: string | null } {
+function reasonOf(edge: Edge, claim: string | null, errorType: string | null, ratioTarget: boolean): { detail: string | null; claim: string | null } {
   if (errorType !== null) return { detail: errorType.replaceAll("_", " "), claim };
+  if (ratioTarget) return { detail: null, claim: null };
   if (edge.share >= 0.04) return { detail: `${Math.round(edge.share * 100)}% of the move`, claim: null };
   return { detail: null, claim: null };
 }
@@ -62,6 +64,7 @@ export default function Stage({
   const [room, setRoom] = useState(0);
   const edges = useMemo(() => edgesOf(view.causal_tree), [view.causal_tree]);
   const causes = useMemo(() => new Map((view.hypotheses ?? []).map((item) => [item.cell, item])), [view.hypotheses]);
+  const ratioTarget = kindOf(view.model_map, view.target?.label) === "ratio";
 
   useLayoutEffect(() => {
     const node = root.current;
@@ -102,14 +105,14 @@ export default function Stage({
       const bad = edge.suspicious || marks.suspicious.has(edge.from) || marks.confirmed.has(edge.from);
       return [{ ...route({ ...edge, suspicious: bad }, from, to, lane, group.length), delay: 0.15 + index * 0.18, lane, lanes: group.length, anchor: to.y + to.h / 2, bad, edge }];
     });
-  }, [edges, boxes, marks]);
+  }, [edges, boxes, marks, ratioTarget]);
 
   const noteX = Math.min(Math.max(0, ...wires.map((wire) => wire.rail)) + 14, Math.max(0, room - NOTE_WIDTH));
   const notes: Label[] = wires
     .filter((wire) => wire.edge.depth === 0 || wire.bad)
     .map((wire) => {
       const cause = causes.get(wire.edge.from);
-      const reason = reasonOf(wire.edge, cause?.claim ?? null, wire.bad ? cause?.error_type ?? null : null);
+      const reason = reasonOf(wire.edge, cause?.claim ?? null, wire.bad ? cause?.error_type ?? null : null, ratioTarget);
       return {
         id: wire.id,
         x: noteX,
