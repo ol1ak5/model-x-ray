@@ -7,7 +7,7 @@ from langchain_core.runnables import Runnable
 from pydantic import BaseModel, Field
 
 from model_x_ray.llm import invoke_with_usage
-from model_x_ray.rules import scan_model, scan_tables
+from model_x_ray.rules import AGGREGATE_FORMULA, scan_model, scan_tables
 from model_x_ray.prompts import load_prompt
 from model_x_ray.spreadsheet.engine import CellAddress, FormulaError, Workbook, is_number, make_ref, normalize_ref, split_ref
 from model_x_ray.state import InvestigationState, Patch, RunLog, Verification
@@ -124,7 +124,7 @@ def _column_pattern_restored(book: Workbook, patch: Patch, patched: Workbook) ->
     sheet, address = split_ref(patch["cell"])
     neighbours = [make_ref(sheet, CellAddress(address.column, address.row + offset)) for offset in (-2, -1, 1, 2) if address.row + offset >= 1]
     formula_neighbours = [n for n in neighbours if book.formula(n) is not None]
-    return pattern is not None and (not formula_neighbours or any(patched.formula_pattern(n) == pattern for n in formula_neighbours) or pattern.upper().startswith("=SUM("))
+    return pattern is not None and (not formula_neighbours or any(patched.formula_pattern(n) == pattern for n in formula_neighbours) or AGGREGATE_FORMULA.match(patched.formula(patch["cell"]) or "") is not None)
 
 
 def deterministic_checks(book: Workbook, state: InvestigationState, verification: Verification) -> dict[str, bool]:
