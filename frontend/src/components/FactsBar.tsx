@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { type Decision, correctedFileUrl, type InvestigationView } from "../api";
-import { money } from "../format";
+import { figure, kindOf } from "../format";
 import Button from "./Button";
 import WireKey from "./WireKey";
 import styles from "./FactsBar.module.css";
@@ -49,6 +49,7 @@ export default function FactsBar({
   const [downloaded, setDownloaded] = useState(false);
 
   const target = view.target;
+  const kind = kindOf(view.model_map, target?.label);
   const verification = view.verifications?.at(-1) ?? null;
   const checks = verification?.checks ?? {};
   const verdict = verification?.verdict ?? null;
@@ -61,7 +62,7 @@ export default function FactsBar({
             {target.label} {target.period}
           </span>
           <span className="mono">
-            {money(target.prior_value)} → {money(target.value)}
+            {figure(target.prior_value, kind)} → {figure(target.value, kind)}
           </span>
         </p>
       )}
