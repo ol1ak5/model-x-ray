@@ -92,9 +92,9 @@ Results are reported per set, because the expected winner differs by set and the
 - Each node records its latency in `node_log` and each LLM call its role, model, tokens and latency in `run_log`; the runner needs no LangSmith.
 - The benchmark isolates the diagnose step: in every set-up `map_model` is the code stub and `locate` runs without an LLM.
 - `uv run tools/benchmark.py --setups rules` runs the rules baseline offline and for free, generating the dataset first if it is missing.
-- `scripts/benchmark.sh` (zero flags) runs all four set-ups with six parallel workers and writes `docs/benchmark-results.json`, the rendered `docs/benchmark.md` and the chart `docs/benchmark.svg`; the three LLM set-ups spend Token Factory credits.
+- `scripts/benchmark.sh` (zero flags) runs all four set-ups with six parallel workers and writes `docs/benchmark-results.json`, the rendered `docs/benchmark.md` and the chart `docs/benchmark.svg`; the three LLM set-ups spend Token Factory credits. Those three files are generated, not committed: the only run kept in the tree is `docs/benchmark-before101.*`.
 - `uv run tools/benchmark.py --render-only` re-renders the report and chart from an existing results file — the re-run-and-refresh workflow needs no new measurements.
-- Unit tests for the evaluators use fixed fake outputs; the full four-way run is a separate, opt-in invocation.
+- The evaluators are covered by tests that feed fixed model outputs; the full four-way run is a separate, opt-in invocation.
 
 ## Report
 

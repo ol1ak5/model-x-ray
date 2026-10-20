@@ -10,6 +10,8 @@ Two integrations, deliberately separate (design: `docs/agent-architecture.md` §
 1. **Reading** a model (values, formulas, labels, metadata) → Sheets API
 2. **Sandbox** (copy → patch → read recalculated values) → Drive `files.copy` + Sheets `values.update`
 
+Status today: `.xlsx` is the platform that ships. Only the sandbox adapter exists (`GoogleSandbox` in `spreadsheet/sandbox.py`, exercised against fake services, no server path uses it); there is no Google `SpreadsheetSource` yet and nothing here is wired into the API (#13). Treat the sections below as the verified API notes for building it, not as a description of working code.
+
 Credentials: service account JSON **outside the repo**, path in `.env` as `GOOGLE_APPLICATION_CREDENTIALS` (issue #14). Client libraries: `uv add google-api-python-client google-auth` (or `gspread`, pick one in #5 and record it in `docs/`).
 
 ## Reading: the two render options

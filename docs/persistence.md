@@ -52,7 +52,7 @@ The landing says "Your file stays private". The server now behaves that way (`ap
 
 - `POST /spreadsheets` writes the `.xlsx` into `uploads/` and registers it as held. The file lives only while its run does: when the run finishes (approve or reject) the upload is deleted, removed from the source so its id stops resolving, and the workbook is no longer readable.
 - An abandoned upload — the visitor uploads, starts a run and never returns — is swept once it is older than the TTL. The sweep runs on the requests that matter (`GET /spreadsheets`, the sheet window), so there is no background thread and no scheduler; the injected clock keeps it testable.
-- The corrected copy is served once. `GET /investigations/{id}/corrected` answers the file and deletes it when the download finishes, so `corrected/` does not accumulate approved fixes. A copy the visitor never downloads stays until the process restarts; that is the remaining hole and it is filed as an issue.
+- The corrected copy is served once. `GET /investigations/{id}/corrected` answers the file and deletes it when the download finishes, so `corrected/` does not accumulate approved fixes. A copy the visitor never downloads stays until the process restarts; that is the remaining hole and it is filed as #166.
 
 What the visitor keeps is the run in their own browser (above), and what they get is the corrected workbook in their own downloads. The server keeps neither.
 

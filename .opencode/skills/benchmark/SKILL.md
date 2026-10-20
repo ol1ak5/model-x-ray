@@ -15,12 +15,12 @@ One **clean base model** + seeded planted-error copies ⇒ exact ground truth. A
 
 | Set | What | Tests |
 |---|---|---|
-| types 1–4 | one error each: typed value / bad ref / skipped range / sign-period | detection per type |
+| types 1–5 | one error each: typed value / bad reference / range / sign / period slip | detection per type |
 | blended | 2–3 mixed, incl. symptom ≠ cause | root cause under noise, retry loop |
 | overrides | documented deliberate hardcodes | **false-alarm rate** |
 | clean | untouched | must report nothing wrong |
 
-Seeded generation ⇒ reproducible. Ground truth JSON next to each variant: planted cells, error types, original formulas, expected outputs. Questions from templates targeting a line *downstream* of the planted error.
+Sets come from `SINGLE_PLANT_SETS` in `src/model_x_ray/dataset.py`. Seeded generation ⇒ reproducible. Ground truth JSON next to each variant: planted cells, error types, original formulas, expected outputs. Questions from templates targeting a line *downstream* of the planted error.
 
 ## Non-negotiable statistical rules
 
