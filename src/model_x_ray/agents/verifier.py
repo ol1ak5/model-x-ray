@@ -145,7 +145,7 @@ def deterministic_checks(book: Workbook, state: InvestigationState, verification
         }
     if target and target.get("mode") == "table":
         patched_book = book.with_patch(patch["cell"], patch["new_formula"])
-        still_flagged = {f["cell"] for f in scan_tables(patched_book)}
+        still_flagged = {f["cell"] for f in scan_tables(patched_book, layout=book)}
         return {
             "anomaly_resolved": patch["cell"] not in still_flagged,
             "dependents_consistent": all(_dependent_matches(patched_book, dependent, after) for dependent in book.all_dependents(patch["cell"])),

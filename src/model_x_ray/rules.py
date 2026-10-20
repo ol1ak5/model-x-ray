@@ -1,7 +1,10 @@
 import re
 from collections import Counter
+from collections.abc import Callable
+from weakref import WeakKeyDictionary
 
 from model_x_ray.spreadsheet.engine import CellAddress, FormulaError, Workbook, column_letters, expand_range, is_number, make_ref, normalize_ref, split_ref
+from model_x_ray.structure import profile
 
 PERIOD_LIKE = re.compile(r"\d")
 
@@ -225,6 +228,18 @@ def double_count_findings(book: Workbook) -> list[dict[str, str]]:
     return findings
 
 
-def scan_tables(book: Workbook) -> list[dict[str, str]]:
-    found = {finding["cell"]: finding for finding in [*total_findings(book), *double_count_findings(book), *column_findings(book)]}
+RECORD_BLOCKS: WeakKeyDictionary[Workbook, list] = WeakKeyDictionary()
+
+
+def runs_down_like_records(book: Workbook) -> Callable[[str], bool]:
+    if book not in RECORD_BLOCKS:
+        RECORD_BLOCKS[book] = [block for block in profile(book) if block.kind == "table" or (block.kind == "temporal" and block.axis == "down")]
+    blocks = RECORD_BLOCKS[book]
+    return lambda ref: any(block.contains(ref) for block in blocks)
+
+
+def scan_tables(book: Workbook, layout: Workbook | None = None) -> list[dict[str, str]]:
+    like_records = runs_down_like_records(layout or book)
+    columns = [finding for finding in column_findings(book) if like_records(finding["cell"])]
+    found = {finding["cell"]: finding for finding in [*total_findings(book), *double_count_findings(book), *columns]}
     return sorted(found.values(), key=lambda f: (split_ref(f["cell"])[0], split_ref(f["cell"])[1].row, split_ref(f["cell"])[1].column))

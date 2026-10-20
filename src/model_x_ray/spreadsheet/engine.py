@@ -775,15 +775,15 @@ class Workbook:
 
     @staticmethod
     def _walk(start: str, neighbours: Callable[[str], list[str]]) -> list[str]:
-        seen: list[str] = []
+        seen: dict[str, None] = {}
         queue = deque(neighbours(start))
         while queue:
             cell = queue.popleft()
             if cell in seen or cell == start:
                 continue
-            seen.append(cell)
+            seen[cell] = None
             queue.extend(neighbours(cell))
-        return seen
+        return list(seen)
 
 
 class FormulaEvaluator:
