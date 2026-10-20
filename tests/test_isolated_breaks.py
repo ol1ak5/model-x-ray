@@ -70,3 +70,28 @@ def test_the_isolated_break_is_the_first_candidate_and_gets_fixed(tmp_path: Path
     assert final["patch"]["cell"] == "Valuation!G7"
     assert final["patch"]["new_formula"] == "=G6*Inputs!$B$3"
     assert final["verifications"][-1]["verdict"] == "confirmed"
+
+
+def test_a_clean_model_with_cells_the_engine_cannot_calculate_is_still_reviewed(tmp_path: Path) -> None:
+    from conftest import ScriptedVerdict
+    from test_investigator import ScriptedDiagnosis
+
+    path = write_transition_model(tmp_path / "valuation.xlsx")
+    workbook = openpyxl.load_workbook(path)
+    model = workbook["Valuation"]
+    model["G7"] = "=G6*Inputs!$B$3"
+    for index, column in enumerate(YEARS):
+        model[f"{column}5"] = "=Inputs!$B$1"
+        model[f"{column}10"] = f'=IF({column}3>2030," ",{column}8/1.1)'
+        model[f"{column}11"] = f"={column}10*2+{column}6+{column}7+{column}8"
+    model["A10"], model["A11"] = "Discounted EBITDA", "Value"
+    workbook.save(path)
+    investigator = ScriptedDiagnosis(turns=[([], None)])
+    setup = Setup(name="scripted", kind="investigator", model="scripted-investigator", verifier="scripted-verifier")
+    source = XlsxSource({"valuation": path})
+    graph = build_setup_graph(setup, source, XlsxSandbox(source, tmp_path / "corrected"), "valuation", lambda model_id: ScriptedVerdict() if model_id == "scripted-verifier" else investigator)
+    final = drive_graph(graph, {"spreadsheet_id": "valuation", "question": ""}, {"configurable": {"thread_id": uuid4().hex}})
+
+    target = f"Valuation!{final['target']['cell']}"
+    assert isinstance(load_xlsx(path).value(target), float)
+    assert final.get("patch") is None

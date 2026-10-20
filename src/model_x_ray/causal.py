@@ -79,8 +79,8 @@ def explain_change(book: Workbook, ref: str, from_period: str, to_period: str) -
         raise ValueError(f"No period columns {from_period} -> {to_period} for {ref}")
     value_before = book.value(from_ref)
     value_after = book.value(ref)
-    if value_before is None or value_after is None:
-        raise ValueError(f"Missing values for {ref}")
+    if not is_number(value_before) or not is_number(value_after):
+        raise ValueError(f"No numbers to compare for {ref}")
     inputs = book.precedents(ref)
     shifts = {input_ref: _from_ref(book, input_ref, from_period, to_period) for input_ref in inputs}
     patched = book
@@ -97,8 +97,10 @@ def explain_change(book: Workbook, ref: str, from_period: str, to_period: str) -
         input_value = book.value(input_ref)
         if shift is None or input_value is None:
             continue
-        restored = patched.with_patch(input_ref, input_value)
-        contribution = restored.value(ref) - baseline
+        restored = patched.with_patch(input_ref, input_value).value(ref)
+        if not is_number(restored) or not is_number(baseline):
+            continue
+        contribution = restored - baseline
         if abs(contribution) < 1e-9:
             continue
         contributions.append({"cell": input_ref, "label": book.row_label(input_ref) or "", "delta": contribution})
@@ -118,8 +120,8 @@ def build_causal_tree(book: Workbook, ref: str, from_period: str, to_period: str
         raise ValueError(f"No period columns {from_period} -> {to_period} for {ref}")
     value_before = book.value(from_ref)
     value_after = book.value(ref)
-    if value_before is None or value_after is None:
-        raise ValueError(f"Missing values for {ref}")
+    if not is_number(value_before) or not is_number(value_after):
+        raise ValueError(f"No numbers to compare for {ref}")
     root_delta = value_after - value_before
     tree = _node(book, ref, from_period, to_period, root_delta)
     if tree is None:

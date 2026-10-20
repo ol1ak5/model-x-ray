@@ -96,8 +96,19 @@ def target_cell(book: Workbook, ref: str) -> TargetCell:
     }
 
 
+def computable(book: Workbook, ref: str) -> bool:
+    try:
+        book.value(ref)
+    except FormulaError:
+        return False
+    return True
+
+
 def is_target(book: Workbook, ref: str) -> bool:
-    return is_period_cell(book, ref) and prior_cell(book, ref) is not None
+    if not is_period_cell(book, ref):
+        return False
+    prior = prior_cell(book, ref)
+    return prior is not None and computable(book, ref) and computable(book, prior)
 
 
 def relative_move(book: Workbook, ref: str) -> float:
@@ -190,7 +201,7 @@ def make_locate_node(llm: BaseChatModel | None, book: Workbook) -> Callable[[Inv
 
 
 def table_check(book: Workbook) -> tuple[TargetCell, str] | None:
-    findings = scan_tables(book)
+    findings = [finding for finding in scan_tables(book) if computable(book, finding["cell"])]
     if not findings:
         return None
     ranked = sorted(findings, key=lambda f: (len(book.all_dependents(f["cell"])), f["kind"] == "incomplete_total"), reverse=True)
