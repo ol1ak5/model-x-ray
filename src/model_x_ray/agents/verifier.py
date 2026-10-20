@@ -183,6 +183,17 @@ def _relevant_refs(book: Workbook, patch: Patch) -> list[str]:
     return list(dict.fromkeys([patch["cell"], *neighbours, *book.all_dependents(patch["cell"])]))
 
 
+def anomaly_of(book: Workbook, state: InvestigationState) -> dict:
+    target = state.get("target") or {}
+    patch = state["patch"]
+    if target.get("mode") in ("table", "review"):
+        return {"kind": "table finding", "finding": target.get("finding", "")}
+    flagged = {o["cell"]: o["reason"] for o in scan_model(book)}
+    if patch["cell"] in flagged:
+        return {"kind": "pattern break", "finding": f"{patch['cell']}: {flagged[patch['cell']]}"}
+    return {"kind": "jump against the prior period", "finding": ""}
+
+
 def evidence_package(
     state: InvestigationState,
     verification: Verification,
@@ -196,6 +207,7 @@ def evidence_package(
     after = verification.get("after", {})
     return {
         "question": state["question"],
+        "anomaly": anomaly_of(book, state),
         "target": {
             "ref": target_ref,
             "prior_value": target["prior_value"] if target else None,
