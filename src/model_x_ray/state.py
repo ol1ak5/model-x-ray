@@ -156,6 +156,7 @@ class Decision(TypedDict):
     candidates: int
     judgements: NotRequired[list[dict]]
     votes: NotRequired[dict[str, int]]
+    ballots: NotRequired[list[dict]]
 
 
 class InvestigationState(TypedDict):

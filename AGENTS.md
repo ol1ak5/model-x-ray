@@ -54,6 +54,7 @@ Verified 8 Oct 2026. Do not assume tooling that is not there — re-check the tr
 - Run the API locally: `uv run tools/generate_dataset.py --output models --per-set 2` once, then `scripts/serve.sh` (http://localhost:8000/docs).
 - Re-record the demo stories against a running API: `uv run tools/export_demo_run.py --review <id> --done <id>` (reads `GET /investigations/{id}` and `/sheet`, writes `frontend/src/test/recorded/*.json`, spends no credits).
 - Graph picture: `scripts/export_graph.sh` (writes `docs/investigation-graph.mmd` and `.png`; re-run after any change to nodes or edges — a test fails if the committed diagram is stale).
+- Trace one run step by step (target, logic brief, every vote, decisions, verifications, report): `uv run tools/trace_run.py <model.xlsx>` (free, rules baseline) or `--setup super` (live, about 4 cents for a small model).
 - Tool-calling measurement (live, about 3 cents): `scripts/measure_tool_calling.sh`.
 - Benchmark: `uv run tools/benchmark.py --setups rules` (offline, free, generates the dataset if missing) or `scripts/benchmark.sh` (all four set-ups, six workers; the LLM ones spend Token Factory credits; writes `docs/benchmark-results.json` plus the rendered `docs/benchmark.md` and `docs/benchmark.svg`; `--render-only` re-renders from an existing results file).
 - `scripts/*.sh` are zero-flag wrappers that call `uv run x.py` with fixed, curated flags; they must run from the repo root with no arguments. The ones that exist today are `scripts/measure_tool_calling.sh`, `scripts/export_graph.sh` and `scripts/benchmark.sh`.

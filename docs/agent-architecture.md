@@ -129,6 +129,22 @@ Model assignment is provisional until the tool-calling spike (#4) reports result
 
 The system presents itself as one reasoning loop with three capabilities: **understand** (Model mapper), **investigate** (Investigator), **verify** (Verifier), followed by **explain**.
 
+### Logic review (when no rule flags a cell)
+
+Pattern rules cannot see a formula that is wrong in every period (a gross profit that adds its costs, an EBITDA that subtracts only salaries, a net income that never subtracts taxes): the line is consistent, so nothing breaks. When the rules give the Investigator no candidate, its brief also carries the logic review (`prompts/logic_review.md`) and a logic map built in code (`logic_map` in `agents/investigator.py`):
+
+- every line feeding the reviewed result, plus every formula line on its sheet, written as its label and its formula with each reference replaced by the label of the line it reads (`Gross profit = Revenue + Cost of goods sold`), once per formula pattern, with the period span it covers, the values in the reviewed period and, when the label names a concept in the financial formula library (`finance.py`, matched by whole words, the last word deciding), the standard definition;
+- the total column collapsed into one line, and the lines that are calculated but used by no other line (an EBITDA that skips the cost total leaves that total unused);
+- suspicious inputs: typed values five times larger or smaller than the same input in the other periods (`rules.input_outliers`).
+
+The system prompt (`prompts/investigator.md`) makes the Investigator a senior analyst who always starts from the formula, compares it with the label and the standard definition, respects the model's sign convention and only then checks consistency. Two error types join the five pattern types: `logic_error` and `input_outlier`.
+
+In check mode (no question) the logic review runs three times and keeps what a majority finds: a cell survives when at least two answers name it, with the most voted error type and the fix a majority proposes. Nemotron Super at temperature 0 still varies between runs, and the vote removes one-off findings and one-off misses. The decision records the counts (`votes`) and every answer (`ballots`). Runs with a question, and runs where rules gave candidates, make one call.
+
+A `logic_error` whose cell shares its formula with the rest of its line is fixed on the whole line: `Patch.also` lists the other cells with the same fix shifted to each column. The sandbox, the corrected copy and the Google copy apply all of them, and the deterministic checks become: the cell's value changes, every dependent still calculates, the line ends with one pattern. The Verifier receives the anomaly kind `line logic error` with the line's formula in words before and after and its standard definition, and judges the new formula against them instead of the move against the prior period. Other error types keep single-cell fixes, so a wrong fix on a correct line cannot pass by making the line uniform. An `input_outlier` or a `logic_error` without a fix closes as a finding for a person (the report quotes the claim) instead of being retried.
+
+`uv run tools/trace_run.py <model.xlsx> [--setup super]` prints one run's target, logic brief, every vote, every decision, every verification and the report.
+
 ### Investigator loop
 
 The Investigator is the most autonomous part of the system, and its autonomy must be visible, not hidden inside one call.
@@ -289,6 +305,8 @@ Implementation (`src/model_x_ray/causal.py`): `explain_change(book, ref, from_pe
 | `range_inconsistency` | A range that leaves out or adds a row compared with its neighbours (for example a SUM that skips a row) |
 | `sign_inconsistency` | A flipped sign compared with the row |
 | `period_inconsistency` | A reference to the wrong period, for example the prior year's column |
+| `logic_error` | A formula that contradicts its line's label and the standard definition, often in every period (flagged by the logic review; fixed on the whole line when the fix follows from the labels) |
+| `input_outlier` | A typed input far out of line with the same input in the other periods (flagged for a person, never fixed: nobody can know the right number from the model alone) |
 
 These exact names are shared by the agent (`state.py`, the Investigator's `Diagnosis`, the Investigator prompt) and the benchmark dataset (`dataset.py`), so a diagnosis can be scored against ground truth by direct comparison. `documented_override` exists only in the dataset, for deliberate overrides that are not errors.
 

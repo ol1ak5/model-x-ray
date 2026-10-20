@@ -166,6 +166,9 @@ def test_the_logic_review_asks_three_times_and_keeps_only_what_a_majority_finds(
     assert [(h["cell"], h["error_type"]) for h in final["hypotheses"]] == [("Budget!F6", "logic_error")]
     assert final["verifications"][-1]["verdict"] == "confirmed"
     assert final["decisions"][0]["votes"] == {"Budget!F6": 2}
+    ballots = final["decisions"][0]["ballots"]
+    assert [[h["cell"] for h in ballot["hypotheses"]] for ballot in ballots] == [["Budget!F6"], [], ["Budget!F6"]]
+    assert ballots[0]["hypotheses"][0]["error_type"] == "logic_error" and ballots[0]["patch"] == "Budget!F6 =F4-F5"
 
 
 def test_a_finding_only_one_of_the_three_reviews_makes_is_dropped(tmp_path: Path) -> None:

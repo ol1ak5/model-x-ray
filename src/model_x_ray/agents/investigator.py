@@ -505,6 +505,14 @@ def majority_diagnosis(diagnoses: list[Diagnosis], sheet: str) -> tuple[Diagnosi
     return Diagnosis(hypotheses=hypotheses, patch=patch, reason=reason), dict(votes)
 
 
+def ballot_of(diagnosis: Diagnosis) -> dict:
+    return {
+        "hypotheses": [{"cell": h.cell, "error_type": h.error_type, "claim": h.claim, "confidence": h.confidence} for h in diagnosis.hypotheses],
+        "patch": f"{diagnosis.patch.cell} {diagnosis.patch.new_formula}" if diagnosis.patch else None,
+        "reason": diagnosis.reason,
+    }
+
+
 def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_text: bool = False) -> Callable[[InvestigationState], dict]:
     def diagnose(state: InvestigationState) -> dict:
         candidates = tested_candidates(book, state)
@@ -552,6 +560,7 @@ def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_t
         decision = {"cell": None, "decided_by": "none", "fix": None, "model_fix": None, "rule_would_have": f"{rule['cell']} {rule['fix']}" if rule else None, "reason": chosen_reason, "candidates": len(candidates), "judgements": judgements}
         if votes is not None:
             decision["votes"] = votes
+            decision["ballots"] = [ballot_of(run["diagnosis"]) for run in runs]
         if chosen is not None:
             patch = {"cell": chosen["cell"], "old_formula": old_formula(book, chosen["cell"]), "new_formula": chosen["fix"], "source": "agent"}
             decision |= {"cell": chosen["cell"], "decided_by": "model", "fix": chosen["fix"]}
