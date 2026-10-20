@@ -289,6 +289,18 @@ describe("an investigation in the browser", () => {
     expect(chips.some((text) => text.includes("1316%"))).toBe(false);
   });
 
+  test("keeps the page usable when a view arrives without the optional label table", async () => {
+    const withoutLabels: InvestigationView = { ...REVIEW, check_labels: undefined, target_choice: null };
+    const api = fakeApi([...steps(...STEPS.map(([name]) => name)), ["view", withoutLabels]]);
+    vi.stubGlobal("fetch", api.fetch);
+    await checkDemo();
+
+    const facts = await screen.findByRole("region", { name: "Investigation facts" });
+    expect(within(facts).getByText(/84\.7 → 285\.8/)).toBeInTheDocument();
+    expect(within(facts).getByRole("button", { name: "Why?" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Investigation steps" })).toBeInTheDocument();
+  });
+
   test("keeps the model, the steps and the facts on screen while the fix has been tested but not checked", async () => {
     const api = fakeApi([...steps("load_sheet", "map_model", "locate", "trace", "diagnose", "test"), ["view", TESTED]]);
     vi.stubGlobal("fetch", api.fetch);
