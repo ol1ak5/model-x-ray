@@ -62,6 +62,21 @@ def breaks_row_pattern(book: Workbook, ref: str) -> bool:
     return normalize_ref(ref) in {outlier["cell"] for outlier in model_outliers(book, row_cells(book, ref))}
 
 
+def isolated_break(book: Workbook, ref: str) -> bool:
+    row = sorted(row_cells(book, ref), key=lambda cell: split_ref(cell)[1].column)
+    if ref not in row:
+        return False
+    index = row.index(ref)
+    if index == 0 or index + 1 == len(row):
+        return False
+    left, right = book.formula_pattern(row[index - 1]), book.formula_pattern(row[index + 1])
+    return left is not None and left == right and book.formula_pattern(ref) != left
+
+
+def rank_outliers(book: Workbook, outliers: list[dict[str, str]]) -> list[dict[str, str]]:
+    return sorted(outliers, key=lambda o: (not isolated_break(book, o["cell"]), -len(book.all_dependents(o["cell"]))))
+
+
 def scan_model(book: Workbook) -> list[dict[str, str]]:
     return model_outliers(book, [ref for ref in book.cells() if is_period_cell(book, ref) and PERIOD_LIKE.search(book.column_header(ref) or "")])
 

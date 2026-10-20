@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from model_x_ray.llm import invoke_with_usage, model_name_of
 from model_x_ray.prompts import load_prompt
-from model_x_ray.rules import is_period_cell, row_fix, scan_model, scan_tables
+from model_x_ray.rules import is_period_cell, rank_outliers, row_fix, scan_model, scan_tables
 from model_x_ray.spreadsheet.engine import CellAddress, FormulaError, Workbook, make_ref, normalize_ref, split_ref
 from model_x_ray.state import InvestigationState, ModelMap, TargetCell
 from model_x_ray.tools import find_cells
@@ -107,7 +107,7 @@ def relative_move(book: Workbook, ref: str) -> float:
 
 
 def check_target(book: Workbook) -> tuple[str, str]:
-    outliers = sorted(scan_model(book), key=lambda o: len(book.all_dependents(o["cell"])), reverse=True)
+    outliers = rank_outliers(book, scan_model(book))
     for outlier in outliers:
         for ref in [*book.all_dependents(outlier["cell"]), outlier["cell"]]:
             if is_target(book, ref):
@@ -145,7 +145,7 @@ def make_locate_node(llm: BaseChatModel | None, book: Workbook) -> Callable[[Inv
                 try:
                     ref, question = check_target(book)
                     target = target_cell(book, ref)
-                    ranked = sorted(outliers, key=lambda o: len(book.all_dependents(o["cell"])), reverse=True)
+                    ranked = rank_outliers(book, outliers)
                     target["other_findings"] = [{"cell": o["cell"], "reason": o["reason"], "fix": row_fix(book, o["cell"])} for o in ranked[:6]]
                     return {"target": target, "question": question, "target_choice": None}
                 except ValueError:
