@@ -146,6 +146,7 @@ class Decision(TypedDict):
     rule_would_have: str | None
     reason: str
     candidates: int
+    judgements: NotRequired[list[dict]]
 
 
 class InvestigationState(TypedDict):

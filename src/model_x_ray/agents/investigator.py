@@ -36,9 +36,16 @@ class ProposedPatch(BaseModel):
     new_formula: str
 
 
+class CandidateJudgement(BaseModel):
+    number: int
+    verdict: Literal["error", "intentional", "unsure"]
+    reason: str
+
+
 class Diagnosis(BaseModel):
     hypotheses: list[ProposedHypothesis]
     patch: ProposedPatch | None
+    judgements: list[CandidateJudgement] = []
     choice: int | None = None
     reason: str = ""
 
@@ -263,9 +270,13 @@ def sheet_as_text(book: Workbook) -> str:
 MAX_CANDIDATES = 6
 
 
+def judged_intentional(state: InvestigationState) -> set[str]:
+    return {j["cell"] for d in state.get("decisions", []) for j in d.get("judgements", []) if j["verdict"] == "intentional"}
+
+
 def tested_candidates(book: Workbook, state: InvestigationState) -> list[dict]:
     target = state["target"]
-    tried = {h["cell"] for h in state.get("hypotheses", []) if h["status"] != "open"}
+    tried = {h["cell"] for h in state.get("hypotheses", []) if h["status"] != "open"} | judged_intentional(state)
     intentional = {o["cell"] for o in state.get("known_overrides", [])}
     own = [{"cell": f"{target['sheet']}!{target['cell']}", "reason": target["finding"], "fix": target.get("expected_formula")}] if target.get("mode") == "table" else []
     candidates: list[dict] = []
@@ -286,7 +297,7 @@ def tested_candidates(book: Workbook, state: InvestigationState) -> list[dict]:
 def candidates_brief(candidates: list[dict]) -> str:
     if not candidates:
         return ""
-    lines = ["Engine-tested candidate fixes (each was applied to a copy and recalculated). Choose the one that fixes a genuine error by its number, or none if every difference is intentional:"]
+    lines = ["Engine-tested candidate fixes (each was applied to a copy and recalculated). Judge every candidate on its own: error, intentional or unsure, with a reason:"]
     lines += [f"  {c['number']}. {c['cell']}: {c['reason']} -> {c['fix']} (value {c['before']} -> {c['after']})" for c in candidates]
     return "\n".join(lines)
 
@@ -322,15 +333,25 @@ def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_t
             })
         patch = None
         rule = candidates[0] if candidates else None
-        decision = {"cell": None, "decided_by": "none", "fix": None, "model_fix": None, "rule_would_have": f"{rule['cell']} {rule['fix']}" if rule else None, "reason": diagnosis.reason, "candidates": len(candidates)}
-        chosen = next((c for c in candidates if c["number"] == diagnosis.choice), None)
+        by_number = {c["number"]: c for c in candidates}
+        judgements = [{"number": j.number, "cell": by_number[j.number]["cell"], "verdict": j.verdict, "reason": j.reason} for j in diagnosis.judgements if j.number in by_number]
+        errors = [by_number[j["number"]] for j in judgements if j["verdict"] == "error"]
+        intentional_now = {j["cell"] for j in judgements if j["verdict"] == "intentional"}
+        chosen = next((c for c in errors if c["number"] == diagnosis.choice), None) or (errors[0] if errors else None) or next((c for c in candidates if c["number"] == diagnosis.choice and c["cell"] not in intentional_now), None)
+        chosen_reason = next((j["reason"] for j in judgements if chosen and j["number"] == chosen["number"]), "") or diagnosis.reason
+        decision = {"cell": None, "decided_by": "none", "fix": None, "model_fix": None, "rule_would_have": f"{rule['cell']} {rule['fix']}" if rule else None, "reason": chosen_reason, "candidates": len(candidates), "judgements": judgements}
         if chosen is not None:
             patch = {"cell": chosen["cell"], "old_formula": old_formula(book, chosen["cell"]), "new_formula": chosen["fix"], "source": "agent"}
             decision |= {"cell": chosen["cell"], "decided_by": "model", "fix": chosen["fix"]}
-            if chosen["cell"] not in {h["cell"] for h in [*state.get("hypotheses", []), *hypotheses]}:
+            known = {h["cell"] for h in [*state.get("hypotheses", []), *hypotheses]}
+            for candidate in [chosen, *[c for c in errors if c is not chosen]]:
+                if candidate["cell"] in known or len(hypotheses) >= budget:
+                    continue
+                known.add(candidate["cell"])
                 hypotheses.append({
-                    "id": f"hyp-{first_number + len(hypotheses)}", "cell": chosen["cell"], "error_type": "wrong_reference", "claim": chosen["reason"],
-                    "evidence_ids": [e["id"] for e in all_evidence if e["cell"] == chosen["cell"]], "confidence": "high", "status": "open",
+                    "id": f"hyp-{first_number + len(hypotheses)}", "cell": candidate["cell"], "error_type": "wrong_reference",
+                    "claim": next((j["reason"] for j in judgements if j["number"] == candidate["number"]), candidate["reason"]),
+                    "evidence_ids": [e["id"] for e in all_evidence if e["cell"] == candidate["cell"]], "confidence": "high", "status": "open",
                 })
         elif diagnosis.patch is not None and readable_ref(diagnosis.patch.cell, sheet) and full_ref(diagnosis.patch.cell, sheet) not in intentional:
             patch_cell = full_ref(diagnosis.patch.cell, sheet)
@@ -341,12 +362,13 @@ def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_t
             patch = {"cell": patch_cell, "old_formula": old_formula(book, patch_cell), "new_formula": new_formula, "source": "agent"}
             decision |= {"cell": patch_cell, "decided_by": "model_own" if new_formula == model_formula else "rule_corrected", "fix": new_formula, "model_fix": str(model_formula)}
         target = state["target"]
-        abstained = patch is None and bool(candidates) and bool(diagnosis.reason.strip())
+        judged_all = bool(judgements) and all(j["verdict"] == "intentional" for j in judgements) and len(judgements) == len(candidates)
+        abstained = patch is None and bool(candidates) and (judged_all or (not judgements and bool(diagnosis.reason.strip())))
         if patch is None and not abstained and (target.get("mode") == "table" or target.get("other_findings")):
             tried = {h["cell"] for h in state.get("hypotheses", []) if h["status"] != "open"}
             own = [{"cell": f"{target['sheet']}!{target['cell']}", "reason": target["finding"], "fix": target.get("expected_formula")}] if target.get("mode") == "table" else []
             findings = [*own, *target.get("other_findings", [])]
-            untried = [f for f in findings if f.get("fix") and f["cell"] not in tried and f["cell"] not in intentional]
+            untried = [f for f in findings if f.get("fix") and f["cell"] not in tried and f["cell"] not in intentional and f["cell"] not in intentional_now | judged_intentional(state)]
             if untried:
                 proposed_cells = {h["cell"] for h in hypotheses}
                 open_cells = {h["cell"] for h in state.get("hypotheses", []) if h["status"] == "open"}
