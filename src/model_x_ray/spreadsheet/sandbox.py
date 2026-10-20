@@ -46,6 +46,14 @@ def affected_cells(book: Workbook, ref: str) -> list[str]:
     return [first, *book.all_dependents(first)]
 
 
+def patch_cells(patch: Patch) -> list[tuple[str, str]]:
+    return [(patch["cell"], patch["new_formula"]), *[(line["cell"], line["new_formula"]) for line in patch.get("also", [])]]
+
+
+def cells_affected_by(book: Workbook, patch: Patch) -> list[str]:
+    return list(dict.fromkeys(cell for ref, _ in patch_cells(patch) for cell in affected_cells(book, ref)))
+
+
 def run_sandbox_test(
     source: SpreadsheetSource,
     sandbox: Sandbox,
@@ -53,7 +61,7 @@ def run_sandbox_test(
     patch: Patch,
 ) -> dict[str, dict[str, object]]:
     book = source.load(spreadsheet_id)
-    cells = affected_cells(book, patch["cell"])
+    cells = cells_affected_by(book, patch)
     before = {}
     for cell in cells:
         try:
@@ -110,12 +118,13 @@ class GoogleSandbox:
         return created["id"]
 
     def apply_patch(self, copy_id: str, patch: Patch) -> None:
-        self._sheets.spreadsheets().values().update(
-            spreadsheetId=copy_id,
-            range=a1_range(patch["cell"]),
-            valueInputOption="USER_ENTERED",
-            body={"values": [[patch["new_formula"]]]},
-        ).execute()
+        for cell, formula in patch_cells(patch):
+            self._sheets.spreadsheets().values().update(
+                spreadsheetId=copy_id,
+                range=a1_range(cell),
+                valueInputOption="USER_ENTERED",
+                body={"values": [[formula]]},
+            ).execute()
 
     def read_values(self, copy_id: str, cells: list[str]) -> dict[str, object]:
         response = self._sheets.spreadsheets().values().batchGet(
@@ -174,12 +183,14 @@ def cell_content(text: str) -> float | str:
 
 
 def patched_book(book: Workbook, patch: Patch) -> Workbook:
-    return book.with_patch(patch["cell"], cell_content(patch["new_formula"]))
+    for cell, formula in patch_cells(patch):
+        book = book.with_patch(cell, cell_content(formula))
+    return book
 
 
 def check_patch(book: Workbook, patch: Patch) -> None:
     patched = patched_book(book, patch)
-    for ref in affected_cells(book, patch["cell"]):
+    for ref in cells_affected_by(book, patch):
         patched.value(ref)
 
 
@@ -212,8 +223,9 @@ class XlsxSandbox:
 
     def write_corrected_copy(self, spreadsheet_id: str, patch: Patch, log_rows: list[list[object]]) -> str:
         book = openpyxl.load_workbook(self._source.path_of(spreadsheet_id))
-        sheet, address = split_ref(normalize_ref(patch["cell"]))
-        book[sheet].cell(row=address.row, column=address.column).value = cell_content(patch["new_formula"])
+        for cell, formula in patch_cells(patch):
+            sheet, address = split_ref(normalize_ref(cell))
+            book[sheet].cell(row=address.row, column=address.column).value = cell_content(formula)
         if CHANGE_LOG_SHEET in book.sheetnames:
             del book[CHANGE_LOG_SHEET]
         log = book.create_sheet(CHANGE_LOG_SHEET)

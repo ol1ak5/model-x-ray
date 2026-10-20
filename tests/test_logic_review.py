@@ -116,3 +116,32 @@ def test_each_line_is_shown_next_to_the_standard_finance_definition_its_label_na
     assert "standard: pre_tax_income - taxes" in lines["Net income"]
     assert "standard: sum of the operating cost lines" in lines["Total operating costs"]
     assert "enterprise" not in model.briefs[0]
+
+
+def test_a_gross_profit_that_adds_its_costs_in_every_year_is_fixed_on_the_whole_line_and_verified(tmp_path: Path) -> None:
+    from model_x_ray.spreadsheet.xlsx import load_xlsx
+
+    path = write_budget(tmp_path / "budget.xlsx", {f"{c}6": f"={c}4+{c}5" for c in YEARS})
+    model = ScriptedDiagnosis(briefs=[], turns=[(["Budget!F6"], "Budget!F6", "=F4-F5", "logic_error")])
+
+    final = investigate(tmp_path, path, model)
+
+    patch = final["patch"]
+    assert (patch["cell"], patch["new_formula"]) == ("Budget!F6", "=F4-F5")
+    assert [(c["cell"], c["new_formula"]) for c in patch["also"]] == [("Budget!B6", "=B4-B5"), ("Budget!C6", "=C4-C5"), ("Budget!D6", "=D4-D5"), ("Budget!E6", "=E4-E5")]
+    assert final["verifications"][-1]["verdict"] == "confirmed"
+    assert final["verifications"][-1]["checks"] == {"anomaly_resolved": True, "dependents_consistent": True, "pattern_restored": True}
+    corrected = load_xlsx(tmp_path / "corrected" / final["corrected_copy_id"])
+    assert [corrected.formula(f"Budget!{c}6") for c in YEARS] == [f"={c}4-{c}5" for c in YEARS]
+    assert corrected.value("Budget!D13") == (590 - 232 - (133 + 32 + 30)) * 0.75
+
+
+def test_a_net_income_that_never_subtracts_taxes_is_fixed_on_the_whole_line_even_when_the_reviewed_result_is_another_line(tmp_path: Path) -> None:
+    path = write_budget(tmp_path / "budget.xlsx", {f"{c}13": f"={c}11" for c in YEARS})
+    model = ScriptedDiagnosis(briefs=[], turns=[(["Budget!D13"], "Budget!D13", "=D11-D12", "logic_error")])
+
+    final = investigate(tmp_path, path, model)
+
+    assert len(final["patch"]["also"]) == 4
+    assert final["verifications"][-1]["verdict"] == "confirmed"
+    assert "Budget!D13" in final["report"]

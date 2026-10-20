@@ -458,6 +458,25 @@ def logic_review_brief(book: Workbook, state: InvestigationState) -> str:
     return "\n".join(lines)
 
 
+def along_the_line(book: Workbook, patch: dict | None) -> dict | None:
+    if patch is None or not isinstance(patch["new_formula"], str) or not patch["new_formula"].startswith("="):
+        return patch
+    cell = normalize_ref(patch["cell"])
+    if book.formula(cell) is None:
+        return patch
+    sheet, address = split_ref(cell)
+    try:
+        pattern = book.formula_pattern(cell)
+        same = [ref for ref in book.cells() if ref != cell and split_ref(ref)[0] == sheet and split_ref(ref)[1].row == address.row and book.formula(ref) is not None and book.formula_pattern(ref) == pattern]
+        fixed = book.with_patch(cell, patch["new_formula"])
+        also = [{"cell": ref, "old_formula": book.formula(ref), "new_formula": fixed.shifted_formula(cell, ref)} for ref in sorted(same, key=lambda ref: split_ref(ref)[1].column)]
+    except FormulaError:
+        return patch
+    if not same or any(line["new_formula"] is None for line in also):
+        return patch
+    return {**patch, "also": also}
+
+
 def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_text: bool = False) -> Callable[[InvestigationState], dict]:
     def diagnose(state: InvestigationState) -> dict:
         candidates = tested_candidates(book, state)
@@ -540,6 +559,8 @@ def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_t
                 first = untried[0]
                 patch = {"cell": first["cell"], "old_formula": old_formula(book, first["cell"]), "new_formula": first["fix"], "source": "agent"}
                 decision |= {"cell": first["cell"], "decided_by": "rule", "fix": first["fix"]}
+        if patch is not None and any(h["error_type"] == "logic_error" and normalize_ref(h["cell"]) == normalize_ref(patch["cell"]) for h in hypotheses):
+            patch = along_the_line(book, patch)
         return {"hypotheses": hypotheses, "evidence": new_evidence, "patch": patch, "decisions": [decision], "run_log": result.get("run_log", []), "tool_call_counts": [result.get("tool_calls_used", 0)]}
 
     return diagnose

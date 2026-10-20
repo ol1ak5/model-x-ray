@@ -80,11 +80,18 @@ class Hypothesis(TypedDict):
     status: Literal["open", "rejected", "confirmed"]
 
 
+class LineCell(TypedDict):
+    cell: str
+    old_formula: str
+    new_formula: str
+
+
 class Patch(TypedDict):
     cell: str
     old_formula: str
     new_formula: str
     source: Literal["agent", "human"]
+    also: NotRequired[list[LineCell]]
 
 
 class Verification(TypedDict):

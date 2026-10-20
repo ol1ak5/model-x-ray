@@ -10,6 +10,7 @@ from model_x_ray.llm import invoke_with_usage
 from model_x_ray.rules import AGGREGATE_FORMULA, scan_model, scan_tables
 from model_x_ray.prompts import load_prompt
 from model_x_ray.spreadsheet.engine import CellAddress, FormulaError, Workbook, is_number, make_ref, normalize_ref, split_ref
+from model_x_ray.spreadsheet.sandbox import patch_cells, patched_book
 from model_x_ray.state import InvestigationState, Patch, RunLog, Verification
 
 
@@ -43,7 +44,7 @@ def _value_or_none(book: Workbook, ref: str) -> float | None:
 def check_objection(book: Workbook, patch: Patch, after: dict[str, object], objection: Objection) -> tuple[bool, str]:
     sheet = patch["cell"].rsplit("!", 1)[0]
     cell = normalize_ref(objection.cell if "!" in objection.cell else f"{sheet}!{objection.cell}")
-    patched = book.with_patch(patch["cell"], patch["new_formula"])
+    patched = patched_book(book, patch)
     if objection.kind == "note":
         note = book.note(cell)
         return (True, f"{cell} has the note '{note}'") if note else (False, f"{cell} has no note")
@@ -143,20 +144,29 @@ def deterministic_checks(book: Workbook, state: InvestigationState, verification
     prior = target["prior_value"] if target else None
     target_before = before.get(target_ref) if target_ref else None
     target_after = after.get(target_ref) if target_ref else None
+    if patch.get("also"):
+        patched_copy = patched_book(book, patch)
+        line = [cell for cell, _ in patch_cells(patch)]
+        cell_before, cell_after = before.get(patch["cell"]), after.get(patch["cell"])
+        return {
+            "anomaly_resolved": is_number(cell_before) and is_number(cell_after) and not _matches(cell_before, cell_after),
+            "dependents_consistent": all(_dependent_matches(patched_copy, dependent, after) for ref in line for dependent in book.all_dependents(ref)),
+            "pattern_restored": len({patched_copy.formula_pattern(cell) for cell in line}) == 1,
+        }
     if target and target.get("mode") == "review":
-        patched_book = book.with_patch(patch["cell"], patch["new_formula"])
+        patched_copy = patched_book(book, patch)
         return {
             "anomaly_resolved": not _matches(target_before, target_after),
-            "dependents_consistent": all(_dependent_matches(patched_book, dependent, after) for dependent in book.all_dependents(patch["cell"])),
+            "dependents_consistent": all(_dependent_matches(patched_copy, dependent, after) for dependent in book.all_dependents(patch["cell"])),
             "pattern_restored": True,
         }
     if target and target.get("mode") == "table":
-        patched_book = book.with_patch(patch["cell"], patch["new_formula"])
-        still_flagged = {f["cell"] for f in scan_tables(patched_book, layout=book)}
+        patched_copy = patched_book(book, patch)
+        still_flagged = {f["cell"] for f in scan_tables(patched_copy, layout=book)}
         return {
             "anomaly_resolved": patch["cell"] not in still_flagged,
-            "dependents_consistent": all(_dependent_matches(patched_book, dependent, after) for dependent in book.all_dependents(patch["cell"])),
-            "pattern_restored": _pattern_restored(book, patch, patched_book) or _column_pattern_restored(book, patch, patched_book),
+            "dependents_consistent": all(_dependent_matches(patched_copy, dependent, after) for dependent in book.all_dependents(patch["cell"])),
+            "pattern_restored": _pattern_restored(book, patch, patched_copy) or _column_pattern_restored(book, patch, patched_copy),
         }
     anomaly_resolved = (
         isinstance(target_before, (int, float))
@@ -165,7 +175,7 @@ def deterministic_checks(book: Workbook, state: InvestigationState, verification
         and not _matches(target_before, target_after)
         and abs(target_after - prior) < abs(target_before - prior)
     )
-    patched = book.with_patch(patch["cell"], patch["new_formula"])
+    patched = patched_book(book, patch)
     if not anomaly_resolved:
         was_flagged = patch["cell"] in {o["cell"] for o in scan_model(book)}
         anomaly_resolved = was_flagged and patch["cell"] not in {o["cell"] for o in scan_model(patched)}
