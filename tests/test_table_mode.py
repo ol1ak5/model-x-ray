@@ -234,3 +234,15 @@ def test_a_model_answer_naming_a_cell_that_does_not_exist_does_not_stop_the_run(
 
     assert all(h["cell"] != "Costs!" for h in final["hypotheses"])
     assert final["verifications"][-1]["verdict"] == "confirmed"
+
+
+def test_a_reasoned_no_from_the_model_is_respected_and_the_rule_does_not_override_it(tmp_path: Path) -> None:
+    from test_investigator import ScriptedDiagnosis
+
+    investigator = ScriptedDiagnosis(turns=[([], None)], reason="every difference is a deliberate input from the assumptions sheet")
+    final = run_trading(tmp_path, investigator)
+
+    assert final["decisions"][0]["decided_by"] == "none"
+    assert final["decisions"][0]["rule_would_have"].startswith("Costs!B8")
+    assert final.get("patch") is None
+    assert final.get("corrected_copy_id") is None

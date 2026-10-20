@@ -341,7 +341,8 @@ def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_t
             patch = {"cell": patch_cell, "old_formula": old_formula(book, patch_cell), "new_formula": new_formula, "source": "agent"}
             decision |= {"cell": patch_cell, "decided_by": "model_own" if new_formula == model_formula else "rule_corrected", "fix": new_formula, "model_fix": str(model_formula)}
         target = state["target"]
-        if patch is None and (target.get("mode") == "table" or target.get("other_findings")):
+        abstained = patch is None and bool(candidates) and bool(diagnosis.reason.strip())
+        if patch is None and not abstained and (target.get("mode") == "table" or target.get("other_findings")):
             tried = {h["cell"] for h in state.get("hypotheses", []) if h["status"] != "open"}
             own = [{"cell": f"{target['sheet']}!{target['cell']}", "reason": target["finding"], "fix": target.get("expected_formula")}] if target.get("mode") == "table" else []
             findings = [*own, *target.get("other_findings", [])]
