@@ -106,12 +106,20 @@ def corrected_value_matches(case: EnronCase, cell: str, copy_path: Path) -> bool
         return False
 
 
+def left_unchanged(case: EnronCase, cell: str) -> bool:
+    try:
+        return load_xlsx(case.faulty_file).raw(cell) == load_xlsx(case.corrected_file).raw(cell)
+    except Exception:
+        return False
+
+
 def run_case(
     setup: Setup,
     case: EnronCase,
     workdir: Path,
     corrected: bool = False,
     factory: Callable[[str], BaseChatModel] | None = None,
+    known_errors: set[str] | None = None,
 ) -> dict:
     path = case.corrected_file if corrected else case.faulty_file
     row: dict = {"setup": setup.name, "error_nr": case.error, "spreadsheet": case.spreadsheet, "file": "corrected" if corrected else "faulty", "description": case.description, "error": None}
@@ -137,12 +145,14 @@ def run_case(
     found = confirmed and patched in faulty
     copy_name = final.get("corrected_copy_id")
     run_log = final.get("run_log", [])
+    kept = bool(corrected and confirmed and patched in (known_errors or set()) and left_unchanged(case, patched))
     return {
         **row,
         "root_cause_found": None if corrected else found,
         "error_seen": None if corrected else any(normalize_ref(h["cell"]) in faulty for h in final.get("hypotheses", [])),
         "fix_matches_correction": None if corrected else bool(found and copy_name and corrected_value_matches(case, patched, workdir / copy_name)),
-        "false_alarm": confirmed if corrected else None,
+        "false_alarm": (confirmed and not kept) if corrected else None,
+        "known_error_kept": kept if corrected else None,
         "patched_cell": patched,
         "verdict": verifications[-1]["verdict"] if verifications else None,
         "target": final.get("target"),
@@ -169,6 +179,7 @@ def summarize(rows: list[dict]) -> dict:
         "error_seen": count(faulty, "error_seen"),
         "fix_matches_correction": count(faulty, "fix_matches_correction"),
         "false_alarms": count(corrected, "false_alarm"),
+        "known_errors_kept": count(corrected, "known_error_kept"),
         "skipped": len(rows) - len(ran),
         "excluded": len(excluded),
         "latency_p50_s": round(percentile(latencies, 0.5), 1),

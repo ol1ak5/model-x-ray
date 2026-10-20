@@ -77,3 +77,19 @@ def test_cases_are_read_split_by_spreadsheet_and_scored_against_the_corrected_fi
     assert summary["root_cause_found"] == "1 of 1"
     assert summary["false_alarms"] == "0 of 1"
     assert (summary["skipped"], summary["excluded"]) == (0, 1)
+
+
+def test_a_control_fix_on_a_listed_error_the_correction_left_unchanged_is_not_a_false_alarm(demo_workbook_path: Path, tmp_path: Path) -> None:
+    corpus = write_corpus(tmp_path / "enron", demo_workbook_path)
+    first = read_cases(corpus)[0]
+    known = {cell for case in read_cases(corpus) if case.spreadsheet == first.spreadsheet for cell in case.faulty_cells}
+
+    fixed = run_case(SCRIPTED, first, tmp_path / "work", corrected=True, factory=scripted, known_errors=known)
+    shutil.copy(first.faulty_file, first.corrected_file)
+    kept = run_case(SCRIPTED, first, tmp_path / "work", corrected=True, factory=scripted, known_errors=known)
+
+    assert (fixed["false_alarm"], fixed["known_error_kept"]) == (False, False)
+    assert (kept["patched_cell"], kept["verdict"]) == ("P&L!H7", "confirmed")
+    assert (kept["false_alarm"], kept["known_error_kept"]) == (False, True)
+    summary = summarize([fixed, kept])
+    assert (summary["false_alarms"], summary["known_errors_kept"]) == ("0 of 2", "1 of 2")

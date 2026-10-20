@@ -159,3 +159,26 @@ def test_a_season_average_over_the_wrong_columns_is_fixed_and_verified_end_to_en
     assert final["patch"]["new_formula"] == "=AVERAGE(H64:H70)"
     assert final["verifications"][-1]["verdict"] == "confirmed"
     assert final["verifications"][-1]["checks"] == {"anomaly_resolved": True, "dependents_consistent": True, "pattern_restored": True}
+
+
+def test_a_missing_dollar_sign_and_the_last_typed_input_above_carried_forward_cells_are_not_findings() -> None:
+    from model_x_ray.spreadsheet.engine import Workbook
+
+    book = Workbook({
+        "Legacy!G20": "Rate", "Legacy!H20": "A", "Legacy!H21": 1.1, "Legacy!H22": 0.9, "Legacy!H23": 1.0,
+        **{f"Legacy!G{row}": 100.0 + row for row in range(25, 33)},
+        **{f"Legacy!H{row}": f"=$G{row}*H$21*H$22*H$23" for row in range(25, 33)},
+        "Legacy!H26": "=$G26*H$21*H$22*H23",
+        "Receipts!A10": "Day", "Receipts!C10": "Receipt",
+        **{f"Receipts!A{row}": row - 10 for row in range(11, 31)},
+        "Receipts!C11": 9000.0,
+        **{f"Receipts!C{row}": f"=+C{row - 1}" for row in range(12, 15)},
+        **{f"Receipts!C{row}": value for row, value in zip(range(15, 20), [10000.0, 8000.0, 10000.0, 5500.0, 0.0])},
+        **{f"Receipts!C{row}": f"=+C{row - 1}" for row in range(20, 31)},
+        "Receipts!C25": 4200.0,
+    })
+
+    found = {finding["cell"]: finding for finding in scan_tables(book)}
+
+    assert set(found) == {"Receipts!C25"}
+    assert (found["Receipts!C25"]["kind"], found["Receipts!C25"]["fix"]) == ("typed_in_column", "=+C24")

@@ -156,6 +156,8 @@ def column_findings(book: Workbook) -> list[dict[str, str]]:
             if pattern is not None and counted[pattern] > max(2, count // 4):
                 continue
             source = above if patterns[above] == common else below
+            if pattern is None and is_number(book.raw(ref)) and (index == 0 or patterns[run[index - 1]] is None or index == len(run) - 1 or patterns[run[index + 1]] is None):
+                continue
             if pattern is None and is_number(book.raw(ref)):
                 findings.append({"cell": ref, "kind": "typed_in_column", "reason": f"typed value where the column uses {book.formula(source)}", "fix": book.shifted_formula(source, ref)})
             elif pattern is not None and pattern != common and not pattern.startswith("unreadable") and not TOTAL_FORMULA.match(book.formula(ref) or ""):
@@ -372,5 +374,6 @@ def runs_down_like_records(book: Workbook) -> Callable[[str], bool]:
 def scan_tables(book: Workbook, layout: Workbook | None = None) -> list[dict[str, str]]:
     like_records = runs_down_like_records(layout or book)
     columns = [finding for finding in column_findings(book) if like_records(finding["cell"])]
-    found = {finding["cell"]: finding for finding in [*section_total_findings(book), *total_findings(book), *double_count_findings(book), *columns, *aggregate_findings(book)]}
+    findings = [*section_total_findings(book), *total_findings(book), *double_count_findings(book), *columns, *aggregate_findings(book)]
+    found = {finding["cell"]: finding for finding in findings if not finding.get("fix") or changes_value(book, finding["cell"], finding["fix"])}
     return sorted(found.values(), key=lambda f: (split_ref(f["cell"])[0], split_ref(f["cell"])[1].row, split_ref(f["cell"])[1].column))
