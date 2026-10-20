@@ -69,7 +69,7 @@ def test_a_confirmed_run_is_explained_by_the_narrative_model_with_valid_citation
     model = ScriptedDiagnosis(turns=[(["P&L!H7"], "P&L!H7")])
     narrative = ScriptedNarrative(
         text="EBITDA 2027E moved from 40.03 to 52.01 (ev-1). "
-        "The Opex cell held a typed number where the row uses formulas (ev-3). "
+        "P&L!H7 held a typed number where the row uses formulas (ev-3). "
         "Patching it to the row formula brought the result back in the sandbox (ev-4)."
     )
     graph = run_investigation(
@@ -116,6 +116,74 @@ def test_an_unknown_citation_falls_back_to_the_deterministic_report(
     assert cited and set(cited) <= {e["id"] for e in state["evidence"]}
 
 
+def test_a_narrative_that_leaks_its_reasoning_falls_back_to_the_deterministic_report(
+    demo_workbook_path: Path, engine_sandbox, scripted_verdict,
+) -> None:
+    model = ScriptedDiagnosis(turns=[(["P&L!H7"], "P&L!H7")])
+    leaked = (
+        "Here's a thinking process:\n\n"
+        "1.  **Analyze the Request:**\n"
+        "    - I need to write a final report (3-6 sentences of plain prose).\n"
+        "    - Numbers first: open with what moved, from which value to which value.\n"
+        "    - Cite evidence inline as (ev-N) immediately after the claim it supports.\n\n"
+        "2.  **Draft the report:**\n"
+        "    - EBITDA 2027E moved from 40.03 to 52.01 (ev-1).\n"
+        "    - The Opex cell held a typed number where the row uses formulas (ev-3).\n\n"
+        "EBITDA 2027E moved from 40.03 to 52.01 (ev-1). P&L!H7 held a typed number "
+        "where the row uses formulas (ev-3). Patching it to the row formula brought the "
+        "result back in the sandbox (ev-4)."
+    )
+    narrative = ScriptedNarrative(text=leaked)
+    graph = run_investigation(
+        model, "demo", XlsxSource({"demo": demo_workbook_path}), engine_sandbox,
+        verifier=scripted_verdict, explainer=narrative,
+    )
+    config = {"configurable": {"thread_id": "narrative-leaked-reasoning"}}
+
+    graph.invoke({"spreadsheet_id": "demo", "question": QUESTION}, config)
+    state = graph.get_state(config).values
+
+    report = state["report"]
+    assert len(narrative.briefs) == 1
+    assert report == (
+        "EBITDA 2027E moved from 40.03 to 52.01 (ev-1). P&L!H7 held a typed number "
+        "where the row uses formulas (ev-3). Patching it to the row formula brought the "
+        "result back in the sandbox (ev-4)."
+    )
+    assert "thinking process" not in report.lower()
+    assert "**" not in report
+    assert set(re.findall(r"ev-\d+", report)) <= {e["id"] for e in state["evidence"]}
+
+
+def test_a_narrative_that_is_all_scaffolding_falls_back_to_the_deterministic_report(
+    demo_workbook_path: Path, engine_sandbox, scripted_verdict,
+) -> None:
+    model = ScriptedDiagnosis(turns=[(["P&L!H7"], "P&L!H7")])
+    narrative = ScriptedNarrative(
+        text=(
+            "Here's a thinking process:\n\n"
+            "1.  **Analyze the Request:**\n"
+            "    - Numbers first: open with what moved (ev-1).\n"
+            "    - Cite evidence inline as (ev-N) (ev-3).\n\n"
+            "2.  **Check the constraints:**\n"
+            "    - Do not add arithmetic that is not in the brief (ev-4).\n"
+        )
+    )
+    graph = run_investigation(
+        model, "demo", XlsxSource({"demo": demo_workbook_path}), engine_sandbox,
+        verifier=scripted_verdict, explainer=narrative,
+    )
+    config = {"configurable": {"thread_id": "narrative-all-scaffolding"}}
+
+    graph.invoke({"spreadsheet_id": "demo", "question": QUESTION}, config)
+    state = graph.get_state(config).values
+
+    report = state["report"]
+    assert "Root cause found in P&L!H7" in report
+    assert "thinking process" not in report.lower()
+    assert report.endswith(".")
+
+
 def test_a_narrative_without_citations_falls_back_to_the_deterministic_report(
     demo_workbook_path: Path, engine_sandbox, scripted_verdict,
 ) -> None:
@@ -134,6 +202,47 @@ def test_a_narrative_without_citations_falls_back_to_the_deterministic_report(
     assert narrative.text not in report
     assert "Root cause found in P&L!H7" in report
     assert re.findall(r"ev-\d+", report), "the deterministic report still cites its evidence"
+
+
+def test_a_narrative_that_stops_mid_sentence_falls_back_to_the_deterministic_report(
+    demo_workbook_path: Path, engine_sandbox, scripted_verdict,
+) -> None:
+    model = ScriptedDiagnosis(turns=[(["P&L!H7"], "P&L!H7")])
+    narrative = ScriptedNarrative(
+        text="Key numbers: EBITDA 2027E moved from 40.03 to 52.01 (ev-1). After patch, P&L!H8 moved from 52.01 to 44.73"
+    )
+    graph = run_investigation(
+        model, "demo", XlsxSource({"demo": demo_workbook_path}), engine_sandbox,
+        verifier=scripted_verdict, explainer=narrative,
+    )
+    config = {"configurable": {"thread_id": "narrative-cut-off"}}
+
+    graph.invoke({"spreadsheet_id": "demo", "question": QUESTION}, config)
+    state = graph.get_state(config).values
+
+    report = state["report"]
+    assert narrative.text not in report
+    assert "Root cause found in P&L!H7" in report
+    assert report.endswith(".")
+
+
+def test_a_narrative_that_never_names_the_patched_cell_falls_back_to_the_deterministic_report(
+    demo_workbook_path: Path, engine_sandbox, scripted_verdict,
+) -> None:
+    model = ScriptedDiagnosis(turns=[(["P&L!H7"], "P&L!H7")])
+    narrative = ScriptedNarrative(
+        text="EBITDA 2027E moved from 40.03 to 52.01 (ev-1). The cell held a typed number where the row uses formulas (ev-3)."
+    )
+    graph = run_investigation(
+        model, "demo", XlsxSource({"demo": demo_workbook_path}), engine_sandbox,
+        verifier=scripted_verdict, explainer=narrative,
+    )
+    config = {"configurable": {"thread_id": "narrative-no-cell"}}
+
+    graph.invoke({"spreadsheet_id": "demo", "question": QUESTION}, config)
+    state = graph.get_state(config).values
+
+    assert "Root cause found in P&L!H7" in state["report"]
 
 
 def test_an_unconfirmed_run_never_calls_the_narrative_model(

@@ -45,6 +45,12 @@ def test_a_full_investigation_pauses_for_review_and_writes_the_corrected_copy_on
     assert body["causal_tree"]["cell"] == "P&L!H8"
     assert any(e["kind"] == "anomaly" for e in body["evidence"])
     assert {entry["role"] for entry in body["run_log"]} >= {"investigator", "verifier"}
+    assert body["check_labels"] == {
+        "anomaly_resolved": "The repair removes the unusual movement",
+        "dependents_consistent": "Cells downstream still agree",
+        "pattern_restored": "The formula matches its row again",
+    }
+    assert set(body["verifications"][-1]["checks"]) <= set(body["check_labels"])
     assert "messages" not in body
 
     again = client.get(f"/investigations/{body['id']}")

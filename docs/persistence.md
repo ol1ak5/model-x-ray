@@ -17,9 +17,11 @@ One entry per investigation under a versioned key, `model-x-ray:runs:v1`:
 
 `id` is minted by the browser (`newRunId`) so a run is stored from its first streamed step; the investigation id the API returns travels inside `view`. A second entry, `current`, points at the run on screen: "Check another model" clears the pointer and keeps the history.
 
-Measured size for the demo model: `view` 11 KB and `sheet` 6 KB, so about 17 KB per run and roughly 300 runs inside the 5 MB per-origin quota. Rules the code follows (`frontend/src/storage.ts`):
+Measured size for the demo model: `view` 11 KB and `sheet` 6 KB, so about 17 KB per run and roughly 300 runs inside the 5 MB per-origin quota. A real model is not the demo model: a 200-row window of copied columns measured 290 KB per run, so 18 such runs already fill the budget below. Rules the code follows (`frontend/src/storage.ts`):
 
-- Keep the newest 25 runs, oldest evicted first, and keep dropping the oldest on `QuotaExceededError` before giving up on the write.
+- Keep the newest 25 runs and at most `STORAGE_BYTES` (2 MB) of JSON, leaving room in the ~5 MB quota for the rest of the app. Pruning drops the oldest run that is not the one on screen, one at a time until the payload fits.
+- Keep the run on screen whatever happens: when it alone exceeds the budget, its `sheet` goes first (the `view` and the report survive and the reload still restores the facts, refetching the window from the API), then its `view`. A run that fits nothing is dropped from storage rather than losing the write silently.
+- A write that still fails with `QuotaExceededError` (another tab, a smaller quota than assumed) prunes further in the same order before giving up, and only removes the key when nothing is left to give up.
 - `localStorage` holds strings only: the corrected `.xlsx` is **downloaded** when the visitor approves, never stored. A real model can be 10 MB, base64 would not fit, and keeping it would be a second copy of deal data.
 - Write whenever the picture changes (each streamed step, each view, each decision). A run emits a handful of events and the payload grows to a couple of KB, so a synchronous write is cheaper than the bookkeeping a debounce would need.
 - A restored run asks the API for a fresh sheet window and keeps the stored one when the API cannot answer, so the grid survives both a reload and a server restart.
@@ -46,7 +48,13 @@ Why not the other two obvious carriers:
 
 ## Uploaded models and the privacy claim
 
-The landing says "Your file stays private", and today that is not true: `POST /spreadsheets` writes the `.xlsx` into `uploads/` and nothing ever deletes it (the only `unlink` is cleanup after a parse failure), while every approved fix accumulates in `corrected/`. With the run in the browser the server should hold nothing: delete an upload when the run ends (or after a short TTL), and answer the corrected copy in the response body instead of storing it.
+The landing says "Your file stays private". The server now behaves that way (`api.Uploads`, `UPLOAD_TTL` 30 minutes):
+
+- `POST /spreadsheets` writes the `.xlsx` into `uploads/` and registers it as held. The file lives only while its run does: when the run finishes (approve or reject) the upload is deleted, removed from the source so its id stops resolving, and the workbook is no longer readable.
+- An abandoned upload — the visitor uploads, starts a run and never returns — is swept once it is older than the TTL. The sweep runs on the requests that matter (`GET /spreadsheets`, the sheet window), so there is no background thread and no scheduler; the injected clock keeps it testable.
+- The corrected copy is served once. `GET /investigations/{id}/corrected` answers the file and deletes it when the download finishes, so `corrected/` does not accumulate approved fixes. A copy the visitor never downloads stays until the process restarts; that is the remaining hole and it is filed as an issue.
+
+What the visitor keeps is the run in their own browser (above), and what they get is the corrected workbook in their own downloads. The server keeps neither.
 
 ## What this replaces
 
@@ -61,4 +69,5 @@ Measured before the decision, on the real workbook and the real SQLite checkpoin
 - Whether the agent's own memory (model maps, overrides, past fixes) also moves into the browser (#144). It would fix the cross-visitor leak above and make memory private by construction, at the cost of the agent no longer learning anything for the next visitor.
 - Whether the usage cap moves to the browser as well; it is the only remaining reason for server-side state, and an in-memory cap is enough for one container.
 - A way for a visitor to clear their history and their memory from the UI. The store already has `deleteRun` and `clearRuns`; nothing calls them yet.
+- Corrected copies that are never downloaded are not swept yet (they depend on the sandbox's wall-clock mtime, not the upload clock).
 - `/{id}/sheet` and `/{id}/corrected` still resolve through the process, so a visitor who reloads the sheet (rather than keeping the window the browser stored) needs the process that ran the investigation.

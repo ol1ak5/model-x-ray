@@ -423,6 +423,45 @@ def with_choice(state: InvestigationState, update: dict) -> dict:
     return {**update, "report": f"{report} {note}".strip()}
 
 
+REASONING_WORDS = (
+    "thinking process",
+    "analyze the request",
+    "analyze user request",
+    "constraints:",
+    "let me ",
+    "draft the report",
+    "step 1",
+)
+LIST_MARKER = re.compile(r"(?m)^\s*(?:[-*#]|\d+\.)")
+
+
+def looks_like_prose(text: str, known: set[str], cell: str) -> bool:
+    body = " ".join(text.split())
+    if not body or len(body) > 1200:
+        return False
+    if not body.endswith((".", "!", "?")):
+        return False
+    if cell not in body:
+        return False
+    lowered = body.lower()
+    if any(word in lowered for word in REASONING_WORDS):
+        return False
+    if LIST_MARKER.search(text) or "**" in body or "```" in body:
+        return False
+    if len(re.split(r"(?<=[.!?])\s+", body)) > 7:
+        return False
+    cited = re.findall(r"ev-\d+", body)
+    return bool(cited) and set(cited) <= known
+
+
+def prose_answer(text: str, known: set[str], cell: str) -> str | None:
+    blocks = [block.strip() for block in re.split(r"\n\s*\n", text.strip()) if block.strip()]
+    for candidate in [text.strip(), *reversed(blocks)]:
+        if looks_like_prose(candidate, known, cell):
+            return candidate
+    return None
+
+
 def make_explain_node(llm: BaseChatModel | None = None) -> Callable[[InvestigationState], dict]:
     def explain_node(state: InvestigationState) -> dict:
         return with_choice(state, explain_report(state))
@@ -471,10 +510,9 @@ def make_explain_node(llm: BaseChatModel | None = None) -> Callable[[Investigati
             model=model_name_of(llm),
         )
         text = narrative.content if isinstance(narrative.content, str) else ""
-        cited = re.findall(r"ev-\d+", text)
-        known = {record["id"] for record in state.get("evidence", [])}
-        if cited and set(cited) <= known:
-            return {"report": text, "run_log": records}
+        prose = prose_answer(text, {record["id"] for record in state.get("evidence", [])}, cell)
+        if prose is not None:
+            return {"report": prose, "run_log": records}
         return {"report": report, "run_log": records}
 
     return explain_node

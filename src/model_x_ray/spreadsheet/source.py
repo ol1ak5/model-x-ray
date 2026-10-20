@@ -10,6 +10,8 @@ class SpreadsheetSource(Protocol):
 
     def add(self, spreadsheet_id: str, path: Path) -> None: ...
 
+    def remove(self, spreadsheet_id: str) -> None: ...
+
     def load(self, spreadsheet_id: str) -> Workbook: ...
 
     def list_sheets(self, spreadsheet_id: str) -> list[str]: ...
@@ -41,6 +43,10 @@ class XlsxSource:
 
     def add(self, spreadsheet_id: str, path: Path) -> None:
         self._files[spreadsheet_id] = path
+        self._cache.pop(spreadsheet_id, None)
+
+    def remove(self, spreadsheet_id: str) -> None:
+        self._files.pop(spreadsheet_id, None)
         self._cache.pop(spreadsheet_id, None)
 
     def path_of(self, spreadsheet_id: str) -> Path:

@@ -43,7 +43,7 @@ function finding(key: string, view: InvestigationView | null): string | null {
   if (key === "verify") {
     const verification = view.verifications?.at(-1);
     if (!verification?.checks) return null;
-    const total = Object.keys(view.check_labels).length || Object.keys(verification.checks).length;
+    const total = Object.keys(view.check_labels ?? {}).length || Object.keys(verification.checks).length;
     const passed = Object.values(verification.checks).filter(Boolean).length;
     const verdict = verification.verdict === "confirmed" ? "proof passed" : verification.verdict === "rejected" ? "fix rejected" : "could not prove it";
     return `${passed} of ${total} checks passed · ${verdict}`;

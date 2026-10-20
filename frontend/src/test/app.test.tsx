@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
@@ -55,13 +55,20 @@ describe("an investigation in the browser", () => {
     await user.click(within(facts).getByRole("button", { name: "Why?" }));
     const report = within(facts).getByRole("region", { name: "Report" });
     expect(within(report).getByText(/Gross profit 2025A moved from 84\.72 to 285\.76/)).toBeInTheDocument();
-    await user.click(within(report).getByRole("link", { name: "ev-7" }));
+    const cited = (REVIEW.report ?? "").match(/ev-\d+/g) ?? [];
+    const onG5 = cited.find((id) => (REVIEW.evidence ?? []).some((record) => record.id === id && record.cell === "P&L!G5"));
+    expect(onG5).toBeDefined();
+    await user.click(within(report).getByRole("link", { name: onG5 as string }));
     await waitFor(() => expect(document.querySelector("[data-highlight=\"P&L!G5\"]")).not.toBeNull());
 
     await user.type(within(facts).getByLabelText("Reason"), "sign slip on COGS");
     await user.click(within(facts).getByRole("button", { name: "Approve fix" }));
 
-    expect(await screen.findByRole("link", { name: "Download corrected model" })).toHaveAttribute("href", `http://localhost:8000/investigations/${APPROVED.id}/corrected`);
+    const download = await screen.findByRole("link", { name: "Download corrected model" });
+    expect(download).toHaveAttribute("href", `http://localhost:8000/investigations/${APPROVED.id}/corrected`);
+    fireEvent.click(download);
+    expect(screen.queryByRole("link", { name: "Download corrected model" })).toBeNull();
+    expect(within(facts).getByText(/the copy is no longer on the server/)).toBeInTheDocument();
     expect(lastResume(api)).toMatchObject({
       url: `http://localhost:8000/investigations/${REVIEW.id}/resume/stream`,
       body: { action: "approve", reason: "sign slip on COGS", state: { id: REVIEW.id, status: "needs_review" } },
@@ -138,6 +145,23 @@ describe("an investigation in the browser", () => {
     expect(within(facts).getByRole("button", { name: "Test my fix" })).toBeInTheDocument();
   });
 
+  test("keeps the page on screen when the service sends no check labels", async () => {
+    const withoutLabels: Record<string, unknown> = { ...REVIEW };
+    delete withoutLabels.check_labels;
+    const api = fakeApi([...steps(...STEPS.map(([name]) => name)), ["view", withoutLabels as never]]);
+    vi.stubGlobal("fetch", api.fetch);
+    const user = await checkDemo();
+
+    const facts = await screen.findByRole("region", { name: "Investigation facts" });
+    expect(within(facts).getByRole("button", { name: "Approve fix" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Investigation steps" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Sheet" })).toBeInTheDocument();
+    const rail = screen.getByRole("region", { name: "Investigation steps" });
+    expect(within(rail).getByText(/3 of 3 checks passed/)).toBeInTheDocument();
+    await user.click(within(facts).getByRole("button", { name: "Why?" }));
+    expect(within(facts).getByRole("region", { name: "Report" })).toBeInTheDocument();
+  });
+
   test("shows a short message when the investigation fails", async () => {
     const api = fakeApi([...steps("load_sheet", "map_model"), ["error", 503, "The AI service took too long to answer. Please try again in a minute."]]);
     vi.stubGlobal("fetch", api.fetch);
@@ -173,7 +197,8 @@ describe("an investigation in the browser", () => {
     expect(rows.map((row) => row.getAttribute("data-tone"))).toEqual(Array.from({ length: 8 }, () => "done"));
     expect(within(rows[2]).getByText("Gross profit 2025A · 84.7 → 285.8")).toBeInTheDocument();
     expect(within(rows[3]).getByText("Revenue +11.5 · COGS +189.5")).toBeInTheDocument();
-    expect(within(rows[4]).getByText(/^P&L!G5 — The formula lacks the negative sign/)).toBeInTheDocument();
+    const cause = (REVIEW.hypotheses ?? []).find((item) => item.status === "confirmed") ?? (REVIEW.hypotheses ?? [])[0];
+    expect(within(rows[4]).getByText(`${cause.cell} — ${cause.claim}`)).toBeInTheDocument();
     expect(within(rows[5]).getByText("P&L!G5 =G4*Assumptions!$C$5 → =-G4*Assumptions!$C$5")).toBeInTheDocument();
     expect(within(rows[6]).getByText("3 of 3 checks passed · proof passed")).toBeInTheDocument();
     expect(within(rows[7]).getByText(/Report ready · \d+ evidence links/)).toBeInTheDocument();
@@ -190,8 +215,9 @@ describe("an investigation in the browser", () => {
     const culprit = document.querySelector("[data-wire-label='P&L!G5->P&L!G6']");
     expect(culprit).toHaveAttribute("data-tone", "bad");
     expect(culprit?.textContent).toContain("COGS +189.5");
-    expect(culprit?.textContent).toContain("sign inconsistency");
-    expect(culprit).toHaveAttribute("title", "The formula lacks the negative sign present in neighboring cells, causing COGS to be positive instead of negative.");
+    const confirmed = (REVIEW.hypotheses ?? []).find((item) => item.status === "confirmed") ?? (REVIEW.hypotheses ?? [])[0];
+    expect(culprit?.textContent).toContain(confirmed.error_type.replaceAll("_", " "));
+    expect(culprit).toHaveAttribute("title", confirmed.claim);
 
     const revenue = document.querySelector("[data-wire-label='P&L!G4->P&L!G6']");
     expect(revenue).toHaveAttribute("data-tone", "ok");

@@ -103,7 +103,7 @@ def compare_formulas(book: Workbook, ref: str, reference_cells: list[str]) -> st
         else:
             neighbour_patterns.append(pattern)
             sources.setdefault(pattern, neighbour)
-            parts.append(f"neighbour {neighbour} uses pattern {pattern}")
+            parts.append(f"neighbour {neighbour} uses pattern {pattern} ({book.formula(neighbour)})")
     common = Counter(neighbour_patterns).most_common(1)[0][0] if neighbour_patterns else None
     if own_pattern is None:
         if not common:
