@@ -6,29 +6,31 @@ Every number it reports comes from deterministic code or from the spreadsheet's 
 
 ## Demo scenario
 
-The repository ships a generated NVIDIA P&L model with one planted error:
+The repository ships the model the app serves by default, `demo_models/demo.xlsx`: a three-sheet deal model (P&L, Assumptions, Summary; EUR m, 2024A–2028E) with two planted mistakes:
 
-- `demo/nvidia-pnl.xlsx` — clean: two sheets (Assumptions, P&L), FY2025–FY2032, typed actuals and public estimates, every forecast cell a formula.
-- `demo/nvidia-pnl-error.xlsx` — identical, except `P&L!G11` (Total operating expenses, 2030E) is a typed `45.0` where the row uses `=SUM(G7:G10)`. EBITDA margin spikes to 71.2% against 68.5% / 68.9% on either side.
+- `P&L!G5` (COGS, 2025A) reads `=G4*Assumptions!$C$5` where the row uses `=-G4*…`, so COGS flips sign and gross profit shows 285.8 instead of 84.7.
+- `P&L!I6` (gross profit, 2027E) is a typed `95.65` — the 2026E figure — where the row adds revenue and COGS.
 
 Run the API and investigate it:
 
 ```bash
-MODEL_X_RAY_MODELS_DIR=demo scripts/serve.sh   # http://localhost:8000/docs
+scripts/serve.sh                # http://localhost:8000/docs
 ```
 
 ```json
 POST /investigations
-{"spreadsheet_id": "nvidia-pnl-error", "question": "Why did EBITDA 2030E jump?"}
+{"spreadsheet_id": "demo", "question": "Why did gross profit jump in 2025A?"}
 ```
 
-The graph locates `P&L!G12`, traces it to the broken opex row, proposes the `=SUM(G7:G10)` patch, verifies the corrected margins, and pauses for approval. `GET /investigations/{id}/corrected` then returns the fixed workbook. Regenerate both files any time with `uv run tools/generate_demo_model.py`.
+The graph locates `P&L!G5`, traces the 2025A gross profit to it, proposes `=-G4*Assumptions!$C$5`, tests it in a sandbox copy and pauses for approval; approving writes a corrected workbook that `GET /investigations/{id}/corrected` returns once and then deletes, and an uploaded model is deleted from the server as soon as its run ends.
+
+`demo/nvidia-pnl.xlsx` and `demo/nvidia-pnl-error.xlsx` are the second pair the docs and tests use (two sheets, FY2025–FY2032, one typed `45.0` at `P&L!G11` where the row sums `G7:G10`, which lifts the 2030E EBITDA margin); point the API at it with `MODEL_X_RAY_MODELS_DIR=demo`. Regenerate both files any time with `uv run tools/generate_demo_model.py`.
 
 ## How it works
 
 ![Investigation graph](docs/investigation-graph.png)
 
-Eleven nodes over a LangGraph state machine: **locate** resolves the question to a cell (code first, Nemotron only when several cells match — the user picks in a pause), **trace** walks the dependency graph and records causal contributions as evidence, **diagnose** runs a hypothesis loop with an evidence budget, **test** applies the proposed patch in a sandbox copy and compares before/after values, **verify** has an adversarial Nemotron Verifier try to break the diagnosis with a fixed evidence package, and **explain** renders the narrative report citing the recorded evidence ids. **apply_fix** writes the corrected copy after approval. Design details: [`docs/agent-architecture.md`](docs/agent-architecture.md).
+Ten nodes over a LangGraph state machine: **load** opens the workbook and **map** labels its lines and periods, **locate** resolves the question to a cell (code first, Nemotron only when several cells match — the user picks in a pause), **trace** walks the dependency graph and records causal contributions as evidence, **diagnose** runs a hypothesis loop with an evidence budget, **test** applies the proposed patch in a sandbox copy and compares before/after values, **verify** has an adversarial Nemotron Verifier try to break the diagnosis with a fixed evidence package, and **explain** renders the narrative report citing the recorded evidence ids. **human_review** pauses for the decision and **apply_fix** writes the corrected copy after approval. Design details: [`docs/agent-architecture.md`](docs/agent-architecture.md).
 
 ## Built on Nebius × NVIDIA
 
@@ -36,7 +38,8 @@ All LLM calls run on **Nebius Token Factory** (OpenAI-compatible) through LangCh
 
 | Role | Model |
 |---|---|
-| Investigator, Verifier, model mapper, locate, explain | `nvidia/nemotron-3-super-120b-a12b` (262K context, $0.30 / $0.90 per 1M tokens) |
+| Investigator, Verifier, model mapper, locate | `nvidia/nemotron-3-super-120b-a12b` (262K context, $0.30 / $0.90 per 1M tokens) |
+| Report writer (`explain`) | `nvidia/Nemotron-3_5-Lightning` (1M context, $0.06 / $0.24) |
 | Benchmark small-model set-up | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` ($0.06 / $0.24) |
 | Benchmark hardest-verification set-up | `nvidia/Nemotron-3-Ultra-550b-a55b` (1M context, $1.00 / $3.00) |
 
@@ -53,7 +56,7 @@ cp .env.example .env          # then fill in NEBIUS_API_KEY
 uv run model-x-ray            # smoke check: prints the banner
 ```
 
-Optional in `.env`: `GOOGLE_APPLICATION_CREDENTIALS` (Google Sheets source), `LANGSMITH_API_KEY` (tracing, off by default), model overrides and demo rate limits. Google Sheets work needs a service-account key (see issue #14); `.xlsx` files work out of the box.
+Optional in `.env`: `GOOGLE_APPLICATION_CREDENTIALS` (Google Sheets), `LANGSMITH_API_KEY` (tracing, off by default), model overrides and demo rate limits. The API serves `.xlsx` today; the Google Sheets source and sandbox sit behind the same `SpreadsheetSource` / `Sandbox` interface but are not wired into the server yet (#13, #14). The app ships with `demo_models/demo.xlsx`; the benchmark set is generated with `uv run tools/generate_dataset.py --output models --per-set 2`.
 
 ## Tests
 
@@ -66,7 +69,7 @@ The suite runs realistic scenarios end to end — a whole formula trace, a full 
 
 ## Supported Excel functions
 
-Deliberately the small set real financial models use; an unsupported function fails the load with an error naming it instead of producing wrong numbers.
+Deliberately the small set real financial models use; an unsupported function is reported by name on the cell that uses it (and on anything downstream), never guessed or silently skipped.
 
 - Maths: `SUM`, `AVERAGE`, `MIN`, `MAX`, `ROUND`, `ROUNDDOWN`, `INT`, `MOD`, `POWER`, `ABS`, `EXP`, `LN`, `SUMPRODUCT`, `LARGE`, `SMALL`
 - Logic and information: `IF`, `IFERROR`, `AND`, `OR`, `NOT`, `CHOOSE`, `ISERROR`, `ISNUMBER`, `ISTEXT`, `ISBLANK`
@@ -84,11 +87,13 @@ Not supported: links to other workbooks (`=[1]May!J10`; the values live in anoth
 
 ## Why these Nemotron models
 
-The mapper (the one call that labels every line and period of a sheet) started on the fastest candidate, `Nemotron-3_5-Lightning`, which passed every tool-calling check. On a real 63-line project-finance model, however, Lightning wrote its reasoning as text and hit its 8,192-token output limit without ever calling the tool — while **Nemotron 3 Super** returned all 63 lines and 24 periods in 7 seconds (~1,900 output tokens ≈ 0.3 cents), cached per file revision, so the cost is paid once per file. The mapper role moved to Super (PR #97). Every other role uses Super for one reason: a single strong model keeps the structured-output contracts (diagnosis, verdict, report) in one place, and the roles differ by prompt and tools, not by capability.
+The mapper (the one call that labels every line and period of a sheet) started on the fastest candidate, `Nemotron-3_5-Lightning`, which passed every tool-calling check. On a real 63-line project-finance model, however, Lightning wrote its reasoning as text and hit its 8,192-token output limit without ever calling the tool — while **Nemotron 3 Super** returned all 63 lines and 24 periods in 7 seconds (~1,900 output tokens ≈ 0.3 cents), cached per file revision, so the cost is paid once per file. The mapper role moved to Super (PR #97). The Investigator, Verifier and locator stay on Super for the same reason: one strong model keeps the structured-output contracts (diagnosis, verdict, target choice) in one place.
+
+The report writer is the exception. `explain` is the last step, has no tools and no structured output, and Super spent about 9 s and 2,000 output tokens on a three-to-six-sentence report, the largest wait left after the Investigator; it runs on Lightning with a 1,400-token cap. The narrative is checked against the brief before it is shown — plain prose, the patched cell named, only evidence ids that exist — and the deterministic report is used when that check fails, so a faster writer can never lose a citation.
 
 ## How we evaluate it
 
-The proof of value is planted errors: ~50 known mistakes (hardcoded numbers where the row uses formulas, broken links, sign flips, period slips) are planted across generated models, and the agent's diagnosis is scored against the known answer — cell, cause, and fix — in a four-way benchmark (rules baseline vs three Nemotron set-ups). Metrics and scoring rules: [`docs/evaluation.md`](docs/evaluation.md); regenerate with `scripts/benchmark.sh`, which writes `docs/benchmark.md` and `docs/benchmark-results.json`.
+The proof of value is planted errors: the generated Damodaran models carry 75 known mistakes (hardcoded numbers where the row uses formulas, broken references, sign flips, range errors, period slips), and the Enron Errors Corpus adds real spreadsheets with known corrections. The agent's diagnosis is scored against the known answer — cell, cause, and fix — per step, in a four-way benchmark (rules baseline vs three Nemotron set-ups). Metrics and scoring rules: [`docs/evaluation.md`](docs/evaluation.md); regenerate with `scripts/benchmark.sh`, which writes `docs/benchmark-results.json`, `docs/benchmark.md` and `docs/benchmark.svg` (generated, not committed; the only committed run is `docs/benchmark-before101.md`). The held-out splits are frozen in `docs/damodaran-split.json` and `docs/enron-split.json`.
 
 ## Links
 
