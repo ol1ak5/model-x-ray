@@ -88,6 +88,7 @@ class UsageCap:
 
 
 UPLOAD_TTL = 1800.0
+COPY_TTL = 1800.0
 
 
 @dataclass
@@ -123,6 +124,34 @@ class Uploads:
         for name in expired:
             self.drop(name)
         return expired
+
+
+@dataclass
+class Copies:
+    directory: Path | None
+    ttl: float = COPY_TTL
+
+    def __post_init__(self) -> None:
+        self._serving: set[Path] = set()
+
+    def holding(self, path: Path) -> None:
+        self._serving.add(path)
+
+    def release(self, path: Path) -> None:
+        self._serving.discard(path)
+        path.unlink(missing_ok=True)
+
+    def sweep(self) -> list[Path]:
+        if self.directory is None or not self.directory.is_dir():
+            return []
+        cutoff = time.time() - self.ttl
+        removed = []
+        for path in self.directory.glob("*.xlsx"):
+            if path in self._serving or path.stat().st_mtime > cutoff:
+                continue
+            path.unlink(missing_ok=True)
+            removed.append(path)
+        return removed
 
 
 class StartRequest(BaseModel):
@@ -268,11 +297,12 @@ def investigation_view(graph: CompiledStateGraph, investigation_id: str) -> dict
     }
 
 
-def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: AgentModels, checkpointer: BaseCheckpointSaver, cap: UsageCap, allowed_origins: list[str] | None = None, store: BaseStore | None = None, upload_dir: Path | None = None, upload_ttl: float = UPLOAD_TTL, clock: Callable[[], float] = time.monotonic) -> FastAPI:
+def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: AgentModels, checkpointer: BaseCheckpointSaver, cap: UsageCap, allowed_origins: list[str] | None = None, store: BaseStore | None = None, upload_dir: Path | None = None, upload_ttl: float = UPLOAD_TTL, clock: Callable[[], float] = time.monotonic, copy_dir: Path | None = None, copy_ttl: float = COPY_TTL) -> FastAPI:
     app = FastAPI(title="Model X-Ray")
     app.add_middleware(CORSMiddleware, allow_origins=allowed_origins or [], allow_origin_regex=LOCAL_DEV_ORIGIN, allow_methods=["GET", "POST"], allow_headers=["Content-Type"])
     graphs: dict[str, CompiledStateGraph] = {}
     held = Uploads(source, upload_dir, upload_ttl, clock)
+    copies = Copies(copy_dir, copy_ttl)
 
     @app.exception_handler(Exception)
     def explain_failure(request: Request, error: Exception) -> JSONResponse:
@@ -364,6 +394,7 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
     @app.get("/spreadsheets")
     def spreadsheets() -> list[dict]:
         held.sweep()
+        copies.sweep()
         return [{"id": spreadsheet_id, "sheets": source.list_sheets(spreadsheet_id)} for spreadsheet_id in source.ids() if not held.holds(spreadsheet_id)]
 
     @app.post("/spreadsheets", status_code=201)
@@ -408,7 +439,8 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
         path = locate_file(name) if name and locate_file else None
         if path is None:
             raise HTTPException(404, "No corrected file for this investigation; it is written only after you approve the fix, and once downloaded it is removed from the server")
-        return FileResponse(path, media_type=XLSX_MEDIA_TYPE, filename=path.name, background=BackgroundTask(path.unlink, missing_ok=True))
+        copies.holding(path)
+        return FileResponse(path, media_type=XLSX_MEDIA_TYPE, filename=path.name, background=BackgroundTask(copies.release, path))
 
     @app.post("/investigations", status_code=201)
     def start(request: StartRequest, http: Request) -> dict:
