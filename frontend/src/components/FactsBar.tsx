@@ -41,6 +41,7 @@ export default function FactsBar({
   onEvidence: (id: string) => void;
 }) {
   const [why, setWhy] = useState(false);
+  const [choiceWhy, setChoiceWhy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [reason, setReason] = useState("");
   const [intentional, setIntentional] = useState(false);
@@ -64,6 +65,28 @@ export default function FactsBar({
           </span>
         </p>
       )}
+
+      {view.target_choice && (
+        <p className={styles.choice} title={view.target_choice.why}>
+          {view.target_choice.candidates.length > 1 ? (
+            <>
+              Chosen among {view.target_choice.candidates.length} candidates:{" "}
+              <span className="mono">{view.target_choice.candidates.join(", ")}</span>
+            </>
+          ) : (
+            <>
+              Chosen: <span className="mono">{view.target_choice.chosen}</span>
+            </>
+          )}
+          {view.target_choice.why && (
+            <button type="button" className={styles.choiceWhy} aria-expanded={choiceWhy} onClick={() => setChoiceWhy((value) => !value)}>
+              why?
+            </button>
+          )}
+        </p>
+      )}
+
+      {choiceWhy && view.target_choice?.why && <p className={styles.choiceNote}>{view.target_choice.why}</p>}
 
       {view.causal_tree && <WireKey />}
 
