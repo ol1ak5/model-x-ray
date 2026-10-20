@@ -35,7 +35,10 @@ def _from_ref(book: Workbook, ref: str, from_period: str, to_period: str) -> str
     header = book.column_header(ref)
     if header is None or not (period_matches(header, from_period) or period_matches(header, to_period)):
         return None
-    shifted = make_ref(sheet, CellAddress(address.column - (grid[1] - grid[0]), address.row))
+    column = address.column - (grid[1] - grid[0])
+    if column < 1:
+        return None
+    shifted = make_ref(sheet, CellAddress(column, address.row))
     try:
         return shifted if is_number(book.value(shifted)) else None
     except FormulaError:

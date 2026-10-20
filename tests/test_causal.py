@@ -7,6 +7,8 @@ from langgraph.checkpoint.memory import InMemorySaver
 from model_x_ray import nodes
 from model_x_ray.causal import build_causal_tree, explain_change
 from model_x_ray.graph import build_graph
+from model_x_ray.rules import row_fix
+from model_x_ray.spreadsheet.engine import Workbook
 from model_x_ray.spreadsheet.xlsx import load_xlsx
 
 
@@ -89,3 +91,35 @@ def test_the_graph_trace_node_writes_contributions_and_the_causal_tree(demo_work
     assert sum(c["delta"] for c in state["contributions"]) == pytest.approx(state["causal_tree"]["delta"], abs=0.01)
     assert state["causal_tree"]["cell"] == "P&L!H8"
     assert any(c["suspicious"] for c in state["causal_tree"]["children"])
+
+
+def test_a_trailing_twelve_month_bridge_traces_without_shifting_off_the_sheet() -> None:
+    book = Workbook({
+        "TTM!A1": "Item", "TTM!B1": "Last 10K", "TTM!C1": "Year-ago 10Q", "TTM!D1": "Latest 10Q", "TTM!E1": "Trailing 12 month",
+        "TTM!A2": "Revenues", "TTM!B2": 1200.0, "TTM!C2": 280.0, "TTM!D2": 330.0, "TTM!E2": "=B2-C2+D2",
+        "TTM!A3": "EBIT", "TTM!B3": 240.0, "TTM!C3": 50.0, "TTM!D3": 70.0, "TTM!E3": "=B3-C3+D3",
+    })
+
+    explanation = explain_change(book, "TTM!E2", "Last 10K", "Trailing 12 month")
+    tree = build_causal_tree(book, "TTM!E2", "Last 10K", "Trailing 12 month")
+
+    assert explanation["value_before"] == pytest.approx(1200.0)
+    assert explanation["value_after"] == pytest.approx(1250.0)
+    assert explanation["delta"] == pytest.approx(50.0)
+    assert explanation["contributions"] == []
+    assert tree["cell"] == "TTM!E2"
+    assert tree["delta"] == pytest.approx(50.0)
+    assert tree["children"] == []
+
+
+def test_a_two_year_growth_row_offers_no_fix_where_the_copied_formula_would_leave_the_sheet() -> None:
+    book = Workbook({
+        "Growth!B1": "2024", "Growth!C1": "2025", "Growth!D1": "2026", "Growth!E1": "2027", "Growth!F1": "2028",
+        "Growth!B2": 100.0, "Growth!C2": 110.0, "Growth!D2": 125.0, "Growth!E2": 140.0, "Growth!F2": 150.0,
+        "Growth!B3": 0.08, "Growth!C3": 0.1, "Growth!D3": "=D2/B2-1", "Growth!E3": "=E2/C2-1", "Growth!F3": "=F2/D2-1",
+    })
+
+    assert row_fix(book, "Growth!B3") is None
+    assert row_fix(book, "Growth!C3") == "=C2/A2-1"
+    assert row_fix(book, "Growth!E3") == "=E2/C2-1"
+    assert book.shifted_formula("Growth!D3", "Growth!A3") is None

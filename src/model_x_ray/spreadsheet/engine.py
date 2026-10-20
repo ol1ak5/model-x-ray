@@ -129,6 +129,8 @@ def column_number(letters: str) -> int:
 
 
 def column_letters(number: int) -> str:
+    if number < 1:
+        raise ValueError(f"Column number must be at least 1, got {number}")
     letters = ""
     while number:
         number, remainder = divmod(number - 1, 26)
@@ -251,9 +253,11 @@ def relative_part(address: CellAddress, base: CellAddress) -> str:
     return row + column
 
 
-def shifted_part(address: CellAddress, delta_row: int, delta_column: int) -> str:
+def shifted_part(address: CellAddress, delta_row: int, delta_column: int) -> str | None:
     row = address.row if address.absolute_row else address.row + delta_row
     column = address.column if address.absolute_column else address.column + delta_column
+    if row < 1 or column < 1:
+        return None
     column_text = f"${column_letters(column)}" if address.absolute_column else column_letters(column)
     row_text = f"${row}" if address.absolute_row else str(row)
     return column_text + row_text
@@ -633,10 +637,11 @@ class Workbook:
                 continue
             reference = parse_reference(token.text)
             prefix = f"{reference.sheet_text}!" if reference.sheet_text else ""
-            text = shifted_part(reference.start, delta_row, delta_column)
-            if reference.end is not None:
-                text += ":" + shifted_part(reference.end, delta_row, delta_column)
-            pieces.append(prefix + text)
+            start = shifted_part(reference.start, delta_row, delta_column)
+            end = shifted_part(reference.end, delta_row, delta_column) if reference.end is not None else ""
+            if start is None or end is None:
+                return None
+            pieces.append(prefix + start + (f":{end}" if end else ""))
         return "=" + "".join(pieces)
 
     def row_label(self, ref: str) -> str | None:
