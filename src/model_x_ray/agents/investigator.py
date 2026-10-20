@@ -477,17 +477,50 @@ def along_the_line(book: Workbook, patch: dict | None) -> dict | None:
     return {**patch, "also": also}
 
 
+LOGIC_VOTES = 3
+
+
+def majority_diagnosis(diagnoses: list[Diagnosis], sheet: str) -> tuple[Diagnosis, dict[str, int]]:
+    votes: Counter = Counter()
+    proposals: dict[str, list[ProposedHypothesis]] = {}
+    for diagnosis in diagnoses:
+        cells = {}
+        for hypothesis in diagnosis.hypotheses:
+            if readable_ref(hypothesis.cell, sheet):
+                cells.setdefault(full_ref(hypothesis.cell, sheet), hypothesis)
+        for cell, hypothesis in cells.items():
+            votes[cell] += 1
+            proposals.setdefault(cell, []).append(hypothesis)
+    kept = [cell for cell, count in votes.most_common() if count * 2 > len(diagnoses)]
+    hypotheses = []
+    for cell in kept:
+        kind = Counter(h.error_type for h in proposals[cell]).most_common(1)[0][0]
+        hypotheses.append(next(h for h in proposals[cell] if h.error_type == kind).model_copy(update={"cell": cell}))
+    fixes = Counter((full_ref(d.patch.cell, sheet), d.patch.new_formula) for d in diagnoses if d.patch is not None and readable_ref(d.patch.cell, sheet) and full_ref(d.patch.cell, sheet) in kept)
+    patch = None
+    if fixes:
+        (cell, formula), count = fixes.most_common(1)[0]
+        patch = ProposedPatch(cell=cell, new_formula=formula) if count * 2 > len(diagnoses) else None
+    reason = next((d.reason for d in diagnoses if d.reason.strip()), "")
+    return Diagnosis(hypotheses=hypotheses, patch=patch, reason=reason), dict(votes)
+
+
 def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_text: bool = False) -> Callable[[InvestigationState], dict]:
     def diagnose(state: InvestigationState) -> dict:
         candidates = tested_candidates(book, state)
         brief = "\n".join(part for part in (investigation_brief(state), candidates_brief(candidates)) if part)
+        votes: dict[str, int] | None = None
         if not candidates:
             brief = f"{brief}\n\n{logic_review_brief(book, state)}"
         if plain_text:
             brief = f"{brief}\n\nThe whole model, read as text:\n{sheet_as_text(book)}"
-        result = investigator.invoke({"messages": [HumanMessage(content=brief)]})
-        diagnosis = result["diagnosis"]
         sheet = state["target"]["sheet"]
+        voting = not candidates and bool(state["target"].get("checked"))
+        runs = [investigator.invoke({"messages": [HumanMessage(content=brief)]}) for _ in range(LOGIC_VOTES if voting else 1)]
+        result = {"messages": [message for run in runs for message in run["messages"]], "run_log": [entry for run in runs for entry in run.get("run_log", [])], "tool_calls_used": sum(run.get("tool_calls_used", 0) for run in runs)}
+        diagnosis = runs[0]["diagnosis"]
+        if voting:
+            diagnosis, votes = majority_diagnosis([run["diagnosis"] for run in runs], sheet)
         existing = state.get("evidence", [])
         new_evidence = collect_evidence(result["messages"], sheet, existing, len(existing))
         all_evidence = [*existing, *new_evidence]
@@ -517,6 +550,8 @@ def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_t
         chosen = next((c for c in errors if c["number"] == diagnosis.choice), None) or (errors[0] if errors else None) or next((c for c in candidates if c["number"] == diagnosis.choice and c["cell"] not in intentional_now), None)
         chosen_reason = next((j["reason"] for j in judgements if chosen and j["number"] == chosen["number"]), "") or diagnosis.reason
         decision = {"cell": None, "decided_by": "none", "fix": None, "model_fix": None, "rule_would_have": f"{rule['cell']} {rule['fix']}" if rule else None, "reason": chosen_reason, "candidates": len(candidates), "judgements": judgements}
+        if votes is not None:
+            decision["votes"] = votes
         if chosen is not None:
             patch = {"cell": chosen["cell"], "old_formula": old_formula(book, chosen["cell"]), "new_formula": chosen["fix"], "source": "agent"}
             decision |= {"cell": chosen["cell"], "decided_by": "model", "fix": chosen["fix"]}

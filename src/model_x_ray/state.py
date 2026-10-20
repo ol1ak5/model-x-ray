@@ -6,6 +6,7 @@ from langgraph.graph.message import add_messages
 
 
 class TargetCell(TypedDict):
+    checked: NotRequired[bool]
     sheet: str
     cell: str
     label: str
@@ -154,6 +155,7 @@ class Decision(TypedDict):
     reason: str
     candidates: int
     judgements: NotRequired[list[dict]]
+    votes: NotRequired[dict[str, int]]
 
 
 class InvestigationState(TypedDict):

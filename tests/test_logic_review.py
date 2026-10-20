@@ -153,3 +153,29 @@ def test_a_net_income_that_never_subtracts_taxes_is_fixed_on_the_whole_line_even
     assert len(final["patch"]["also"]) == 4
     assert final["verifications"][-1]["verdict"] == "confirmed"
     assert "Budget!D13" in final["report"]
+
+
+def test_the_logic_review_asks_three_times_and_keeps_only_what_a_majority_finds(tmp_path: Path) -> None:
+    path = write_budget(tmp_path / "budget.xlsx", {f"{c}6": f"={c}4+{c}5" for c in YEARS})
+    found, silent = (["Budget!F6"], "Budget!F6", "=F4-F5", "logic_error"), ([], None)
+    model = ScriptedDiagnosis(briefs=[], turns=[found, silent, found])
+
+    final = investigate(tmp_path, path, model)
+
+    assert len(model.briefs) == 3
+    assert [(h["cell"], h["error_type"]) for h in final["hypotheses"]] == [("Budget!F6", "logic_error")]
+    assert final["verifications"][-1]["verdict"] == "confirmed"
+    assert final["decisions"][0]["votes"] == {"Budget!F6": 2}
+
+
+def test_a_finding_only_one_of_the_three_reviews_makes_is_dropped(tmp_path: Path) -> None:
+    path = write_budget(tmp_path / "budget.xlsx", {"D8": 320})
+    once = (["Budget!D8"], None, "", "input_outlier")
+    model = ScriptedDiagnosis(briefs=[], turns=[([], None), once, ([], None)])
+
+    final = investigate(tmp_path, path, model)
+
+    assert len(model.briefs) == 3
+    assert final["hypotheses"] == []
+    assert final["decisions"][0]["votes"] == {"Budget!D8": 1}
+    assert final["report"].startswith("No error found")
