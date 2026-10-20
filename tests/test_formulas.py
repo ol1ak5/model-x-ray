@@ -303,3 +303,29 @@ def test_a_link_to_another_workbook_is_reported_as_unsupported_in_plain_words(tm
     for ref in ("Summary!A1", "Summary!A2", "Summary!A3"):
         with pytest.raises(UnsupportedFormulaError, match="another workbook"):
             book.value(ref)
+
+
+def test_offset_picks_the_selected_scenario_shifts_a_range_and_sizes_a_trailing_sum() -> None:
+    from model_x_ray.spreadsheet.engine import Workbook
+
+    book = Workbook({
+        "Cases!A2": "Selected case", "Cases!B2": 2, "Cases!A3": "Months in trailing sum", "Cases!B3": 3,
+        "Cases!A5": "Base", "Cases!B5": 0.05, "Cases!C5": 100.0, "Cases!D5": 110.0, "Cases!E5": 120.0,
+        "Cases!A6": "Upside", "Cases!B6": 0.08, "Cases!C6": 130.0, "Cases!D6": 140.0, "Cases!E6": 150.0,
+        "Cases!A7": "Downside", "Cases!B7": 0.02, "Cases!C7": 80.0, "Cases!D7": 85.0, "Cases!E7": 90.0,
+        "Cases!A10": "Volume", "Cases!C10": 10.0, "Cases!D10": 20.0, "Cases!E10": 30.0, "Cases!F10": 40.0,
+        "Cases!A12": "Weights", "Cases!C12": 0.2, "Cases!D12": 0.3, "Cases!E12": 0.5,
+        "Out!B1": "=OFFSET(Cases!$B$5,Cases!$B$2-1,0)",
+        "Out!B2": "=SUMPRODUCT(OFFSET(Cases!$C$5:$E$5,Cases!$B$2-1,0),Cases!C12:E12)",
+        "Out!B3": "=SUM(OFFSET(Cases!C10,0,0,1,Cases!$B$3))",
+        "Out!B4": "=SUM(OFFSET(Cases!F10,0,-1,1,-2))",
+        "Out!B5": "=OFFSET(Cases!B5,-5,0)",
+    })
+
+    assert book.value("Out!B1") == 0.08
+    assert book.value("Out!B2") == pytest.approx(130 * 0.2 + 140 * 0.3 + 150 * 0.5)
+    assert book.value("Out!B3") == 60.0
+    assert book.value("Out!B4") == 50.0
+    with pytest.raises(FormulaError, match="#REF"):
+        book.value("Out!B5")
+    assert book.with_patch("Cases!B2", 3).value("Out!B1") == 0.02

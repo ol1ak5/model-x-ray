@@ -70,4 +70,6 @@ def load_xlsx(path: Path) -> Workbook:
                         metadata[ref] = {"note": notes.get(ref), "font_color": color, "number_format": number_format}
     finally:
         source.close()
-    return Workbook(cells, notes, source.sheetnames, metadata, names)
+    calculation = source.calculation
+    iteration = (calculation.iterateCount or 100, calculation.iterateDelta or 0.001) if calculation is not None and calculation.iterate else None
+    return Workbook(cells, notes, source.sheetnames, metadata, names, iteration)

@@ -48,7 +48,7 @@ SUPPORTED_FUNCTIONS = (
     "YEAR", "MONTH", "DAY", "DATE", "EDATE", "NPV", "XNPV",
     "POWER", "ROUNDDOWN", "INT", "MOD", "PPMT", "XIRR",
     "PMT", "IRR", "HLOOKUP", "COUNT", "COUNTA", "ISERROR", "ISTEXT", "ISNUMBER", "ISBLANK", "LARGE", "SMALL", "CHOOSE",
-    "EXP", "LN", "NORMSDIST", "NORM.S.DIST",
+    "EXP", "LN", "NORMSDIST", "NORM.S.DIST", "OFFSET",
 )
 YEAR_RANGE = (1900, 2100)
 PERIOD_INDEX_RANGE = (-50, 200)
@@ -72,7 +72,9 @@ class UnsupportedFormulaError(FormulaError):
 
 
 class CircularReferenceError(FormulaError):
-    pass
+    def __init__(self, message: str, cell: str | None = None) -> None:
+        super().__init__(message)
+        self.cell = cell
 
 
 class Grid(list):
@@ -419,7 +421,7 @@ def numbers(values: list[Value | list[Value]]) -> list[float]:
 
 
 class Workbook:
-    def __init__(self, cells: dict[str, CellContent], notes: dict[str, str] | None = None, sheets: list[str] | None = None, metadata: dict[str, CellMetadata] | None = None, names: dict[str, str] | None = None) -> None:
+    def __init__(self, cells: dict[str, CellContent], notes: dict[str, str] | None = None, sheets: list[str] | None = None, metadata: dict[str, CellMetadata] | None = None, names: dict[str, str] | None = None, iteration: tuple[int, float] | None = None) -> None:
         self._cells = {normalize_ref(ref): content for ref, content in cells.items()}
         self._notes = {normalize_ref(ref): text for ref, text in (notes or {}).items()}
         self._sheets = sheets or list(dict.fromkeys(ref.rsplit("!", 1)[0] for ref in self._cells))
@@ -427,6 +429,9 @@ class Workbook:
         self._cache: dict[str, Value] = {}
         self._failures: dict[str, FormulaError] = {}
         self._evaluating: set[str] = set()
+        self._iteration = iteration
+        self._iterates: dict[str, Value] = {}
+        self._loops: dict[str, dict[str, int | bool]] = {}
         self._dependents: dict[str, list[str]] | None = None
         self._rows: dict[str, dict[int, list[int]]] = {}
         self._label_counts: dict[str, dict[tuple[int, str], int]] = {}
@@ -504,18 +509,89 @@ class Workbook:
     def with_patch(self, ref: str, content: CellContent) -> "Workbook":
         cells = dict(self._cells)
         cells[normalize_ref(ref)] = content
-        return Workbook(cells, self._notes, self._sheets, self._metadata)
+        return Workbook(cells, self._notes, self._sheets, self._metadata, self._names, self._iteration)
 
     def value(self, ref: str) -> Value:
         ref = normalize_ref(ref)
-        if ref in self._cache or self._evaluating:
+        if ref in self._cache or ref in self._iterates or self._evaluating:
             return self._evaluate(ref)
+        for _ in range(len(self._cells) + 1):
+            try:
+                return self._evaluate_from_top(ref)
+            except CircularReferenceError as error:
+                if self._iteration is None or error.cell is None or error.cell in self._cache or error.cell in self._failures:
+                    raise
+                self._evaluating.clear()
+                self._solve_loop(error.cell)
+        return self._evaluate(ref)
+
+    def _evaluate_from_top(self, ref: str) -> Value:
         try:
             return self._evaluate(ref)
         except RecursionError:
             self._evaluating.clear()
             self._warm(ref)
             return self._evaluate(ref)
+
+    def loop(self, ref: str) -> dict[str, int | bool] | None:
+        ref = normalize_ref(ref)
+        if ref not in self._loops:
+            try:
+                self.value(ref)
+            except FormulaError:
+                return None
+        return self._loops.get(ref)
+
+    def _loop_cells(self, cell: str) -> list[str]:
+        forward = {cell: None, **dict.fromkeys(self._walk(cell, self.precedents))}
+        reverse: dict[str, list[str]] = {}
+        for node in forward:
+            for precedent in self.precedents(node):
+                if precedent in forward:
+                    reverse.setdefault(precedent, []).append(node)
+        back = {cell, *self._walk(cell, lambda node: reverse.get(node, []))}
+        return [node for node in forward if node in back and self.formula(node) is not None]
+
+    def _solve_loop(self, cell: str) -> None:
+        cells = self._loop_cells(cell)
+        order = sorted(cells, key=lambda node: (self._sheets.index(node.rsplit("!", 1)[0]) if node.rsplit("!", 1)[0] in self._sheets else 0, split_ref(node)[1].column, split_ref(node)[1].row))
+        members = set(cells)
+        for node in cells:
+            for precedent in self.precedents(node):
+                if precedent not in members:
+                    try:
+                        self.value(precedent)
+                    except FormulaError:
+                        pass
+        count, threshold = self._iteration
+        self._iterates.update({node: 0.0 for node in cells})
+        done, converged = 0, False
+        errors: dict[str, FormulaError] = {}
+        for done in range(1, count + 1):
+            change = 0.0
+            for node in order:
+                old = self._iterates[node]
+                try:
+                    new = FormulaEvaluator(self, node, tokenize(self.formula(node))).evaluate()
+                except FormulaError as error:
+                    errors[node] = error
+                    change = math.inf
+                    continue
+                errors.pop(node, None)
+                change = max(change, abs(new - old) if is_number(new) and is_number(old) else (0.0 if new == old else math.inf))
+                self._iterates[node] = new
+            if change < threshold and not errors:
+                converged = True
+                break
+        if errors:
+            error = next(iter(errors.values()))
+            for node in cells:
+                self._iterates.pop(node, None)
+                self._failures[node] = error
+            return
+        for node in cells:
+            self._cache[node] = self._iterates.pop(node)
+            self._loops[node] = {"cells": len(cells), "iterations": done, "converged": converged}
 
     def _warm(self, ref: str) -> None:
         stack = [(ref, False)]
@@ -537,18 +613,21 @@ class Workbook:
     def _evaluate(self, ref: str) -> Value:
         if ref in self._cache:
             return self._cache[ref]
+        if ref in self._iterates:
+            return self._iterates[ref]
         if ref in self._failures:
             raise self._failures[ref]
         formula = self.formula(ref)
         if formula is None:
             return self._cells.get(ref)
         if ref in self._evaluating:
-            raise CircularReferenceError(f"Circular reference through {ref}")
+            raise CircularReferenceError(f"Circular reference through {ref}", ref)
         self._evaluating.add(ref)
         try:
             result = FormulaEvaluator(self, ref, tokenize(formula)).evaluate()
         except FormulaError as error:
-            self._failures[ref] = error
+            if not (isinstance(error, CircularReferenceError) and self._iteration is not None):
+                self._failures[ref] = error
             raise
         finally:
             self._evaluating.discard(ref)
@@ -911,6 +990,8 @@ class FormulaEvaluator:
     def function(self, name: str) -> Value:
         if name not in SUPPORTED_FUNCTIONS:
             raise UnsupportedFormulaError(f"Unsupported function {name} in {self.ref}; supported: {', '.join(SUPPORTED_FUNCTIONS)}")
+        if name == "OFFSET":
+            return self.offset()
         self.expect("lparen")
         arguments: list[Value | list[Value] | Failure] = []
         if not (self.peek() and self.peek().kind == "rparen"):
@@ -938,6 +1019,34 @@ class FormulaEvaluator:
             return getattr(self, f"call_{name.lower().replace('.', '_')}")(values)
         except (IndexError, TypeError, ValueError, OverflowError, ZeroDivisionError) as error:
             raise FormulaError(f"#VALUE! {name} cannot be calculated with these arguments in {self.ref}") from error
+
+    def offset(self) -> Value | list[Value]:
+        self.expect("lparen")
+        token = self.take()
+        if token.kind not in ("ref", "span", "name"):
+            raise UnsupportedFormulaError(f"OFFSET needs a cell or range as its first argument in {self.ref}")
+        reference = self.book.reference_of(token, self.sheet)
+        arguments = []
+        while self.peek() and self.peek().kind == "comma":
+            self.take()
+            arguments.append(self.settled(self.argument()))
+        self.expect("rparen")
+        end = reference.end or reference.start
+        rows, columns = (int(self.number(arguments[index])) if len(arguments) > index and arguments[index] is not None else 0 for index in (0, 1))
+        height = int(self.number(arguments[2])) if len(arguments) > 2 and arguments[2] is not None else end.row - reference.start.row + 1
+        width = int(self.number(arguments[3])) if len(arguments) > 3 and arguments[3] is not None else end.column - reference.start.column + 1
+        if height == 0 or width == 0:
+            raise FormulaError(f"#REF! OFFSET with an empty size in {self.ref}")
+        top, left = reference.start.row + rows, reference.start.column + columns
+        first_row, last_row = sorted((top, top + height - (1 if height > 0 else -1)))
+        first_column, last_column = sorted((left, left + width - (1 if width > 0 else -1)))
+        if first_row < 1 or first_column < 1 or last_row > MAX_ROWS or last_column > MAX_COLUMNS:
+            raise FormulaError(f"#REF! OFFSET points outside the sheet in {self.ref}")
+        sheet = reference.sheet or self.sheet
+        values = [self.book.value(make_ref(sheet, CellAddress(column, row))) for row in range(first_row, last_row + 1) for column in range(first_column, last_column + 1)]
+        if first_row == last_row and first_column == last_column:
+            return values[0]
+        return Grid(values, last_column - first_column + 1)
 
     def information(self, name: str, argument: Value | list[Value] | Failure) -> Value:
         if isinstance(argument, Failure):
