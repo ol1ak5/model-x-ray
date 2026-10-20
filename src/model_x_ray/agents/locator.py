@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from model_x_ray.llm import invoke_with_usage, model_name_of
 from model_x_ray.prompts import load_prompt
-from model_x_ray.rules import is_period_cell, row_fix, scan_model, scan_tables
+from model_x_ray.rules import is_period_cell, rank_outliers, row_fix, scan_model, scan_tables
 from model_x_ray.spreadsheet.engine import CellAddress, FormulaError, Workbook, make_ref, normalize_ref, split_ref
 from model_x_ray.state import InvestigationState, ModelMap, TargetCell
 from model_x_ray.tools import find_cells
@@ -96,8 +96,19 @@ def target_cell(book: Workbook, ref: str) -> TargetCell:
     }
 
 
+def computable(book: Workbook, ref: str) -> bool:
+    try:
+        book.value(ref)
+    except FormulaError:
+        return False
+    return True
+
+
 def is_target(book: Workbook, ref: str) -> bool:
-    return is_period_cell(book, ref) and prior_cell(book, ref) is not None
+    if not is_period_cell(book, ref):
+        return False
+    prior = prior_cell(book, ref)
+    return prior is not None and computable(book, ref) and computable(book, prior)
 
 
 def relative_move(book: Workbook, ref: str) -> float:
@@ -107,7 +118,7 @@ def relative_move(book: Workbook, ref: str) -> float:
 
 
 def check_target(book: Workbook) -> tuple[str, str]:
-    outliers = sorted(scan_model(book), key=lambda o: len(book.all_dependents(o["cell"])), reverse=True)
+    outliers = rank_outliers(book, scan_model(book))
     for outlier in outliers:
         for ref in [*book.all_dependents(outlier["cell"]), outlier["cell"]]:
             if is_target(book, ref):
@@ -145,7 +156,7 @@ def make_locate_node(llm: BaseChatModel | None, book: Workbook) -> Callable[[Inv
                 try:
                     ref, question = check_target(book)
                     target = target_cell(book, ref)
-                    ranked = sorted(outliers, key=lambda o: len(book.all_dependents(o["cell"])), reverse=True)
+                    ranked = rank_outliers(book, outliers)
                     target["other_findings"] = [{"cell": o["cell"], "reason": o["reason"], "fix": row_fix(book, o["cell"])} for o in ranked[:6]]
                     return {"target": target, "question": question, "target_choice": None}
                 except ValueError:
@@ -160,7 +171,7 @@ def make_locate_node(llm: BaseChatModel | None, book: Workbook) -> Callable[[Inv
             except ValueError:
                 review = review_target(book)
                 if review is None:
-                    raise
+                    raise ValueError(nothing_to_check(book))
                 target, question = review
                 return {"target": target, "question": question, "target_choice": None}
         request = read_question(state["question"], catalogue)
@@ -190,7 +201,7 @@ def make_locate_node(llm: BaseChatModel | None, book: Workbook) -> Callable[[Inv
 
 
 def table_check(book: Workbook) -> tuple[TargetCell, str] | None:
-    findings = scan_tables(book)
+    findings = [finding for finding in scan_tables(book) if computable(book, finding["cell"])]
     if not findings:
         return None
     ranked = sorted(findings, key=lambda f: (len(book.all_dependents(f["cell"])), f["kind"] == "incomplete_total"), reverse=True)
@@ -215,14 +226,11 @@ def table_check(book: Workbook) -> tuple[TargetCell, str] | None:
 
 
 def review_target(book: Workbook) -> tuple[TargetCell, str] | None:
-    outputs = [ref for ref in book.cells() if book.formula(ref) is not None and (book.row_label(ref) or book.column_header(ref))]
+    outputs = [ref for ref in book.cells() if book.formula(ref) is not None and (book.row_label(ref) or book.column_header(ref)) and computable(book, ref)]
     if not outputs:
         return None
     ref = max(outputs, key=lambda cell: (len(book.all_precedents(cell)), -split_ref(cell)[1].row))
-    try:
-        value = as_number(book.value(ref))
-    except FormulaError:
-        return None
+    value = as_number(book.value(ref))
     label = book.row_label(ref) or book.column_header(ref) or ref
     finding = "no cell breaks a pattern here, so the calculation logic behind this output needs a review"
     target: TargetCell = {
@@ -230,6 +238,22 @@ def review_target(book: Workbook) -> tuple[TargetCell, str] | None:
         "prior_cell": "", "prior_value": value, "mode": "review", "finding": finding, "expected_formula": None,
     }
     return target, f"Check the model: {label} ({ref}) is the main result; {finding}."
+
+
+def nothing_to_check(book: Workbook) -> str:
+    formulas = sorted((ref for ref in book.cells() if book.formula(ref) is not None), key=lambda ref: (book.sheets.index(split_ref(ref)[0]) if split_ref(ref)[0] in book.sheets else 0, split_ref(ref)[1].row, split_ref(ref)[1].column))
+    failing = []
+    for ref in formulas:
+        try:
+            book.value(ref)
+        except FormulaError as error:
+            failing.append((ref, str(error)))
+    if formulas and len(failing) == len(formulas):
+        ref, reason = failing[0]
+        return f"Model X-Ray could not check this model: none of the {len(formulas)} formulas in this model can be calculated. The first one, {ref}, fails because: {reason}"
+    if not formulas:
+        return "Model X-Ray could not check this model: it has no formulas, only typed values, so there is no calculation to check"
+    return "Model X-Ray found no calculated line with periods to check in this model"
 
 
 def checked_instead(book: Workbook, records: list, missing: str) -> dict:

@@ -7,7 +7,7 @@ from langchain_core.runnables import Runnable
 from pydantic import BaseModel, Field
 
 from model_x_ray.llm import invoke_with_usage
-from model_x_ray.rules import scan_model, scan_tables
+from model_x_ray.rules import AGGREGATE_FORMULA, scan_model, scan_tables
 from model_x_ray.prompts import load_prompt
 from model_x_ray.spreadsheet.engine import CellAddress, FormulaError, Workbook, is_number, make_ref, normalize_ref, split_ref
 from model_x_ray.state import InvestigationState, Patch, RunLog, Verification
@@ -124,7 +124,7 @@ def _column_pattern_restored(book: Workbook, patch: Patch, patched: Workbook) ->
     sheet, address = split_ref(patch["cell"])
     neighbours = [make_ref(sheet, CellAddress(address.column, address.row + offset)) for offset in (-2, -1, 1, 2) if address.row + offset >= 1]
     formula_neighbours = [n for n in neighbours if book.formula(n) is not None]
-    return pattern is not None and (not formula_neighbours or any(patched.formula_pattern(n) == pattern for n in formula_neighbours) or pattern.upper().startswith("=SUM("))
+    return pattern is not None and (not formula_neighbours or any(patched.formula_pattern(n) == pattern for n in formula_neighbours) or AGGREGATE_FORMULA.match(patched.formula(patch["cell"]) or "") is not None)
 
 
 CHECK_LABELS = {
@@ -152,7 +152,7 @@ def deterministic_checks(book: Workbook, state: InvestigationState, verification
         }
     if target and target.get("mode") == "table":
         patched_book = book.with_patch(patch["cell"], patch["new_formula"])
-        still_flagged = {f["cell"] for f in scan_tables(patched_book)}
+        still_flagged = {f["cell"] for f in scan_tables(patched_book, layout=book)}
         return {
             "anomaly_resolved": patch["cell"] not in still_flagged,
             "dependents_consistent": all(_dependent_matches(patched_book, dependent, after) for dependent in book.all_dependents(patch["cell"])),
@@ -190,6 +190,17 @@ def _relevant_refs(book: Workbook, patch: Patch) -> list[str]:
     return list(dict.fromkeys([patch["cell"], *neighbours, *book.all_dependents(patch["cell"])]))
 
 
+def anomaly_of(book: Workbook, state: InvestigationState) -> dict:
+    target = state.get("target") or {}
+    patch = state["patch"]
+    if target.get("mode") in ("table", "review"):
+        return {"kind": "table finding", "finding": target.get("finding", "")}
+    flagged = {o["cell"]: o["reason"] for o in scan_model(book)}
+    if patch["cell"] in flagged:
+        return {"kind": "pattern break", "finding": f"{patch['cell']}: {flagged[patch['cell']]}"}
+    return {"kind": "jump against the prior period", "finding": ""}
+
+
 def evidence_package(
     state: InvestigationState,
     verification: Verification,
@@ -203,6 +214,7 @@ def evidence_package(
     after = verification.get("after", {})
     return {
         "question": state["question"],
+        "anomaly": anomaly_of(book, state),
         "target": {
             "ref": target_ref,
             "prior_value": target["prior_value"] if target else None,

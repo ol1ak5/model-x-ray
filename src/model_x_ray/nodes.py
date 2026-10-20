@@ -239,6 +239,13 @@ def make_verify_node(llm: BaseChatModel | None, source: SpreadsheetSource) -> Ca
                 "hypotheses": [{"id": hypothesis["id"], "status": "rejected"}],
                 "attempts": attempts,
             }
+        if patch is None and hypothesis is not None and hypothesis["error_type"] in REVIEW_FINDINGS:
+            findings = [h for h in state.get("hypotheses", []) if h["status"] == "open" and h["error_type"] in REVIEW_FINDINGS]
+            return {
+                "verifications": [{"hypothesis_id": h["id"], "before": {}, "after": {}, "checks": {}, "verdict": "inconclusive", "reason": NO_FIX_PROPOSED} for h in findings],
+                "hypotheses": [{"id": h["id"], "status": "rejected"} for h in findings],
+                "attempts": attempts,
+            }
         if hypothesis is None or patch is None or verification is None or "before" not in verification or not verification["before"]:
             return {
                 "verifications": [{
@@ -319,7 +326,13 @@ def no_error_report(state: InvestigationState) -> str:
     return f"No error found. {movement}." if movement else "No error found."
 
 
-def why_unproven(verification: Verification | None) -> str:
+REVIEW_FINDINGS = ("logic_error", "input_outlier")
+NO_FIX_PROPOSED = "a person has to decide the fix"
+
+
+def why_unproven(verification: Verification | None, hypothesis: Hypothesis | None = None) -> str:
+    if verification is not None and verification.get("reason") == NO_FIX_PROPOSED and hypothesis is not None:
+        return f"{NO_FIX_PROPOSED}: {hypothesis['claim'].rstrip('.')}"
     if verification is None:
         return f"it was not tested before the agent's {MAX_ATTEMPTS} attempts ran out"
     failed = [CHECK_FAILURES[name] for name, ok in verification.get("checks", {}).items() if not ok and name in CHECK_FAILURES]
@@ -341,7 +354,7 @@ def unproven_report(state: InvestigationState) -> str:
         if verification is not None:
             tested.add(hypothesis["cell"])
         kind = hypothesis["error_type"].replace("_", " ")
-        suspects[hypothesis["cell"]] = f"{hypothesis['cell']} ({kind}), because {why_unproven(verification)}"
+        suspects[hypothesis["cell"]] = f"{hypothesis['cell']} ({kind}), because {why_unproven(verification, hypothesis)}"
     count = len(suspects)
     movement = movement_and_drivers(state)
     report = f"No confirmed error. {movement}. " if movement else "No confirmed error. "

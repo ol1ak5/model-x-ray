@@ -36,7 +36,8 @@ def test_verify_confirms_a_good_patch_and_sends_a_fixed_evidence_package(
     assert record["after"]["P&L!H8"] == pytest.approx(44.73, abs=0.01)
 
     package = json.loads(scripted_verdict.human[0])
-    assert set(package) == {"question", "target", "patch", "formulas", "sandbox", "deterministic_checks"}
+    assert set(package) == {"question", "anomaly", "target", "patch", "formulas", "sandbox", "deterministic_checks"}
+    assert package["anomaly"]["kind"] == "pattern break"
     assert "hypotheses" not in package and "messages" not in package
     assert package["sandbox"]["after"]["P&L!H8"] == pytest.approx(44.73, abs=0.01)
     assert package["patch"]["old_formula"] == "-45.2"

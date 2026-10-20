@@ -58,13 +58,15 @@ def main() -> None:
     if args.split == "test" and not args.final:
         parser.error("the test split is held out; pass --final only for the last run")
     split = freeze_split(args.data)
-    cases = [case for case in read_cases(args.data) if case.spreadsheet in split[args.split]][: args.limit]
+    corpus = read_cases(args.data)
+    cases = [case for case in corpus if case.spreadsheet in split[args.split]][: args.limit]
     setup = SETUPS[args.setup]
     rows = []
     for case in cases:
         rows.append(run_case(setup, case, args.data / "work"))
         if args.controls:
-            rows.append(run_case(setup, case, args.data / "work", corrected=True))
+            known = {cell for other in corpus if other.spreadsheet == case.spreadsheet for cell in other.faulty_cells}
+            rows.append(run_case(setup, case, args.data / "work", corrected=True, known_errors=known))
         last = rows[-1]
         print(f"error {case.error}: {last.get('excluded') or last.get('error') or ('found' if last.get('root_cause_found') else 'not found')}", flush=True)
     output = args.data / f"results-{args.setup}-{args.split}.json"

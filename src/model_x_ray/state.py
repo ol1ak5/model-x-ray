@@ -73,7 +73,7 @@ class CausalNode(TypedDict):
 class Hypothesis(TypedDict):
     id: str
     cell: str
-    error_type: Literal["typed_value", "wrong_reference", "range_inconsistency", "sign_inconsistency", "period_inconsistency"]
+    error_type: Literal["typed_value", "wrong_reference", "range_inconsistency", "sign_inconsistency", "period_inconsistency", "logic_error", "input_outlier"]
     claim: str
     evidence_ids: list[str]
     confidence: Literal["high", "medium", "low"]
@@ -146,6 +146,7 @@ class Decision(TypedDict):
     rule_would_have: str | None
     reason: str
     candidates: int
+    judgements: NotRequired[list[dict]]
 
 
 class InvestigationState(TypedDict):

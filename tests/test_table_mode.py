@@ -234,3 +234,53 @@ def test_a_model_answer_naming_a_cell_that_does_not_exist_does_not_stop_the_run(
 
     assert all(h["cell"] != "Costs!" for h in final["hypotheses"])
     assert final["verifications"][-1]["verdict"] == "confirmed"
+
+
+def test_a_reasoned_no_from_the_model_is_respected_and_the_rule_does_not_override_it(tmp_path: Path) -> None:
+    from test_investigator import ScriptedDiagnosis
+
+    investigator = ScriptedDiagnosis(turns=[([], None)], reason="every difference is a deliberate input from the assumptions sheet")
+    final = run_trading(tmp_path, investigator)
+
+    assert final["decisions"][0]["decided_by"] == "none"
+    assert final["decisions"][0]["rule_would_have"].startswith("Costs!B8")
+    assert final.get("patch") is None
+    assert final.get("corrected_copy_id") is None
+
+
+def test_each_candidate_is_judged_on_its_own_and_an_intentional_one_does_not_hide_a_real_error(tmp_path: Path) -> None:
+    from test_investigator import ScriptedDiagnosis
+
+    judgements = [
+        {"number": 1, "verdict": "intentional", "reason": "the total excludes the last item on purpose, its label says so"},
+        {"number": 2, "verdict": "error", "reason": "a typed number sits in a column of volume times price"},
+    ]
+    final = run_trading(tmp_path, ScriptedDiagnosis(turns=[([], None)], judgements=judgements))
+
+    decision = final["decisions"][0]
+    assert decision["decided_by"] == "model"
+    assert decision["cell"] != "Costs!B8"
+    assert decision["reason"] == "a typed number sits in a column of volume times price"
+    assert [j["verdict"] for j in decision["judgements"]] == ["intentional", "error"]
+    assert all(v["hypothesis_id"] for v in final["verifications"])
+    assert "Costs!B8" not in {h["cell"] for h in final["hypotheses"]}
+
+
+def test_when_every_candidate_is_judged_intentional_nothing_is_changed(tmp_path: Path) -> None:
+    from test_investigator import ScriptedDiagnosis
+
+    judgements = [{"number": n, "verdict": "intentional", "reason": "a deliberate input"} for n in range(1, 7)]
+    final = run_trading(tmp_path, ScriptedDiagnosis(turns=[([], None)], judgements=judgements))
+
+    assert final["decisions"][0]["decided_by"] == "none"
+    assert final.get("patch") is None
+
+
+def test_the_rule_may_test_what_the_model_left_unjudged_but_never_what_it_called_intentional(tmp_path: Path) -> None:
+    from test_investigator import ScriptedDiagnosis
+
+    judgements = [{"number": 1, "verdict": "intentional", "reason": "the total is meant to exclude the last item"}]
+    final = run_trading(tmp_path, ScriptedDiagnosis(turns=[([], None)], judgements=judgements))
+
+    assert final["decisions"][0]["decided_by"] == "rule"
+    assert all(d["cell"] != "Costs!B8" for d in final["decisions"])
