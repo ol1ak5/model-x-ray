@@ -5,6 +5,7 @@ from langchain_core.tools import tool
 from model_x_ray.llm import build_chat_model
 
 MODELS = [
+    "nvidia/Nemotron-3.5-Super-VL",
     "nvidia/nemotron-3-super-120b-a12b",
     "nvidia/Nemotron-3_5-Lightning",
     "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",

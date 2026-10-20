@@ -36,13 +36,16 @@ All LLM calls run on **Nebius Token Factory** (OpenAI-compatible) through LangCh
 
 | Role | Model |
 |---|---|
-| Investigator, Verifier, model mapper, locate, explain | `nvidia/nemotron-3-super-120b-a12b` (262K context, $0.30 / $0.90 per 1M tokens) |
+| Investigator, Verifier | `nvidia/Nemotron-3.5-Super-VL` (1M context, $0.30 / $0.90 per 1M tokens) |
+| Model mapper, locate | `nvidia/nemotron-3-super-120b-a12b` (256K context, $0.30 / $0.90) |
+| Report writer (explain) | `nvidia/Nemotron-3_5-Lightning` ($0.06 / $0.24) |
+| Benchmark comparison set-up `super-3` | `nvidia/nemotron-3-super-120b-a12b` |
 | Benchmark small-model set-up | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` ($0.06 / $0.24) |
 | Benchmark hardest-verification set-up | `nvidia/Nemotron-3-Ultra-550b-a55b` (1M context, $1.00 / $3.00) |
 
-- Base URL: `https://api.tokenfactory.nebius.com/v1/` — key in `NEBIUS_API_KEY` (`.env`, never committed); every role is overridable via `NEBIUS_MODEL_<ROLE>`.
+- Base URL: `https://api.tokenfactory.nebius.com/v1/`, key in `NEBIUS_API_KEY` (`.env`, never committed); every role is overridable via `NEBIUS_MODEL_<ROLE>`.
 - Token Factory docs: <https://docs.tokenfactory.nebius.com/> (model list, function calling, structured output, rate limits).
-- Model IDs, context windows and prices were verified live with `GET /v1/models` on 6 Oct 2026 and are pinned in [`docs/agent-architecture.md`](docs/agent-architecture.md) §Models.
+- Model IDs were verified live with `GET /v1/models` on 6 Oct 2026, and Nemotron 3.5 Super on 21 Oct 2026; prices and context windows come from the [Token Factory model catalog](https://tokenfactory.nebius.com/model-catalog.md) and are pinned in [`docs/agent-architecture.md`](docs/agent-architecture.md) §Models.
 - Nebius credits: the hackathon Token Factory allocation for the Nebius × NVIDIA Global AI Hackathon ([devpost](https://nebiusglobalaihackathon.devpost.com/)).
 
 ## Setup
@@ -84,7 +87,27 @@ Not supported: links to other workbooks (`=[1]May!J10`; the values live in anoth
 
 ## Why these Nemotron models
 
-The mapper (the one call that labels every line and period of a sheet) started on the fastest candidate, `Nemotron-3_5-Lightning`, which passed every tool-calling check. On a real 63-line project-finance model, however, Lightning wrote its reasoning as text and hit its 8,192-token output limit without ever calling the tool — while **Nemotron 3 Super** returned all 63 lines and 24 periods in 7 seconds (~1,900 output tokens ≈ 0.3 cents), cached per file revision, so the cost is paid once per file. The mapper role moved to Super (PR #97). Every other role uses Super for one reason: a single strong model keeps the structured-output contracts (diagnosis, verdict, report) in one place, and the roles differ by prompt and tools, not by capability.
+The agent never asks a model to calculate: the Excel engine produces every number. What the model must do is judge a formula the way an expert analyst would and drive tools over several steps. So we chose by the benchmarks that measure those two skills, then checked the choice on our own task.
+
+| Skill the agent needs | Benchmark (NVIDIA model cards) | Nemotron 3 Super | Nemotron 3.5 Super |
+|---|---|---|---|
+| Expert reasoning: is this formula right? | GPQA Diamond | 79.2 | **89.5** |
+| Hard expert questions | HLE, text only, no tools | 18.3 | **31.8** |
+| Multi-step tool use | τ²-bench retail / airline / telecom | 62.8 / 56.3 / 64.4 | **69.2 / 76.5 / 73.2** |
+| Following instructions and formats | IFBench | **72.6** | 70.9 |
+
+Both cost the same on Token Factory ($0.30 / $0.90 per 1M tokens), and 3.5 Super reads four times more context (1M tokens). The decisive test was ours: a five-year SaaS subscription forecast the agent had never seen, with five planted logic errors (churned customers added instead of subtracted, a contribution margin that skips support costs, revenue on 10 months a year, a margin divided by costs instead of revenue, a price typed 100 times too large) and a clean copy.
+
+| On the unseen SaaS forecast | Nemotron 3 Super | Nemotron 3.5 Super |
+|---|---|---|
+| Errors fixed and verified | 0 of 5 | **4 of 5** |
+| Errors seen | 1 of 5 | **5 of 5** (the price typo is flagged for a person, never fixed with an invented value) |
+| False alarms on the clean copy | 0 | 0 |
+| Tokens for the whole set | 307,000 | 442,000 |
+
+Nemotron 3 Super read "Closing customers = Opening customers + New customers + Churned customers" and answered that every line matched its label; 3.5 Super caught it in all three votes and fixed the whole line. It spends more tokens only because it goes on to test, verify and correct what it finds; on a clean file both spend about the same. The Investigator and the Verifier run on 3.5 Super; 3 Super stays available as the `super-3` benchmark set-up.
+
+The mapper (the one call that labels every line and period of a sheet) and `locate` still run on 3 Super until 3.5 Super passes the same tool-calling checks. The mapper started on the fastest candidate, `Nemotron-3_5-Lightning`, which passed every tool-calling check; on a real 63-line project-finance model, however, Lightning wrote its reasoning as text and hit its 8,192-token output limit without ever calling the tool, while Nemotron 3 Super returned all 63 lines and 24 periods in 7 seconds (about 1,900 output tokens, 0.3 cents), cached per file revision (PR #97).
 
 ## How we evaluate it
 

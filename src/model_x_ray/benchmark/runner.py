@@ -34,10 +34,11 @@ from model_x_ray.spreadsheet.xlsx import load_xlsx
 from model_x_ray.state import InvestigationState, NodeLog, RunLog
 from model_x_ray.tools import find_cells, make_read_only_tools
 
-SUPER = "nvidia/nemotron-3-super-120b-a12b"
+SUPER = "nvidia/Nemotron-3.5-Super-VL"
+SUPER_3 = "nvidia/nemotron-3-super-120b-a12b"
 LIGHTNING = "nvidia/Nemotron-3_5-Lightning"
 NANO = "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
-PRICES: dict[str, tuple[float, float]] = {SUPER: (0.30, 0.90), LIGHTNING: (0.06, 0.24), NANO: (0.06, 0.24)}
+PRICES: dict[str, tuple[float, float]] = {SUPER: (0.30, 0.90), SUPER_3: (0.30, 0.90), LIGHTNING: (0.06, 0.24), NANO: (0.06, 0.24)}
 
 
 @dataclass(frozen=True)
@@ -52,6 +53,7 @@ class Setup:
 SETUP_RULES = Setup(name="rules", kind="rules")
 SETUP_NANO = Setup(name="nano", kind="investigator", model=NANO, verifier=NANO)
 SETUP_SUPER = Setup(name="super", kind="investigator", model=SUPER, verifier=SUPER)
+SETUP_SUPER_3 = Setup(name="super-3", kind="investigator", model=SUPER_3, verifier=SUPER_3)
 SETUP_NO_TOOLS = Setup(name="no-tools", kind="investigator", model=SUPER, verifier=SUPER, plain_text=True)
 
 

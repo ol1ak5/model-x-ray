@@ -11,14 +11,15 @@ from langchain_openai import ChatOpenAI
 
 from model_x_ray.state import RunLog
 
-SUPER = "nvidia/nemotron-3-super-120b-a12b"
+SUPER = "nvidia/Nemotron-3.5-Super-VL"
+SUPER_3 = "nvidia/nemotron-3-super-120b-a12b"
 LIGHTNING = "nvidia/Nemotron-3_5-Lightning"
 
 ROLE_MODELS: dict[str, str] = {
     "investigator": SUPER,
     "verifier": SUPER,
-    "mapper": SUPER,
-    "locate": SUPER,
+    "mapper": SUPER_3,
+    "locate": SUPER_3,
     "explain": LIGHTNING,
 }
 ROLE_MAX_TOKENS: dict[str, int] = {"explain": 1400}

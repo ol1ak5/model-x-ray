@@ -82,7 +82,7 @@ The same dataset runs through four set-ups. The graph receives its models as par
 |---|---|---|
 | Rules only | `find_formula_outliers` ranks suspicious cells; no LLM | The baseline plain code achieves |
 | Small Nemotron | Investigator on `NVIDIA-Nemotron-3-Nano-30B-A3B` | Whether a small model is enough |
-| Nemotron Super | Investigator on `nemotron-3-super-120b-a12b` (main system) | The full agent |
+| Nemotron Super | Investigator and Verifier on `Nemotron-3.5-Super-VL` (main system; `nemotron-3-super-120b-a12b` before 21 Oct 2026, kept as set-up `super-3`) | The full agent |
 | Super without tools | Nemotron reads the sheet as plain text | What the tools add |
 
 Results are reported per set, because the expected winner differs by set and the comparison must not be rigged. Rules should do well on single, clean errors such as a typed value replacing a formula. Nemotron is expected to earn its place on the override set (fewer false alarms, by reading notes and context) and the blended set (symptom is not the cause). The headline is stated in those terms, for example "rules handle the easy cases; Nemotron cuts false alarms by X points and solves Y% of the blended cases rules miss", with the measured numbers whatever they turn out to be.

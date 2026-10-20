@@ -8,6 +8,7 @@ from model_x_ray.benchmark.runner import (
     SETUP_NO_TOOLS,
     SETUP_RULES,
     SETUP_SUPER,
+    SETUP_SUPER_3,
     Setup,
     run_benchmark,
 )
@@ -17,6 +18,7 @@ SETUPS: dict[str, Setup] = {
     "rules": SETUP_RULES,
     "nano": SETUP_NANO,
     "super": SETUP_SUPER,
+    "super-3": SETUP_SUPER_3,
     "no-tools": SETUP_NO_TOOLS,
 }
 

@@ -6,12 +6,12 @@ from uuid import uuid4
 from dotenv import load_dotenv
 
 from model_x_ray.agents.investigator import logic_review_brief
-from model_x_ray.benchmark.runner import SETUP_RULES, SETUP_SUPER, build_setup_graph, cost_of, drive_graph
+from model_x_ray.benchmark.runner import SETUP_RULES, SETUP_SUPER, SETUP_SUPER_3, build_setup_graph, cost_of, drive_graph
 from model_x_ray.spreadsheet.sandbox import XlsxSandbox
 from model_x_ray.spreadsheet.source import XlsxSource
 from model_x_ray.spreadsheet.xlsx import load_xlsx
 
-SETUPS = {"rules": SETUP_RULES, "super": SETUP_SUPER}
+SETUPS = {"rules": SETUP_RULES, "super": SETUP_SUPER, "super-3": SETUP_SUPER_3}
 
 
 def section(title: str, lines: list[str]) -> None:
