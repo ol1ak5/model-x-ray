@@ -6,6 +6,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import Runnable
 from pydantic import BaseModel, Field
 
+from model_x_ray.agents.investigator import formula_in_words, label_of, standard_definition
 from model_x_ray.llm import invoke_with_usage
 from model_x_ray.rules import AGGREGATE_FORMULA, scan_model, scan_tables
 from model_x_ray.prompts import load_prompt
@@ -203,6 +204,11 @@ def _relevant_refs(book: Workbook, patch: Patch) -> list[str]:
 def anomaly_of(book: Workbook, state: InvestigationState) -> dict:
     target = state.get("target") or {}
     patch = state["patch"]
+    if patch.get("also"):
+        patched = patched_book(book, patch)
+        label = label_of(book, patch["cell"])
+        finding = f"{label}: {formula_in_words(book, patch['cell'])} -> {formula_in_words(patched, patch['cell'])} in {len(patch['also']) + 1} periods"
+        return {"kind": "line logic error", "finding": finding + standard_definition(label)}
     if target.get("mode") in ("table", "review"):
         return {"kind": "table finding", "finding": target.get("finding", "")}
     flagged = {o["cell"]: o["reason"] for o in scan_model(book)}

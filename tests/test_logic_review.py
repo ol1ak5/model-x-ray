@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from uuid import uuid4
 
@@ -39,10 +40,11 @@ def write_budget(path: Path, changes: dict[str, object] | None = None) -> Path:
     return path
 
 
-def investigate(tmp_path: Path, path: Path, model: ScriptedDiagnosis) -> dict:
+def investigate(tmp_path: Path, path: Path, model: ScriptedDiagnosis, verdict: ScriptedVerdict | None = None) -> dict:
     setup = Setup(name="scripted", kind="investigator", model="scripted-investigator", verifier="scripted-verifier")
     source = XlsxSource({"budget": path})
-    graph = build_setup_graph(setup, source, XlsxSandbox(source, tmp_path / "corrected"), "budget", lambda model_id: ScriptedVerdict() if model_id == "scripted-verifier" else model)
+    judge = verdict or ScriptedVerdict()
+    graph = build_setup_graph(setup, source, XlsxSandbox(source, tmp_path / "corrected"), "budget", lambda model_id: judge if model_id == "scripted-verifier" else model)
     return drive_graph(graph, {"spreadsheet_id": "budget", "question": ""}, {"configurable": {"thread_id": uuid4().hex}})
 
 
@@ -123,8 +125,14 @@ def test_a_gross_profit_that_adds_its_costs_in_every_year_is_fixed_on_the_whole_
 
     path = write_budget(tmp_path / "budget.xlsx", {f"{c}6": f"={c}4+{c}5" for c in YEARS})
     model = ScriptedDiagnosis(briefs=[], turns=[(["Budget!F6"], "Budget!F6", "=F4-F5", "logic_error")])
+    verdict = ScriptedVerdict(human=[])
 
-    final = investigate(tmp_path, path, model)
+    final = investigate(tmp_path, path, model, verdict)
+
+    package = json.loads(verdict.human[0])
+    assert package["anomaly"]["kind"] == "line logic error"
+    assert "Gross profit: Revenue + Cost of goods sold -> Revenue - Cost of goods sold in 5 periods" in package["anomaly"]["finding"]
+    assert "standard: revenue - cost_of_goods_sold" in package["anomaly"]["finding"]
 
     patch = final["patch"]
     assert (patch["cell"], patch["new_formula"]) == ("Budget!F6", "=F4-F5")
