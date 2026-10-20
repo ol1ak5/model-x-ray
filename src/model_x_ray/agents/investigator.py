@@ -97,7 +97,10 @@ def build_investigator(llm: BaseChatModel, tools: list[BaseTool], max_tool_calls
             [system, *messages, HumanMessage(content=load_prompt("investigator_conclude"))],
             role="investigator",
             model=model_name,
+            retry_empty=True,
         )
+        if diagnosis is None:
+            diagnosis = Diagnosis(hypotheses=[], patch=None, reason="the model gave no structured answer after several attempts")
         return {"diagnosis": diagnosis, "run_log": records}
 
     builder = StateGraph(InvestigatorState)

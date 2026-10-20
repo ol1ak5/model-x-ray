@@ -132,14 +132,16 @@ def invoke_with_usage(
     *,
     role: str,
     model: str | None,
+    retry_empty: bool = False,
 ) -> tuple[Any, list[RunLog]]:
     recorder = UsageRecorder()
+    failure = None
     for _ in range(PROVIDER_ATTEMPTS):
         result = runnable.invoke(messages, config={"callbacks": [recorder]})
         failure = provider_error(result)
-        if failure is None:
+        if failure is None and not (retry_empty and result is None):
             break
-    else:
+    if failure is not None:
         raise ProviderFailure(f"The AI service failed to answer the {role} after {PROVIDER_ATTEMPTS} attempts: {failure[:200]}")
     records: list[RunLog] = [
         {

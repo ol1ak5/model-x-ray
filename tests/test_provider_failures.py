@@ -53,3 +53,27 @@ def test_a_provider_that_keeps_failing_is_reported_as_a_service_failure_never_as
     assert response.status_code == 503
     assert "AI service" in response.json()["detail"]
     assert "No error found" not in response.text
+
+
+class SilentOnce(ScriptedDiagnosis):
+    silences_left: list[int] = [0]
+
+    def bind_tools(self, tools: Any, **kwargs: Any) -> "SilentOnce":
+        return self.model_copy(update={"bound": [getattr(t, "name", None) or getattr(t, "__name__", "") for t in tools], "briefs": self.briefs, "silences_left": self.silences_left})
+
+    def _generate(self, messages: list[BaseMessage], stop: list[str] | None = None, **kwargs: Any) -> ChatResult:
+        if "Diagnosis" in self.bound and self.silences_left[0] > 0:
+            self.silences_left[0] -= 1
+            return ChatResult(generations=[ChatGeneration(message=AIMessage(content="Let me reason about every line once more before answering..."))])
+        return super()._generate(messages, stop, **kwargs)
+
+
+def test_a_diagnosis_the_model_writes_as_text_instead_of_through_the_tool_is_asked_again(demo_workbook_path: Path, engine_sandbox, scripted_verdict) -> None:
+    investigator = SilentOnce(briefs=[], silences_left=[1], turns=[(["P&L!H7"], "P&L!H7")])
+    client = client_with(investigator, demo_workbook_path, engine_sandbox, scripted_verdict)
+
+    response = client.post("/investigations", json={"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump?"})
+
+    assert response.status_code == 201
+    assert response.json()["patch"]["cell"] == "P&L!H7"
+    assert investigator.silences_left == [0]
