@@ -16,5 +16,7 @@ Error types (use exactly these names):
 - range_inconsistency: a SUM or similar range leaves out or adds a row compared with its neighbours.
 - sign_inconsistency: a sign is flipped compared with the row, for example a cost added instead of subtracted.
 - period_inconsistency: a formula refers to the wrong period, for example the prior year's column instead of the current one.
+- logic_error: a formula whose operation contradicts what its line's label says, for example a profit line that adds its costs or a net figure that never subtracts the step it names; it is often the same in every period.
+- input_outlier: a typed input far out of line with the same input in the other periods, for example ten times larger, with nothing explaining it.
 
 When you have enough evidence, stop calling tools. Prefer the smallest fix that restores the row's pattern, and derive the corrected formula from the formulas of the neighbouring cells shown in tool results.

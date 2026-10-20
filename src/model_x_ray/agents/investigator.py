@@ -16,8 +16,8 @@ from pydantic import BaseModel
 from model_x_ray.causal import render_causal_tree
 from model_x_ray.llm import invoke_with_usage, model_name_of
 from model_x_ray.prompts import load_prompt
-from model_x_ray.rules import breaks_row_pattern
-from model_x_ray.spreadsheet.engine import CellAddress, FormulaError, Workbook, make_ref, normalize_ref, split_ref
+from model_x_ray.rules import AGGREGATE_FORMULA, breaks_row_pattern, input_outliers
+from model_x_ray.spreadsheet.engine import CellAddress, FormulaError, Workbook, column_letters, make_ref, normalize_ref, parse_reference, split_ref, tokenize
 from model_x_ray.state import Evidence, InvestigationState, RunLog
 
 MAX_TOOL_CALLS = 8
@@ -26,7 +26,7 @@ MAX_OPEN_HYPOTHESES = 3
 
 class ProposedHypothesis(BaseModel):
     cell: str
-    error_type: Literal["typed_value", "wrong_reference", "range_inconsistency", "sign_inconsistency", "period_inconsistency"]
+    error_type: Literal["typed_value", "wrong_reference", "range_inconsistency", "sign_inconsistency", "period_inconsistency", "logic_error", "input_outlier"]
     claim: str
     confidence: Literal["high", "medium", "low"]
 
@@ -302,10 +302,159 @@ def candidates_brief(candidates: list[dict]) -> str:
     return "\n".join(lines)
 
 
+MAX_LOGIC_LINES = 60
+
+
+def period_offset(book: Workbook, cell: str, read: str) -> str:
+    own, other = book.column_header(cell), book.column_header(read)
+    if not own or not other or own == other or book.row_label(read) is None:
+        return ""
+    steps = split_ref(cell)[1].column - split_ref(read)[1].column
+    if steps == 1:
+        return " (prior period)"
+    if steps == -1:
+        return " (next period)"
+    return f" ({abs(steps)} periods {'earlier' if steps > 0 else 'later'})"
+
+
+def label_of(book: Workbook, ref: str) -> str:
+    return book.row_label(ref) or book.column_header(ref) or ref.split("!", 1)[1]
+
+
+def formula_in_words(book: Workbook, cell: str) -> str:
+    sheet = split_ref(cell)[0]
+    pieces = []
+    for token in tokenize(book.formula(cell) or ""):
+        if token.kind == "ref":
+            reference = parse_reference(token.text)
+            start = make_ref(reference.sheet or sheet, reference.start)
+            if reference.end is None:
+                pieces.append(label_of(book, start) + ("" if reference.start.absolute_column else period_offset(book, cell, start)))
+                continue
+            end = make_ref(reference.sheet or sheet, reference.end)
+            first, last = label_of(book, start), label_of(book, end)
+            if first == last:
+                pieces.append(f"{first} {book.column_header(start) or start.split('!', 1)[1]} to {book.column_header(end) or end.split('!', 1)[1]}")
+            else:
+                pieces.append(f"{first} to {last}")
+        elif token.kind == "op":
+            pieces.append(f" {token.text} ")
+        elif token.kind == "comma":
+            pieces.append(", ")
+        else:
+            pieces.append(token.text)
+    return "".join(pieces).strip()
+
+
+def lines_feeding(book: Workbook, target_ref: str) -> list[str]:
+    feeding = [target_ref, *book.all_precedents(target_ref)]
+    sheet = split_ref(target_ref)[0]
+    rows = {(split_ref(cell)[0], split_ref(cell)[1].row) for cell in feeding}
+    return [cell for cell in book.cells() if split_ref(cell)[0] == sheet or (split_ref(cell)[0], split_ref(cell)[1].row) in rows]
+
+
+def period_total(book: Workbook, cell: str) -> tuple[str, int, int] | None:
+    match = AGGREGATE_FORMULA.match(book.formula(cell) or "")
+    if match is None or match.group(3) is None:
+        return None
+    sheet, address = split_ref(cell)
+    first, last = (split_ref(f"{sheet}!{part.replace('$', '')}")[1] for part in (match.group(2), match.group(3)))
+    if first.row != address.row or last.row != address.row or last.column >= address.column:
+        return None
+    return match.group(1).upper(), address.column - first.column, address.column - last.column
+
+
+def shown_value(value: object) -> str:
+    return f"{value:g}" if isinstance(value, (int, float)) and not isinstance(value, bool) else str(value)
+
+
+def line_values(book: Workbook, cell: str) -> str:
+    sheet = split_ref(cell)[0]
+    parts = []
+    for token in tokenize(book.formula(cell) or ""):
+        if token.kind == "ref" and ":" not in token.text:
+            read = make_ref(parse_reference(token.text).sheet or sheet, parse_reference(token.text).start)
+            parts.append(f"{label_of(book, read)} {shown_value(book.value(read))}")
+    if not parts or len(parts) > 4:
+        return ""
+    return f"; values: {', '.join(parts)} -> {shown_value(book.value(cell))}"
+
+
+def logic_map(book: Workbook, target_ref: str) -> list[str]:
+    cells = [cell for cell in lines_feeding(book, target_ref) if book.formula(cell) is not None]
+    totals: dict[tuple[str, int], list[str]] = {}
+    shapes: dict[tuple[str, int], Counter] = {}
+    for cell in cells:
+        shape = period_total(book, cell)
+        if shape is not None:
+            key = (split_ref(cell)[0], split_ref(cell)[1].column)
+            shapes.setdefault(key, Counter())[shape] += 1
+            totals.setdefault(key, []).append(cell)
+    collapsed: set[str] = set()
+    summary = []
+    for key, members in totals.items():
+        common, count = shapes[key].most_common(1)[0]
+        if count < 3:
+            continue
+        same = [cell for cell in members if period_total(book, cell) == common]
+        collapsed |= set(same)
+        sheet, column = key
+        rows = sorted(split_ref(cell)[1].row for cell in same)
+        first, last = (book.column_header(make_ref(sheet, CellAddress(column - offset, rows[0]))) for offset in common[1:])
+        summary.append(f"- {sheet} total column {column_letters(column)}: each line summed over {first} to {last} (rows {rows[0]} to {rows[-1]})")
+    groups: dict[tuple[str, int, str], list[str]] = {}
+    for cell in cells:
+        if cell in collapsed:
+            continue
+        sheet, address = split_ref(cell)
+        try:
+            pattern = book.formula_pattern(cell) or ""
+        except FormulaError:
+            continue
+        groups.setdefault((sheet, address.row, pattern), []).append(cell)
+    order = {sheet: index for index, sheet in enumerate(book.sheets)}
+    target_column = split_ref(target_ref)[1].column
+    lines = []
+    for (sheet, row, _), members in sorted(groups.items(), key=lambda item: (order.get(item[0][0], 0), item[0][1])):
+        members.sort(key=lambda cell: split_ref(cell)[1].column)
+        shown = min(members, key=lambda cell: abs(split_ref(cell)[1].column - target_column))
+        try:
+            words = formula_in_words(book, shown) + line_values(book, shown)
+        except FormulaError:
+            continue
+        first, last = book.column_header(members[0]), book.column_header(members[-1])
+        where = f"same in {first} to {last}" if len(members) > 1 and first and last else f"in {', '.join(cell.split('!', 1)[1] for cell in members)}"
+        lines.append(f"- {sheet} row {row}: {label_of(book, shown)} = {words} [{shown.split('!', 1)[1]} {book.formula(shown)}, {where}]")
+        if len(lines) == MAX_LOGIC_LINES:
+            break
+    unused = []
+    for (sheet, row, _), members in sorted(groups.items(), key=lambda item: (order.get(item[0][0], 0), item[0][1])):
+        readers = {reader for cell in members for reader in book.dependents(cell) if reader not in collapsed and split_ref(reader)[1].row != row}
+        label = label_of(book, members[0])
+        if not readers and f"{label} (row {row})" not in unused:
+            unused.append(f"{label} (row {row})")
+    tail = [f"Calculated but used by no other line: {', '.join(unused)}"] if unused else []
+    return [*lines, *summary, *tail]
+
+
+def logic_review_brief(book: Workbook, state: InvestigationState) -> str:
+    target = state["target"]
+    target_ref = f"{target['sheet']}!{target['cell']}"
+    lines = [load_prompt("logic_review"), "", "Lines in words:", *logic_map(book, target_ref)]
+    inside = set(lines_feeding(book, target_ref))
+    suspicious = [finding for finding in input_outliers(book) if finding["cell"] in inside]
+    if suspicious:
+        lines += ["", "Suspicious inputs:"]
+        lines += [f"- {f['cell']} {label_of(book, f['cell'])} {book.column_header(f['cell']) or ''} = {f['value']:g}, while the same input is about {f['typical']:g} in the other periods" for f in suspicious]
+    return "\n".join(lines)
+
+
 def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_text: bool = False) -> Callable[[InvestigationState], dict]:
     def diagnose(state: InvestigationState) -> dict:
         candidates = tested_candidates(book, state)
         brief = "\n".join(part for part in (investigation_brief(state), candidates_brief(candidates)) if part)
+        if not candidates:
+            brief = f"{brief}\n\n{logic_review_brief(book, state)}"
         if plain_text:
             brief = f"{brief}\n\nThe whole model, read as text:\n{sheet_as_text(book)}"
         result = investigator.invoke({"messages": [HumanMessage(content=brief)]})

@@ -387,3 +387,26 @@ def scan_tables(book: Workbook, layout: Workbook | None = None) -> list[dict[str
     findings = [*section_total_findings(book), *total_findings(book), *double_count_findings(book), *columns, *aggregate_findings(book)]
     found = {finding["cell"]: finding for finding in findings if not finding.get("fix") or changes_value(book, finding["cell"], finding["fix"])}
     return sorted(found.values(), key=lambda f: (split_ref(f["cell"])[0], split_ref(f["cell"])[1].row, split_ref(f["cell"])[1].column))
+
+
+INPUT_OUTLIER_FACTOR = 5
+MIN_INPUTS_IN_LINE = 4
+
+
+def input_outliers(book: Workbook) -> list[dict]:
+    lines: dict[tuple[str, int], list[str]] = {}
+    for ref in book.cells():
+        if book.formula(ref) is None and is_number(book.raw(ref)) and is_period_cell(book, ref):
+            sheet, address = split_ref(ref)
+            lines.setdefault((sheet, address.row), []).append(ref)
+    found = []
+    for cells in lines.values():
+        if len(cells) < MIN_INPUTS_IN_LINE:
+            continue
+        for ref in cells:
+            value = float(book.raw(ref))
+            others = sorted(abs(float(book.raw(cell))) for cell in cells if cell != ref)
+            typical = others[len(others) // 2]
+            if typical > 0 and value != 0 and (abs(value) >= INPUT_OUTLIER_FACTOR * typical or abs(value) * INPUT_OUTLIER_FACTOR <= typical):
+                found.append({"cell": ref, "value": value, "typical": typical})
+    return found

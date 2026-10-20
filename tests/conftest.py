@@ -146,7 +146,7 @@ class ScriptedDiagnosis(BaseChatModel):
     bound: list[str] = []
     briefs: list[str] = []
     turns: list[
-        tuple[list[str], str | None] | tuple[list[str], str, str] | tuple[list[str], str, str, str]
+        tuple[list[str], str | None] | tuple[list[str], str, str] | tuple[list[str], str | None, str, str]
     ] = [(["P&L!H7"], "P&L!H7")]
     choice: int | None = None
     reason: str = ""
