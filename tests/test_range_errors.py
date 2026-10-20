@@ -182,3 +182,26 @@ def test_a_missing_dollar_sign_and_the_last_typed_input_above_carried_forward_ce
 
     assert set(found) == {"Receipts!C25"}
     assert (found["Receipts!C25"]["kind"], found["Receipts!C25"]["fix"]) == ("typed_in_column", "=+C24")
+
+
+def test_operating_costs_summed_under_the_gross_profit_line_are_a_complete_total_and_a_short_five_year_total_is_found() -> None:
+    from model_x_ray.spreadsheet.engine import Workbook
+
+    cells = {"Budget!A3": "EUR k", "Budget!G3": "Total"}
+    for index, column in enumerate("BCDEF"):
+        cells[f"Budget!{column}3"] = str(2022 + index)
+        for row, value in {4: 500 + 50 * index, 5: 200 + 18 * index, 7: 120 + 6 * index, 8: 30.0, 9: 25 + 3 * index}.items():
+            cells[f"Budget!{column}{row}"] = float(value)
+        cells[f"Budget!{column}6"] = f"={column}4-{column}5"
+        cells[f"Budget!{column}10"] = f"=SUM({column}7:{column}9)"
+        cells[f"Budget!{column}11"] = f"={column}6-{column}10"
+    for row, label in {4: "Revenue", 5: "Cost of goods sold", 6: "Gross profit", 7: "Salaries", 8: "Rent", 9: "Marketing", 10: "Total operating costs", 11: "EBITDA"}.items():
+        cells[f"Budget!A{row}"] = label
+        cells[f"Budget!G{row}"] = f"=SUM(B{row}:F{row})"
+    clean = Workbook(cells)
+    short = Workbook({**cells, "Budget!G4": "=SUM(B4:E4)"})
+
+    assert scan_tables(clean) == []
+    found = {finding["cell"]: finding for finding in scan_tables(short)}
+    assert set(found) == {"Budget!G4"}
+    assert found["Budget!G4"]["fix"] == "=SUM(B4:F4)"

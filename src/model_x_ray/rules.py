@@ -181,6 +181,15 @@ def block_above(book: Workbook, ref: str) -> list[str]:
     return list(reversed(block))
 
 
+def same_kind_tail(book: Workbook, block: list[str], typed: bool) -> list[str]:
+    tail: list[str] = []
+    for cell in reversed(block):
+        if (book.formula(cell) is None) != typed:
+            break
+        tail.append(cell)
+    return list(reversed(tail))
+
+
 def total_findings(book: Workbook) -> list[dict[str, str]]:
     findings = []
     for ref in book.cells():
@@ -192,8 +201,9 @@ def total_findings(book: Workbook) -> list[dict[str, str]]:
         covered = expand_range(f"{sheet}!{first.split('!')[1]}:{last.split('!')[1]}")
         if any(split_ref(cell)[1].column != address.column for cell in covered):
             continue
-        block = block_above(book, ref)
         filled = [cell for cell in covered if book.raw(cell) is not None]
+        typed = {book.formula(cell) is None for cell in filled}
+        block = same_kind_tail(book, block_above(book, ref), typed.pop()) if len(typed) == 1 else block_above(book, ref)
         if not filled or not set(filled) < set(block):
             continue
         missing = [cell for cell in block if cell not in covered]
