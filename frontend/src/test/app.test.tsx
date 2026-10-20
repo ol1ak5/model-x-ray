@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import App from "../App";
+import type { InvestigationView } from "../api";
 import { APPROVED, REJECTED, REVIEW, RUNNING, STEPS, TESTED, fakeApi, steps } from "./fakeApi";
 
 afterEach(() => {
@@ -223,6 +224,36 @@ describe("an investigation in the browser", () => {
     expect(revenue).toHaveAttribute("data-tone", "ok");
     expect(revenue?.textContent).toContain("Revenue +11.5");
     expect(revenue?.textContent).toContain("6% of the move");
+  });
+
+  test("shows which cell the locator chose, and among how many, when the question was ambiguous", async () => {
+    const ambiguous: InvestigationView = {
+      ...REVIEW,
+      target_choice: { candidates: ["P&L!G6", "Summary!G6", "P&L!F6"], chosen: "P&L!G6", why: "Gross profit 2025A moves most and sits downstream of the broken row." },
+    };
+    const api = fakeApi([...steps(...STEPS.map(([name]) => name)), ["view", ambiguous]]);
+    vi.stubGlobal("fetch", api.fetch);
+    const user = await checkDemo();
+
+    const facts = await screen.findByRole("region", { name: "Investigation facts" });
+    expect(await within(facts).findByText(/Chosen among 3 candidates/)).toBeInTheDocument();
+    expect(within(facts).getByText("P&L!G6, Summary!G6, P&L!F6")).toBeInTheDocument();
+    await user.click(within(facts).getByRole("button", { name: "why?" }));
+    expect(within(facts).getByText(/moves most and sits downstream of the broken row/)).toBeInTheDocument();
+  });
+
+  test("states the chosen cell without ceremony when the code found only one", async () => {
+    const one: InvestigationView = {
+      ...REVIEW,
+      target_choice: { candidates: [], chosen: "P&L!G6", why: "The only period cell off its row pattern." },
+    };
+    const api = fakeApi([...steps(...STEPS.map(([name]) => name)), ["view", one]]);
+    vi.stubGlobal("fetch", api.fetch);
+    await checkDemo();
+
+    const facts = await screen.findByRole("region", { name: "Investigation facts" });
+    expect(await within(facts).findByText(/^Chosen:/)).toBeInTheDocument();
+    expect(within(facts).queryByText(/Chosen among/)).toBeNull();
   });
 
   test("keeps the model, the steps and the facts on screen while the fix has been tested but not checked", async () => {
