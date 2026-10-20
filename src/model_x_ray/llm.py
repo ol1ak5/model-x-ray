@@ -4,7 +4,7 @@ from typing import Any
 
 from dotenv import load_dotenv
 from langchain_core.callbacks import BaseCallbackHandler
-from langchain_core.messages import AnyMessage
+from langchain_core.messages import AIMessage, AnyMessage
 from langchain_core.outputs import LLMResult
 from langchain_core.runnables import Runnable
 from langchain_openai import ChatOpenAI
@@ -110,6 +110,21 @@ def _as_int(value: Any) -> int | None:
     return int(value) if value is not None else None
 
 
+PROVIDER_ERROR_PREFIX = "[ERROR:"
+PROVIDER_ATTEMPTS = 3
+
+
+class ProviderFailure(RuntimeError):
+    pass
+
+
+def provider_error(result: Any) -> str | None:
+    if not isinstance(result, AIMessage) or result.tool_calls:
+        return None
+    text = result.content if isinstance(result.content, str) else ""
+    return text.strip() if text.strip().startswith(PROVIDER_ERROR_PREFIX) else None
+
+
 def invoke_with_usage(
     runnable: Runnable,
     messages: list[AnyMessage],
@@ -118,7 +133,13 @@ def invoke_with_usage(
     model: str | None,
 ) -> tuple[Any, list[RunLog]]:
     recorder = UsageRecorder()
-    result = runnable.invoke(messages, config={"callbacks": [recorder]})
+    for _ in range(PROVIDER_ATTEMPTS):
+        result = runnable.invoke(messages, config={"callbacks": [recorder]})
+        failure = provider_error(result)
+        if failure is None:
+            break
+    else:
+        raise ProviderFailure(f"The AI service failed to answer the {role} after {PROVIDER_ATTEMPTS} attempts: {failure[:200]}")
     records: list[RunLog] = [
         {
             "role": role,
