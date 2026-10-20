@@ -102,3 +102,17 @@ def test_the_clean_budget_gets_the_logic_map_and_no_suspicious_inputs(tmp_path: 
     assert "Suspicious inputs:" not in model.briefs[0]
     assert final["hypotheses"] == []
     assert final["report"].startswith("No error found")
+
+
+def test_each_line_is_shown_next_to_the_standard_finance_definition_its_label_names(tmp_path: Path) -> None:
+    path = write_budget(tmp_path / "budget.xlsx", {f"{c}11": f"={c}6-{c}7" for c in YEARS})
+    model = ScriptedDiagnosis(briefs=[], turns=[([], None)])
+
+    investigate(tmp_path, path, model)
+
+    lines = {line.split(": ", 1)[1].split(" = ", 1)[0]: line for line in model.briefs[0].splitlines() if line.startswith("- Budget row")}
+    assert "standard: revenue - cost_of_goods_sold" in lines["Gross profit"]
+    assert "standard: gross_profit - total_operating_costs" in lines["EBITDA"]
+    assert "standard: pre_tax_income - taxes" in lines["Net income"]
+    assert "standard: sum of the operating cost lines" in lines["Total operating costs"]
+    assert "enterprise" not in model.briefs[0]

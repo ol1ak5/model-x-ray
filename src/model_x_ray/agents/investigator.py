@@ -14,6 +14,7 @@ from langgraph.prebuilt import ToolNode
 from pydantic import BaseModel
 
 from model_x_ray.causal import render_causal_tree
+from model_x_ray.finance import find_formulas, names
 from model_x_ray.llm import invoke_with_usage, model_name_of
 from model_x_ray.prompts import load_prompt
 from model_x_ray.rules import AGGREGATE_FORMULA, breaks_row_pattern, input_outliers
@@ -368,6 +369,14 @@ def shown_value(value: object) -> str:
     return f"{value:g}" if isinstance(value, (int, float)) and not isinstance(value, bool) else str(value)
 
 
+def standard_definition(label: str) -> str:
+    text = label.strip().lower()
+    found = find_formulas(label)
+    ending = [formula for formula in found if any(names(alias, text) and text.endswith(alias) for alias in formula.aliases)]
+    forms = list(dict.fromkeys(formula.expression for formula in (ending or found)))
+    return f" | standard: {' or '.join(forms)}" if forms else ""
+
+
 def line_values(book: Workbook, cell: str) -> str:
     sheet = split_ref(cell)[0]
     parts = []
@@ -424,7 +433,7 @@ def logic_map(book: Workbook, target_ref: str) -> list[str]:
             continue
         first, last = book.column_header(members[0]), book.column_header(members[-1])
         where = f"same in {first} to {last}" if len(members) > 1 and first and last else f"in {', '.join(cell.split('!', 1)[1] for cell in members)}"
-        lines.append(f"- {sheet} row {row}: {label_of(book, shown)} = {words} [{shown.split('!', 1)[1]} {book.formula(shown)}, {where}]")
+        lines.append(f"- {sheet} row {row}: {label_of(book, shown)} = {words} [{shown.split('!', 1)[1]} {book.formula(shown)}, {where}]{standard_definition(label_of(book, shown))}")
         if len(lines) == MAX_LOGIC_LINES:
             break
     unused = []
