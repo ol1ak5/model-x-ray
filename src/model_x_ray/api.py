@@ -23,6 +23,7 @@ from pydantic import BaseModel
 
 from model_x_ray.agents.verifier import CHECK_LABELS
 from model_x_ray.graph import run_continuation, run_investigation
+from model_x_ray.llm import ProviderFailure
 from model_x_ray.rules import is_period_cell
 from model_x_ray.spreadsheet.engine import FormulaError, UnsupportedFormulaError, Workbook, column_letters, is_number, split_ref
 from model_x_ray.spreadsheet.sandbox import SandboxWithWrite, check_patch, normalized_formula
@@ -199,6 +200,8 @@ def carried_state(raw: dict[str, Any]) -> dict[str, Any]:
 def friendly_error(error: Exception) -> tuple[int, str]:
     if isinstance(error, HTTPException):
         return error.status_code, str(error.detail)
+    if isinstance(error, ProviderFailure):
+        return 503, "The AI service failed to answer (it returned an internal error). Please try again in a minute."
     if isinstance(error, openai.APITimeoutError):
         return 503, "The AI service took too long to answer. Please try again in a minute."
     if isinstance(error, openai.RateLimitError):

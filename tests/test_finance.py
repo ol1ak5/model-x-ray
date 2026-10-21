@@ -71,3 +71,13 @@ def test_every_formula_documents_its_inputs_and_names_the_lines_it_matches() -> 
 
 def test_the_committed_library_document_matches_the_code() -> None:
     assert (ROOT / "docs" / "financial-formulas.md").read_text() == render_markdown() + "\n"
+
+
+def test_a_line_label_finds_the_formulas_it_names_by_whole_words_only() -> None:
+    from model_x_ray.finance import find_formulas
+
+    assert [f.key for f in find_formulas("Revenue")] == []
+    assert {f.key for f in find_formulas("EBITDA")} == {"ebitda", "ebitda_from_gross_profit"}
+    assert [f.key for f in find_formulas("Gross profit")] == ["gross_profit"]
+    assert [f.key for f in find_formulas("Net income")] == ["net_income"]
+    assert "enterprise_value" in {f.key for f in find_formulas("EV")}

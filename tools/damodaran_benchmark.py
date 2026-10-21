@@ -6,11 +6,11 @@ import urllib.request
 from pathlib import Path
 
 from model_x_ray.benchmark.planting import plant_model, run_planted, split_models, summarize
-from model_x_ray.benchmark.runner import SETUP_RULES, SETUP_SUPER, Setup
+from model_x_ray.benchmark.runner import SETUP_RULES, SETUP_SUPER, SETUP_SUPER_3, Setup
 
 PAGE = "https://pages.stern.nyu.edu/~adamodar/New_Home_Page/spreadsh.htm"
 SPLIT_FILE = Path("docs/damodaran-split.json")
-SETUPS: dict[str, Setup] = {"rules": SETUP_RULES, "super": SETUP_SUPER}
+SETUPS: dict[str, Setup] = {"rules": SETUP_RULES, "super": SETUP_SUPER, "super-3": SETUP_SUPER_3}
 
 
 def download(data: Path) -> None:

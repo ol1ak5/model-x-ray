@@ -1,0 +1,84 @@
+[
+ {
+  "file": "01-typed-number.xlsx",
+  "description": "A typed number where the row uses a formula",
+  "cells": [
+   "Budget!D6"
+  ]
+ },
+ {
+  "file": "02-flipped-sign.xlsx",
+  "description": "Net income adds taxes instead of subtracting them, in one year",
+  "cells": [
+   "Budget!E13"
+  ]
+ },
+ {
+  "file": "03-sum-leaves-out-a-row.xlsx",
+  "description": "Total operating costs leaves out marketing, in one year",
+  "cells": [
+   "Budget!D10"
+  ]
+ },
+ {
+  "file": "04-total-misses-a-year.xlsx",
+  "description": "The 5-year revenue total leaves out 2026",
+  "cells": [
+   "Budget!G4"
+  ]
+ },
+ {
+  "file": "05-wrong-tax-rate-typed.xlsx",
+  "description": "One year multiplies by a typed 30% instead of the tax-rate cell",
+  "cells": [
+   "Budget!E12"
+  ]
+ },
+ {
+  "file": "06-growth-wrong-year.xlsx",
+  "description": "Revenue growth 2025 compares with 2023 instead of 2024",
+  "cells": [
+   "Budget!E14"
+  ]
+ },
+ {
+  "file": "07-whole-row-wrong-sign.xlsx",
+  "description": "Gross profit adds cost of goods sold in every year (consistent logic error)",
+  "cells": [
+   "Budget!B6",
+   "Budget!C6",
+   "Budget!D6",
+   "Budget!E6",
+   "Budget!F6"
+  ]
+ },
+ {
+  "file": "08-whole-row-wrong-line.xlsx",
+  "description": "EBITDA subtracts only salaries instead of total operating costs, in every year",
+  "cells": [
+   "Budget!B11",
+   "Budget!C11",
+   "Budget!D11",
+   "Budget!E11",
+   "Budget!F11"
+  ]
+ },
+ {
+  "file": "09-input-typo.xlsx",
+  "description": "A typed input with an extra zero: rent 2024 is 320 instead of 32",
+  "cells": [
+   "Budget!D8"
+  ]
+ },
+ {
+  "file": "10-net-income-ignores-taxes.xlsx",
+  "description": "Net income equals EBITDA in every year (taxes never subtracted)",
+  "cells": [
+   "Budget!B13",
+   "Budget!C13",
+   "Budget!D13",
+   "Budget!E13",
+   "Budget!F13"
+  ]
+ }
+]

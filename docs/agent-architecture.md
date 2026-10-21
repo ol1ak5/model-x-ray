@@ -129,6 +129,22 @@ Model assignment is provisional until the tool-calling spike (#4) reports result
 
 The system presents itself as one reasoning loop with three capabilities: **understand** (Model mapper), **investigate** (Investigator), **verify** (Verifier), followed by **explain**.
 
+### Logic review (when no rule flags a cell)
+
+Pattern rules cannot see a formula that is wrong in every period (a gross profit that adds its costs, an EBITDA that subtracts only salaries, a net income that never subtracts taxes): the line is consistent, so nothing breaks. When the rules give the Investigator no candidate, its brief also carries the logic review (`prompts/logic_review.md`) and a logic map built in code (`logic_map` in `agents/investigator.py`):
+
+- every line feeding the reviewed result, plus every formula line on its sheet, written as its label and its formula with each reference replaced by the label of the line it reads (`Gross profit = Revenue + Cost of goods sold`), once per formula pattern, with the period span it covers, the values in the reviewed period and, when the label names a concept in the financial formula library (`finance.py`, matched by whole words, the last word deciding), the standard definition;
+- the total column collapsed into one line, and the lines that are calculated but used by no other line (an EBITDA that skips the cost total leaves that total unused);
+- suspicious inputs: typed values five times larger or smaller than the same input in the other periods (`rules.input_outliers`).
+
+The system prompt (`prompts/investigator.md`) makes the Investigator a senior analyst who always starts from the formula, compares it with the label and the standard definition, respects the model's sign convention and only then checks consistency. Two error types join the five pattern types: `logic_error` and `input_outlier`.
+
+In check mode (no question) the logic review runs three times and keeps what a majority finds: a cell survives when at least two answers name it, with the most voted error type and the fix a majority proposes. Nemotron Super at temperature 0 still varies between runs, and the vote removes one-off findings and one-off misses. The decision records the counts (`votes`) and every answer (`ballots`). Runs with a question, and runs where rules gave candidates, make one call.
+
+A `logic_error` whose cell shares its formula with the rest of its line is fixed on the whole line: `Patch.also` lists the other cells with the same fix shifted to each column. The sandbox, the corrected copy and the Google copy apply all of them, and the deterministic checks become: the cell's value changes, every dependent still calculates, the line ends with one pattern. The Verifier receives the anomaly kind `line logic error` with the line's formula in words before and after and its standard definition, and judges the new formula against them instead of the move against the prior period. Other error types keep single-cell fixes, so a wrong fix on a correct line cannot pass by making the line uniform. An `input_outlier` or a `logic_error` without a fix closes as a finding for a person (the report quotes the claim) instead of being retried.
+
+`uv run tools/trace_run.py <model.xlsx> [--setup super]` prints one run's target, logic brief, every vote, every decision, every verification and the report.
+
 ### Investigator loop
 
 The Investigator is the most autonomous part of the system, and its autonomy must be visible, not hidden inside one call.
@@ -289,6 +305,8 @@ Implementation (`src/model_x_ray/causal.py`): `explain_change(book, ref, from_pe
 | `range_inconsistency` | A range that leaves out or adds a row compared with its neighbours (for example a SUM that skips a row) |
 | `sign_inconsistency` | A flipped sign compared with the row |
 | `period_inconsistency` | A reference to the wrong period, for example the prior year's column |
+| `logic_error` | A formula that contradicts its line's label and the standard definition, often in every period (flagged by the logic review; fixed on the whole line when the fix follows from the labels) |
+| `input_outlier` | A typed input far out of line with the same input in the other periods (flagged for a person, never fixed: nobody can know the right number from the model alone) |
 
 These exact names are shared by the agent (`state.py`, the Investigator's `Diagnosis`, the Investigator prompt) and the benchmark dataset (`dataset.py`), so a diagnosis can be scored against ground truth by direct comparison. `documented_override` exists only in the dataset, for deliberate overrides that are not errors.
 
@@ -335,12 +353,13 @@ A plain rejection (without `intentional`) writes nothing: "not convinced" is not
 
 | Use | Model ID | Context | Price per 1M tokens (in / out) |
 |---|---|---|---|
-| Investigator, Verifier, `locate`, mapper | `nvidia/nemotron-3-super-120b-a12b` | 262K | $0.30 / $0.90 |
+| Investigator, Verifier | `nvidia/Nemotron-3.5-Super-VL` | 1M | $0.30 / $0.90 |
+| `locate`, mapper; benchmark set-up `super-3` | `nvidia/nemotron-3-super-120b-a12b` | 256K | $0.30 / $0.90 |
 | Report writer (`explain`) | `nvidia/Nemotron-3_5-Lightning` | 1M | $0.06 / $0.24 |
 | Small-model comparison / benchmark set-up | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | 262K | $0.06 / $0.24 |
 | Optional: hardest verification, strongest benchmark attacker | `nvidia/Nemotron-3-Ultra-550b-a55b` | 1M | $1.00 / $3.00 |
 
-IDs, context and prices were confirmed with `GET /v1/models` on 6 Oct 2026; all four list `tools` and `reasoning` in `supported_features`. IDs are case-sensitive. Lightning passed every tool-calling and structured-output check in #4 and was the fastest model, so it was the provisional mapper. On 11 Oct 2026 a real 63-line project-finance model showed its limit: Lightning wrote its reasoning as text and hit the 8,192-token output limit without calling the tool, even when told to answer only through the tool, while Super returned all 63 lines and 24 periods in 7 seconds with about 1,900 output tokens. The mapper role moved to Super; the map is cached per file revision, so the cost is paid once per file. A failed map never stops an investigation (`model_map` stays empty). Structured output uses `with_structured_output(..., method="function_calling")`, because the catalog lists no JSON-schema mode.
+On 21 Oct 2026 the Investigator and the Verifier moved to Nemotron 3.5 Super (listed by `GET /v1/models` that day; 1M context and $0.30 / $0.90 per the Token Factory model catalog): on a SaaS forecast with five planted logic errors it fixed four and flagged the fifth, where 3 Super fixed none, at the same price (the comparison and the public benchmarks are in the README, "Why these Nemotron models"). The mapper and `locate` stay on 3 Super until 3.5 Super passes the tool-calling checks of #4. IDs, context and prices of the other models were confirmed with `GET /v1/models` on 6 Oct 2026; all four list `tools` and `reasoning` in `supported_features`. IDs are case-sensitive. Lightning passed every tool-calling and structured-output check in #4 and was the fastest model, so it was the provisional mapper. On 11 Oct 2026 a real 63-line project-finance model showed its limit: Lightning wrote its reasoning as text and hit the 8,192-token output limit without calling the tool, even when told to answer only through the tool, while Super returned all 63 lines and 24 periods in 7 seconds with about 1,900 output tokens. The mapper role moved to Super; the map is cached per file revision, so the cost is paid once per file. A failed map never stops an investigation (`model_map` stays empty). Structured output uses `with_structured_output(..., method="function_calling")`, because the catalog lists no JSON-schema mode.
 
 The report writer moved from Super to Lightning on 18 Oct 2026: on a real run Super spent 9.1 s and 2,062 output tokens on a 3-to-6-sentence report (the prompt is short, the model reasons), which was the largest single wait in the pipeline after the Investigator. Lightning writes prose from a fixed brief — no tools, no structured output — and the report is checked against the brief before it is shown: if the narrative is empty or cites an id that is not in the evidence, the node keeps the deterministic report instead, so a faster writer can never lose a citation. `explain` also carries the only `max_tokens` cap in the registry (`ROLE_MAX_TOKENS`, 1400 after #156 found the 900-token cap cutting a report mid-sentence), because the answer is a paragraph.
 

@@ -1,3 +1,4 @@
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -363,6 +364,63 @@ FORMULAS: list[FinancialFormula] = [
         common_errors=("Current dividend used instead of next year's.",), source=DAMODARAN_SLIDES,
     ),
     FinancialFormula(
+        "gross_profit", "Gross profit", "income statement",
+        "revenue - cost_of_goods_sold",
+        {"revenue": "revenue of the period", "cost_of_goods_sold": "cost of goods sold, as a positive amount"},
+        lambda revenue, cost_of_goods_sold: revenue - cost_of_goods_sold,
+        aliases=("gross profit",),
+        conventions=("A cost entered as a positive number is subtracted; a cost entered as a negative number is added.",),
+        common_errors=("Cost of goods sold added while it is entered as a positive number.",),
+    ),
+    FinancialFormula(
+        "total_operating_costs", "Total operating costs", "income statement",
+        "sum of the operating cost lines (salaries, rent, marketing, other operating expenses)",
+        {"cost_lines": "every operating cost line of the period"},
+        lambda cost_lines: sum(cost_lines),
+        aliases=("total operating costs", "total operating expenses", "total opex"),
+        common_errors=("A cost line left out of the total.", "Cost of goods sold counted again inside operating costs."),
+    ),
+    FinancialFormula(
+        "ebitda_from_gross_profit", "EBITDA, built from gross profit", "income statement",
+        "gross_profit - total_operating_costs",
+        {"gross_profit": "gross profit", "total_operating_costs": "operating costs excluding depreciation and amortisation"},
+        lambda gross_profit, total_operating_costs: gross_profit - total_operating_costs,
+        aliases=("ebitda", "operating profit before depreciation"),
+        common_errors=("Only one cost line subtracted instead of the total of operating costs.", "Depreciation subtracted, which gives EBIT, not EBITDA."),
+        concept="ebitda",
+    ),
+    FinancialFormula(
+        "ebit", "EBIT (operating profit)", "income statement",
+        "ebitda - depreciation_and_amortisation",
+        {"ebitda": "EBITDA", "depreciation_and_amortisation": "depreciation and amortisation"},
+        lambda ebitda, depreciation_and_amortisation: ebitda - depreciation_and_amortisation,
+        aliases=("ebit", "operating profit"),
+    ),
+    FinancialFormula(
+        "pre_tax_income", "Profit before tax", "income statement",
+        "ebit - interest_expense",
+        {"ebit": "operating profit", "interest_expense": "net interest expense (0 when the model has no debt)"},
+        lambda ebit, interest_expense: ebit - interest_expense,
+        aliases=("profit before tax", "pre-tax income", "earnings before tax", "pbt", "ebt"),
+        conventions=("In a model without debt or depreciation, EBITDA or EBIT stands in for profit before tax.",),
+    ),
+    FinancialFormula(
+        "income_taxes", "Income taxes", "income statement",
+        "pre_tax_income * tax_rate",
+        {"pre_tax_income": "profit before tax", "tax_rate": "tax rate"},
+        lambda pre_tax_income, tax_rate: pre_tax_income * tax_rate,
+        aliases=("taxes", "income tax", "tax expense", "corporate tax"),
+        common_errors=("Tax rate typed into the formula instead of read from the assumption.", "Tax charged on revenue instead of on profit."),
+    ),
+    FinancialFormula(
+        "net_income", "Net income", "income statement",
+        "pre_tax_income - taxes",
+        {"pre_tax_income": "profit before tax", "taxes": "income taxes"},
+        lambda pre_tax_income, taxes: pre_tax_income - taxes,
+        aliases=("net income", "net profit", "profit after tax", "net earnings"),
+        common_errors=("Taxes never subtracted.", "Taxes added instead of subtracted."),
+    ),
+    FinancialFormula(
         "gross_margin", "Gross margin", "income statement",
         "gross_profit / revenue",
         {"gross_profit": "revenue - cost of goods sold", "revenue": "revenue"},
@@ -507,9 +565,13 @@ def accepted_forms(concept: str) -> list[FinancialFormula]:
     return [formula for formula in FORMULAS if formula.concept_name == concept]
 
 
+def names(alias: str, text: str) -> bool:
+    return re.search(rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])", text) is not None
+
+
 def find_formulas(label: str) -> list[FinancialFormula]:
     text = label.strip().lower()
-    return [formula for formula in FORMULAS if any(alias == text or alias in text for alias in formula.aliases)]
+    return [formula for formula in FORMULAS if any(names(alias, text) for alias in formula.aliases)]
 
 
 def render_markdown() -> str:

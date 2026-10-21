@@ -6,6 +6,7 @@ from langgraph.graph.message import add_messages
 
 
 class TargetCell(TypedDict):
+    checked: NotRequired[bool]
     sheet: str
     cell: str
     label: str
@@ -80,11 +81,18 @@ class Hypothesis(TypedDict):
     status: Literal["open", "rejected", "confirmed"]
 
 
+class LineCell(TypedDict):
+    cell: str
+    old_formula: str
+    new_formula: str
+
+
 class Patch(TypedDict):
     cell: str
     old_formula: str
     new_formula: str
     source: Literal["agent", "human"]
+    also: NotRequired[list[LineCell]]
 
 
 class Verification(TypedDict):
@@ -147,6 +155,8 @@ class Decision(TypedDict):
     reason: str
     candidates: int
     judgements: NotRequired[list[dict]]
+    votes: NotRequired[dict[str, int]]
+    ballots: NotRequired[list[dict]]
 
 
 class InvestigationState(TypedDict):

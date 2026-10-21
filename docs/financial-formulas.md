@@ -447,6 +447,74 @@ Generated from `src/model_x_ray/finance.py` by `tools/export_formulas.py`.
 
 ## Income statement
 
+### Gross profit
+
+`revenue - cost_of_goods_sold`
+
+- **Usual names:** gross profit
+- **Inputs:** `revenue` (revenue of the period); `cost_of_goods_sold` (cost of goods sold, as a positive amount)
+- **Convention:** A cost entered as a positive number is subtracted; a cost entered as a negative number is added.
+- **Typical error:** Cost of goods sold added while it is entered as a positive number.
+- **Source:** Standard corporate finance practice
+
+### Total operating costs
+
+`sum of the operating cost lines (salaries, rent, marketing, other operating expenses)`
+
+- **Usual names:** total operating costs, total operating expenses, total opex
+- **Inputs:** `cost_lines` (every operating cost line of the period)
+- **Typical error:** A cost line left out of the total.
+- **Typical error:** Cost of goods sold counted again inside operating costs.
+- **Source:** Standard corporate finance practice
+
+### EBITDA, built from gross profit
+
+`gross_profit - total_operating_costs`
+
+- **Usual names:** ebitda, operating profit before depreciation
+- **Inputs:** `gross_profit` (gross profit); `total_operating_costs` (operating costs excluding depreciation and amortisation)
+- **Typical error:** Only one cost line subtracted instead of the total of operating costs.
+- **Typical error:** Depreciation subtracted, which gives EBIT, not EBITDA.
+- **Accepted form of:** ebitda (common practice)
+- **Source:** Standard corporate finance practice
+
+### EBIT (operating profit)
+
+`ebitda - depreciation_and_amortisation`
+
+- **Usual names:** ebit, operating profit
+- **Inputs:** `ebitda` (EBITDA); `depreciation_and_amortisation` (depreciation and amortisation)
+- **Source:** Standard corporate finance practice
+
+### Profit before tax
+
+`ebit - interest_expense`
+
+- **Usual names:** profit before tax, pre-tax income, earnings before tax, pbt, ebt
+- **Inputs:** `ebit` (operating profit); `interest_expense` (net interest expense (0 when the model has no debt))
+- **Convention:** In a model without debt or depreciation, EBITDA or EBIT stands in for profit before tax.
+- **Source:** Standard corporate finance practice
+
+### Income taxes
+
+`pre_tax_income * tax_rate`
+
+- **Usual names:** taxes, income tax, tax expense, corporate tax
+- **Inputs:** `pre_tax_income` (profit before tax); `tax_rate` (tax rate)
+- **Typical error:** Tax rate typed into the formula instead of read from the assumption.
+- **Typical error:** Tax charged on revenue instead of on profit.
+- **Source:** Standard corporate finance practice
+
+### Net income
+
+`pre_tax_income - taxes`
+
+- **Usual names:** net income, net profit, profit after tax, net earnings
+- **Inputs:** `pre_tax_income` (profit before tax); `taxes` (income taxes)
+- **Typical error:** Taxes never subtracted.
+- **Typical error:** Taxes added instead of subtracted.
+- **Source:** Standard corporate finance practice
+
 ### Gross margin
 
 `gross_profit / revenue`

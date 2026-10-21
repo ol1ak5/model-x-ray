@@ -4,21 +4,22 @@ from typing import Any
 
 from dotenv import load_dotenv
 from langchain_core.callbacks import BaseCallbackHandler
-from langchain_core.messages import AnyMessage
+from langchain_core.messages import AIMessage, AnyMessage
 from langchain_core.outputs import LLMResult
 from langchain_core.runnables import Runnable
 from langchain_openai import ChatOpenAI
 
 from model_x_ray.state import RunLog
 
-SUPER = "nvidia/nemotron-3-super-120b-a12b"
+SUPER = "nvidia/Nemotron-3.5-Super-VL"
+SUPER_3 = "nvidia/nemotron-3-super-120b-a12b"
 LIGHTNING = "nvidia/Nemotron-3_5-Lightning"
 
 ROLE_MODELS: dict[str, str] = {
     "investigator": SUPER,
     "verifier": SUPER,
-    "mapper": SUPER,
-    "locate": SUPER,
+    "mapper": SUPER_3,
+    "locate": SUPER_3,
     "explain": LIGHTNING,
 }
 ROLE_MAX_TOKENS: dict[str, int] = {"explain": 1400}
@@ -110,15 +111,38 @@ def _as_int(value: Any) -> int | None:
     return int(value) if value is not None else None
 
 
+PROVIDER_ERROR_PREFIX = "[ERROR:"
+PROVIDER_ATTEMPTS = 3
+
+
+class ProviderFailure(RuntimeError):
+    pass
+
+
+def provider_error(result: Any) -> str | None:
+    if not isinstance(result, AIMessage) or result.tool_calls:
+        return None
+    text = result.content if isinstance(result.content, str) else ""
+    return text.strip() if text.strip().startswith(PROVIDER_ERROR_PREFIX) else None
+
+
 def invoke_with_usage(
     runnable: Runnable,
     messages: list[AnyMessage],
     *,
     role: str,
     model: str | None,
+    retry_empty: bool = False,
 ) -> tuple[Any, list[RunLog]]:
     recorder = UsageRecorder()
-    result = runnable.invoke(messages, config={"callbacks": [recorder]})
+    failure = None
+    for _ in range(PROVIDER_ATTEMPTS):
+        result = runnable.invoke(messages, config={"callbacks": [recorder]})
+        failure = provider_error(result)
+        if failure is None and not (retry_empty and result is None):
+            break
+    if failure is not None:
+        raise ProviderFailure(f"The AI service failed to answer the {role} after {PROVIDER_ATTEMPTS} attempts: {failure[:200]}")
     records: list[RunLog] = [
         {
             "role": role,

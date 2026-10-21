@@ -151,29 +151,37 @@ def make_locate_node(llm: BaseChatModel | None, book: Workbook) -> Callable[[Inv
 
     def locate(state: InvestigationState) -> dict:
         if not state.get("question", "").strip():
-            outliers = scan_model(book)
-            if outliers:
-                try:
-                    ref, question = check_target(book)
-                    target = target_cell(book, ref)
-                    ranked = rank_outliers(book, outliers)
-                    target["other_findings"] = [{"cell": o["cell"], "reason": o["reason"], "fix": row_fix(book, o["cell"])} for o in ranked[:6]]
-                    return {"target": target, "question": question, "target_choice": None}
-                except ValueError:
-                    pass
-            table = table_check(book)
-            if table is not None:
-                target, question = table
-                return {"target": target, "question": question, "target_choice": None}
+            update = check_model(state)
+            update["target"]["checked"] = True
+            return update
+        return answer_question(state)
+
+    def check_model(state: InvestigationState) -> dict:
+        outliers = scan_model(book)
+        if outliers:
             try:
                 ref, question = check_target(book)
-                return {"target": target_cell(book, ref), "question": question, "target_choice": None}
-            except ValueError:
-                review = review_target(book)
-                if review is None:
-                    raise ValueError(nothing_to_check(book))
-                target, question = review
+                target = target_cell(book, ref)
+                ranked = rank_outliers(book, outliers)
+                target["other_findings"] = [{"cell": o["cell"], "reason": o["reason"], "fix": row_fix(book, o["cell"])} for o in ranked[:6]]
                 return {"target": target, "question": question, "target_choice": None}
+            except ValueError:
+                pass
+        table = table_check(book)
+        if table is not None:
+            target, question = table
+            return {"target": target, "question": question, "target_choice": None}
+        try:
+            ref, question = check_target(book)
+            return {"target": target_cell(book, ref), "question": question, "target_choice": None}
+        except ValueError:
+            review = review_target(book)
+            if review is None:
+                raise ValueError(nothing_to_check(book))
+            target, question = review
+            return {"target": target, "question": question, "target_choice": None}
+
+    def answer_question(state: InvestigationState) -> dict:
         request = read_question(state["question"], catalogue)
         records = []
         if request is None and structured is not None:

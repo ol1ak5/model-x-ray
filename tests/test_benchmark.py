@@ -279,3 +279,15 @@ def test_the_runner_produces_identical_results_when_variants_run_in_parallel(tmp
 def test_build_setup_graph_rejects_an_unknown_setup() -> None:
     with pytest.raises(ValueError, match="unknown setup"):
         build_setup_graph(Setup(name="gpt", kind="unknown", model=None), None, None, "x")
+
+
+
+def test_every_model_the_agent_can_use_has_a_price_so_benchmark_costs_are_never_silently_zero() -> None:
+    from model_x_ray.benchmark.runner import PRICES, SETUP_SUPER, SETUP_SUPER_3, cost_of
+    from model_x_ray.llm import ROLE_MODELS
+
+    assert set(ROLE_MODELS.values()) | {SETUP_SUPER.model, SETUP_SUPER_3.model} <= set(PRICES)
+    assert SETUP_SUPER.model == "nvidia/Nemotron-3.5-Super-VL"
+    assert SETUP_SUPER_3.model == "nvidia/nemotron-3-super-120b-a12b"
+    log = [{"role": "investigator", "model": SETUP_SUPER.model, "input_tokens": 1_000_000, "output_tokens": 1_000_000, "reasoning_tokens": 0, "latency_ms": 1.0}]
+    assert cost_of(log) == 0.30 + 0.90

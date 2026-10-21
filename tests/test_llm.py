@@ -12,11 +12,12 @@ def test_the_role_registry_maps_roles_to_models_and_overrides_from_the_environme
         monkeypatch.delenv(f"NEBIUS_MODEL_{role.upper()}", raising=False)
 
     investigator = build_chat_model(role="investigator")
-    assert investigator.model_name == "nvidia/nemotron-3-super-120b-a12b"
+    assert investigator.model_name == "nvidia/Nemotron-3.5-Super-VL"
     assert investigator.request_timeout == 120.0
     assert investigator.max_retries == 3
-    assert model_for_role("verifier") == "nvidia/nemotron-3-super-120b-a12b"
+    assert model_for_role("verifier") == "nvidia/Nemotron-3.5-Super-VL"
     assert model_for_role("mapper") == "nvidia/nemotron-3-super-120b-a12b"
+    assert model_for_role("locate") == "nvidia/nemotron-3-super-120b-a12b"
 
     explainer = build_chat_model(role="explain")
     assert explainer.model_name == "nvidia/Nemotron-3_5-Lightning"

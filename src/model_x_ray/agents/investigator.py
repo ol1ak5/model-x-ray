@@ -14,6 +14,7 @@ from langgraph.prebuilt import ToolNode
 from pydantic import BaseModel
 
 from model_x_ray.causal import render_causal_tree
+from model_x_ray.finance import find_formulas, names
 from model_x_ray.llm import invoke_with_usage, model_name_of
 from model_x_ray.prompts import load_prompt
 from model_x_ray.rules import AGGREGATE_FORMULA, breaks_row_pattern, input_outliers
@@ -96,7 +97,10 @@ def build_investigator(llm: BaseChatModel, tools: list[BaseTool], max_tool_calls
             [system, *messages, HumanMessage(content=load_prompt("investigator_conclude"))],
             role="investigator",
             model=model_name,
+            retry_empty=True,
         )
+        if diagnosis is None:
+            diagnosis = Diagnosis(hypotheses=[], patch=None, reason="the model gave no structured answer after several attempts")
         return {"diagnosis": diagnosis, "run_log": records}
 
     builder = StateGraph(InvestigatorState)
@@ -368,6 +372,14 @@ def shown_value(value: object) -> str:
     return f"{value:g}" if isinstance(value, (int, float)) and not isinstance(value, bool) else str(value)
 
 
+def standard_definition(label: str) -> str:
+    text = label.strip().lower()
+    found = find_formulas(label)
+    ending = [formula for formula in found if any(names(alias, text) and text.endswith(alias) for alias in formula.aliases)]
+    forms = list(dict.fromkeys(formula.expression for formula in (ending or found)))
+    return f" | standard: {' or '.join(forms)}" if forms else ""
+
+
 def line_values(book: Workbook, cell: str) -> str:
     sheet = split_ref(cell)[0]
     parts = []
@@ -424,7 +436,7 @@ def logic_map(book: Workbook, target_ref: str) -> list[str]:
             continue
         first, last = book.column_header(members[0]), book.column_header(members[-1])
         where = f"same in {first} to {last}" if len(members) > 1 and first and last else f"in {', '.join(cell.split('!', 1)[1] for cell in members)}"
-        lines.append(f"- {sheet} row {row}: {label_of(book, shown)} = {words} [{shown.split('!', 1)[1]} {book.formula(shown)}, {where}]")
+        lines.append(f"- {sheet} row {row}: {label_of(book, shown)} = {words} [{shown.split('!', 1)[1]} {book.formula(shown)}, {where}]{standard_definition(label_of(book, shown))}")
         if len(lines) == MAX_LOGIC_LINES:
             break
     unused = []
@@ -449,17 +461,77 @@ def logic_review_brief(book: Workbook, state: InvestigationState) -> str:
     return "\n".join(lines)
 
 
+def along_the_line(book: Workbook, patch: dict | None) -> dict | None:
+    if patch is None or not isinstance(patch["new_formula"], str) or not patch["new_formula"].startswith("="):
+        return patch
+    cell = normalize_ref(patch["cell"])
+    if book.formula(cell) is None:
+        return patch
+    sheet, address = split_ref(cell)
+    try:
+        pattern = book.formula_pattern(cell)
+        same = [ref for ref in book.cells() if ref != cell and split_ref(ref)[0] == sheet and split_ref(ref)[1].row == address.row and book.formula(ref) is not None and book.formula_pattern(ref) == pattern]
+        fixed = book.with_patch(cell, patch["new_formula"])
+        also = [{"cell": ref, "old_formula": book.formula(ref), "new_formula": fixed.shifted_formula(cell, ref)} for ref in sorted(same, key=lambda ref: split_ref(ref)[1].column)]
+    except FormulaError:
+        return patch
+    if not same or any(line["new_formula"] is None for line in also):
+        return patch
+    return {**patch, "also": also}
+
+
+LOGIC_VOTES = 3
+
+
+def majority_diagnosis(diagnoses: list[Diagnosis], sheet: str) -> tuple[Diagnosis, dict[str, int]]:
+    votes: Counter = Counter()
+    proposals: dict[str, list[ProposedHypothesis]] = {}
+    for diagnosis in diagnoses:
+        cells = {}
+        for hypothesis in diagnosis.hypotheses:
+            if readable_ref(hypothesis.cell, sheet):
+                cells.setdefault(full_ref(hypothesis.cell, sheet), hypothesis)
+        for cell, hypothesis in cells.items():
+            votes[cell] += 1
+            proposals.setdefault(cell, []).append(hypothesis)
+    kept = [cell for cell, count in votes.most_common() if count * 2 > len(diagnoses)]
+    hypotheses = []
+    for cell in kept:
+        kind = Counter(h.error_type for h in proposals[cell]).most_common(1)[0][0]
+        hypotheses.append(next(h for h in proposals[cell] if h.error_type == kind).model_copy(update={"cell": cell}))
+    fixes = Counter((full_ref(d.patch.cell, sheet), d.patch.new_formula) for d in diagnoses if d.patch is not None and readable_ref(d.patch.cell, sheet) and full_ref(d.patch.cell, sheet) in kept)
+    patch = None
+    if fixes:
+        (cell, formula), count = fixes.most_common(1)[0]
+        patch = ProposedPatch(cell=cell, new_formula=formula) if count * 2 > len(diagnoses) else None
+    reason = next((d.reason for d in diagnoses if d.reason.strip()), "")
+    return Diagnosis(hypotheses=hypotheses, patch=patch, reason=reason), dict(votes)
+
+
+def ballot_of(diagnosis: Diagnosis) -> dict:
+    return {
+        "hypotheses": [{"cell": h.cell, "error_type": h.error_type, "claim": h.claim, "confidence": h.confidence} for h in diagnosis.hypotheses],
+        "patch": f"{diagnosis.patch.cell} {diagnosis.patch.new_formula}" if diagnosis.patch else None,
+        "reason": diagnosis.reason,
+    }
+
+
 def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_text: bool = False) -> Callable[[InvestigationState], dict]:
     def diagnose(state: InvestigationState) -> dict:
         candidates = tested_candidates(book, state)
         brief = "\n".join(part for part in (investigation_brief(state), candidates_brief(candidates)) if part)
+        votes: dict[str, int] | None = None
         if not candidates:
             brief = f"{brief}\n\n{logic_review_brief(book, state)}"
         if plain_text:
             brief = f"{brief}\n\nThe whole model, read as text:\n{sheet_as_text(book)}"
-        result = investigator.invoke({"messages": [HumanMessage(content=brief)]})
-        diagnosis = result["diagnosis"]
         sheet = state["target"]["sheet"]
+        voting = not candidates and bool(state["target"].get("checked"))
+        runs = [investigator.invoke({"messages": [HumanMessage(content=brief)]}) for _ in range(LOGIC_VOTES if voting else 1)]
+        result = {"messages": [message for run in runs for message in run["messages"]], "run_log": [entry for run in runs for entry in run.get("run_log", [])], "tool_calls_used": sum(run.get("tool_calls_used", 0) for run in runs)}
+        diagnosis = runs[0]["diagnosis"]
+        if voting:
+            diagnosis, votes = majority_diagnosis([run["diagnosis"] for run in runs], sheet)
         existing = state.get("evidence", [])
         new_evidence = collect_evidence(result["messages"], sheet, existing, len(existing))
         all_evidence = [*existing, *new_evidence]
@@ -489,6 +561,9 @@ def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_t
         chosen = next((c for c in errors if c["number"] == diagnosis.choice), None) or (errors[0] if errors else None) or next((c for c in candidates if c["number"] == diagnosis.choice and c["cell"] not in intentional_now), None)
         chosen_reason = next((j["reason"] for j in judgements if chosen and j["number"] == chosen["number"]), "") or diagnosis.reason
         decision = {"cell": None, "decided_by": "none", "fix": None, "model_fix": None, "rule_would_have": f"{rule['cell']} {rule['fix']}" if rule else None, "reason": chosen_reason, "candidates": len(candidates), "judgements": judgements}
+        if votes is not None:
+            decision["votes"] = votes
+            decision["ballots"] = [ballot_of(run["diagnosis"]) for run in runs]
         if chosen is not None:
             patch = {"cell": chosen["cell"], "old_formula": old_formula(book, chosen["cell"]), "new_formula": chosen["fix"], "source": "agent"}
             decision |= {"cell": chosen["cell"], "decided_by": "model", "fix": chosen["fix"]}
@@ -531,6 +606,8 @@ def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_t
                 first = untried[0]
                 patch = {"cell": first["cell"], "old_formula": old_formula(book, first["cell"]), "new_formula": first["fix"], "source": "agent"}
                 decision |= {"cell": first["cell"], "decided_by": "rule", "fix": first["fix"]}
+        if patch is not None and any(h["error_type"] == "logic_error" and normalize_ref(h["cell"]) == normalize_ref(patch["cell"]) for h in hypotheses):
+            patch = along_the_line(book, patch)
         return {"hypotheses": hypotheses, "evidence": new_evidence, "patch": patch, "decisions": [decision], "run_log": result.get("run_log", []), "tool_call_counts": [result.get("tool_calls_used", 0)]}
 
     return diagnose

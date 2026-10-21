@@ -7,11 +7,11 @@ import zipfile
 from pathlib import Path
 
 from model_x_ray.benchmark.enron import INDEX_FILE, read_cases, run_case, split_by_spreadsheet, summarize
-from model_x_ray.benchmark.runner import SETUP_RULES, SETUP_SUPER, Setup
+from model_x_ray.benchmark.runner import SETUP_RULES, SETUP_SUPER, SETUP_SUPER_3, Setup
 
 CORPUS_URL = "https://ls13-www.cs.tu-dortmund.de/homepage/spreadsheets/enron-errors.zip"
 SPLIT_FILE = Path("docs/enron-split.json")
-SETUPS: dict[str, Setup] = {"rules": SETUP_RULES, "super": SETUP_SUPER}
+SETUPS: dict[str, Setup] = {"rules": SETUP_RULES, "super": SETUP_SUPER, "super-3": SETUP_SUPER_3}
 
 
 def prepare(data: Path) -> None:

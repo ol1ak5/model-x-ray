@@ -12,6 +12,7 @@ from model_x_ray.spreadsheet.engine import Workbook
 from model_x_ray.tools import make_read_only_tools
 
 MODELS = [
+    "nvidia/Nemotron-3.5-Super-VL",
     "nvidia/nemotron-3-super-120b-a12b",
     "nvidia/Nemotron-3_5-Lightning",
     "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",

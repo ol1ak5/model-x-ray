@@ -1,0 +1,53 @@
+[
+ {
+  "file": "01-churn-added.xlsx",
+  "description": "Closing customers adds churned customers instead of subtracting them, in every year",
+  "cells": [
+   "Forecast!C7",
+   "Forecast!D7",
+   "Forecast!E7",
+   "Forecast!F7",
+   "Forecast!G7"
+  ]
+ },
+ {
+  "file": "02-margin-skips-support.xlsx",
+  "description": "Contribution margin subtracts only hosting, not the total cost of service, in every year",
+  "cells": [
+   "Forecast!C13",
+   "Forecast!D13",
+   "Forecast!E13",
+   "Forecast!F13",
+   "Forecast!G13"
+  ]
+ },
+ {
+  "file": "03-ten-months-a-year.xlsx",
+  "description": "Annual revenue multiplies the monthly price by 10 months instead of 12, in every year",
+  "cells": [
+   "Forecast!C9",
+   "Forecast!D9",
+   "Forecast!E9",
+   "Forecast!F9",
+   "Forecast!G9"
+  ]
+ },
+ {
+  "file": "04-price-typo.xlsx",
+  "description": "Monthly price 2027 typed as 5200 instead of 52",
+  "cells": [
+   "Forecast!E8"
+  ]
+ },
+ {
+  "file": "05-margin-pct-on-costs.xlsx",
+  "description": "Contribution margin % divides by total cost of service instead of revenue, in every year",
+  "cells": [
+   "Forecast!C14",
+   "Forecast!D14",
+   "Forecast!E14",
+   "Forecast!F14",
+   "Forecast!G14"
+  ]
+ }
+]
