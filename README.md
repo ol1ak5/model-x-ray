@@ -93,7 +93,18 @@ The report writer is the exception. `explain` is the last step, has no tools and
 
 ## How we evaluate it
 
-The proof of value is planted errors: the generated Damodaran models carry 75 known mistakes (hardcoded numbers where the row uses formulas, broken references, sign flips, range errors, period slips), and the Enron Errors Corpus adds real spreadsheets with known corrections. The agent's diagnosis is scored against the known answer — cell, cause, and fix — per step, in a four-way benchmark (rules baseline vs three Nemotron set-ups). Metrics and scoring rules: [`docs/evaluation.md`](docs/evaluation.md); regenerate with `scripts/benchmark.sh`, which writes `docs/benchmark-results.json`, `docs/benchmark.md` and `docs/benchmark.svg` (generated, not committed; the only committed run is `docs/benchmark-before101.md`). The held-out splits are frozen in `docs/damodaran-split.json` and `docs/enron-split.json`.
+The proof of value is planted errors: the generated models carry 75 known mistakes (hardcoded numbers where the row uses formulas, broken references, sign flips, range errors, period slips), and the Enron Errors Corpus adds real spreadsheets with known corrections. Every diagnosis is scored against the known answer — cell, cause, fix — per step, through four set-ups that differ only in configuration: rules alone, Nano with the tools, Super with the tools (what the app runs), and Super with the whole sheet pasted as text and no tools.
+
+174 variants, 696 investigations, run on 21 Oct 2026; 31 failed with errors and are excluded:
+
+| Set-up | Root cause top-1 | Fix accuracy | False alarms | Latency p50 | Cost / investigation |
+|---|---|---|---|---|---|
+| rules only | 22% | 0% | 100% | 0.0 s | $0.0000 |
+| Nano + tools | 82% | 81% | 7% | 97 s | $0.0072 |
+| Super + tools (the app) | 75% | 74% | 4% | 20 s | $0.0123 |
+| Super, sheet in the prompt, no tools | 92% | 92% | 25% | 15 s | $0.0068 |
+
+The tools are not what finds the cell on a 63-line model: a strong model with the whole sheet in its prompt does better on planted errors. It is also wrong about models that are fine — it invents a root cause in one of four healthy or deliberately hardcoded models, where the tool loop leaves them alone — and the tools are the only thing that scales to a workbook the context window cannot hold, and what produces the clickable evidence. The gap is measured and open in #179, not smoothed over. The per-type table, the per-step metrics (locate, trace, verdict) and the confusion matrix are in the generated report, `docs/benchmark.md`, which `scripts/benchmark.sh` writes together with the raw `docs/benchmark-results.json` and the chart (`--render-only` re-renders; none of the three is committed). Metrics and scoring rules: [`docs/evaluation.md`](docs/evaluation.md). The held-out splits are frozen in `docs/damodaran-split.json` and `docs/enron-split.json`.
 
 ## Links
 
