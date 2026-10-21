@@ -17,9 +17,10 @@ The first command fills `models/` with the clean base model and planted-error va
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `MODEL_X_RAY_MODELS_DIR` | `demo_models` | Folder with the demo models anyone can try (the repo ships `demo_models/demo.xlsx`, a synthetic model with three mixed planted errors); point it at `models/` to expose the benchmark set locally |
+| `MODEL_X_RAY_MODELS_DIR` | `demo_models` | Folder with the demo models anyone can try (the repo ships `demo_models/demo.xlsx`, a synthetic three-sheet model with a sign flip on `P&L!G5` and a typed value on `P&L!I6`); point it at `models/` to expose the benchmark set locally |
 | `MODEL_X_RAY_UPLOAD_DIR` | `uploads` | Where uploaded models are saved while their run is alive; each file is deleted when the run ends or after the upload TTL |
 | `MODEL_X_RAY_OUTPUT_DIR` | `corrected` | Where approved corrected copies are saved |
+| `MODEL_X_RAY_COPY_TTL` | `1800` | Seconds a corrected copy waits for its download before the sweep removes it |
 | `MODEL_X_RAY_CHECKPOINTS` | `checkpoints.db` | SQLite checkpointer file (Postgres on Supabase in the deployed app, #72) |
 | `MODEL_X_RAY_ALLOWED_ORIGINS` | `http://localhost:5173` | Comma-separated web addresses allowed to call the API from a browser (CORS): the React dev server, then the Vercel URL. Any `localhost` port is allowed on top of this list, so a dev server that had to fall back to `5174` (or `4173` after a preview build) still works; the deployed URL must be listed here |
 | `MODEL_X_RAY_MEMORY` | `memory.db` | SQLite long-term memory: model maps, intentional overrides, past fixes (Postgres on Supabase in the deployed app, #72) |
@@ -45,7 +46,8 @@ Models come from the role registry: Super for the Investigator, Verifier and loc
 | `GET /spreadsheets` | | The demo models: `[{"id", "sheets"}]`. Uploads are never listed, so one visitor never sees another's file, and each call first sweeps uploads older than the TTL |
 | `POST /spreadsheets?name=My%20model.xlsx` | The raw `.xlsx` bytes | `201` and `{"id", "name", "sheets"}`; `.xlsx` only, up to 10 MB, checked by opening it; the saved name is generated, so a name like `../x.xlsx` cannot escape the folder. The file is deleted when the run finishes (approve or reject) or after `MODEL_X_RAY_UPLOAD_TTL` seconds, whichever comes first, and its id stops resolving |
 | `GET /investigations/{id}` | | The investigation view |
-| `GET /investigations/{id}/corrected` | | The corrected `.xlsx` after approval, served once: the file is removed from the server when the download finishes, so a second call answers 404 |
+| `GET /investigations/{id}/sheet` | | The sheet window around the target: header row, rows, before/after values, so the page can draw the model (404 once the workbook is gone) |
+| `GET /investigations/{id}/corrected` | | The corrected `.xlsx` after approval, served once: the file is removed from the server when the download finishes, so a second call answers 404. A copy nobody downloads is deleted after `MODEL_X_RAY_COPY_TTL` (1800 s), swept on `GET /spreadsheets` |
 | `POST /investigations/{id}/resume` | A cell choice `{"ref": "P&L!H8"}` or a decision `{"action": "approve" \| "edit" \| "reject", "reason", "patch", "intentional"}` (`intentional: true` with `reject` remembers the cell as deliberate, see `docs/agent-architecture.md` §Memory). An `edit` patch is normalized and calculated before it is accepted: `-G4*Assumptions!$C$5` becomes `=-G4*Assumptions!$C$5`, a plain number stays a number, and a formula that cannot be calculated in that cell answers `422` with a sentence naming the cell, leaving the investigation paused at `human_review`. `state` carries the investigation view the browser kept, so a server that never saw this id can still continue it (see below) | The investigation view after the graph continued |
 | `POST /investigations/stream` | Same as `POST /investigations` | A live stream of progress events, then the view |
 | `POST /investigations/{id}/resume/stream` | Same as `resume` | A live stream of progress events, then the view |
@@ -87,7 +89,7 @@ Every endpoint answers with the same JSON, built by `investigation_view` from th
 - `id`: also the LangGraph `thread_id`, so one investigation is one thread.
 - `status`: `needs_review` (paused in `human_review`) or `done`.
 - `pause`: the value the graph passed to `interrupt()`: the report and patch to approve. `null` when not paused.
-- The public state fields: `spreadsheet_id`, `question`, `target_choice` (the candidates, the chosen cell and why), `model_map`, `known_overrides`, `past_findings`, `target`, `causal_tree`, `contributions`, `hypotheses`, `evidence`, `verifications`, `patch`, `report`, `corrected_copy_id`, `run_log`, `attempts`. LangChain messages are never sent. These are also the fields a browser can hand back as `state` to continue an investigation the server has forgotten.
+- The public state fields: `spreadsheet_id`, `question`, `target_choice`, `decisions` (the candidates, the chosen cell and why), `model_map`, `known_overrides`, `past_findings`, `target`, `causal_tree`, `contributions`, `hypotheses`, `evidence`, `verifications`, `patch`, `report`, `corrected_copy_id`, `run_log`, `attempts`. LangChain messages are never sent. These are also the fields a browser can hand back as `state` to continue an investigation the server has forgotten.
 
 ## Continuing without a thread
 

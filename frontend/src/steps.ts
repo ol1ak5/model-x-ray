@@ -1,5 +1,5 @@
 import type { InvestigationView } from "./api";
-import { money } from "./format";
+import { figure, kindOf, money } from "./format";
 
 export type Tone = "done" | "active" | "pending";
 export type RailStep = { key: string; title: string; detail: string | null; tone: Tone };
@@ -22,7 +22,7 @@ function finding(key: string, view: InvestigationView | null): string | null {
   if (key === "locate") {
     const target = view.target;
     if (!target) return null;
-    return `${target.label} ${target.period} · ${money(target.prior_value)} → ${money(target.value)}`;
+    return `${target.label} ${target.period} · ${figure(target.prior_value, kindOf(view.model_map, target.label))} → ${figure(target.value, kindOf(view.model_map, target.label))}`;
   }
 
   if (key === "trace") {

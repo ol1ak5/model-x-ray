@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import App from "../App";
+import type { InvestigationView } from "../api";
 import { APPROVED, REJECTED, REVIEW, RUNNING, STEPS, TESTED, fakeApi, steps } from "./fakeApi";
 
 afterEach(() => {
@@ -223,6 +224,81 @@ describe("an investigation in the browser", () => {
     expect(revenue).toHaveAttribute("data-tone", "ok");
     expect(revenue?.textContent).toContain("Revenue +11.5");
     expect(revenue?.textContent).toContain("6% of the move");
+  });
+
+  test("shows which cell the locator chose, and among how many, when the question was ambiguous", async () => {
+    const ambiguous: InvestigationView = {
+      ...REVIEW,
+      target_choice: { candidates: ["P&L!G6", "Summary!G6", "P&L!F6"], chosen: "P&L!G6", why: "Gross profit 2025A moves most and sits downstream of the broken row." },
+    };
+    const api = fakeApi([...steps(...STEPS.map(([name]) => name)), ["view", ambiguous]]);
+    vi.stubGlobal("fetch", api.fetch);
+    const user = await checkDemo();
+
+    const facts = await screen.findByRole("region", { name: "Investigation facts" });
+    expect(await within(facts).findByText(/Chosen among 3 candidates/)).toBeInTheDocument();
+    expect(within(facts).getByText("P&L!G6, Summary!G6, P&L!F6")).toBeInTheDocument();
+    await user.click(within(facts).getByRole("button", { name: "why?" }));
+    expect(within(facts).getByText(/moves most and sits downstream of the broken row/)).toBeInTheDocument();
+  });
+
+  test("states the chosen cell without ceremony when the code found only one", async () => {
+    const one: InvestigationView = {
+      ...REVIEW,
+      target_choice: { candidates: [], chosen: "P&L!G6", why: "The only period cell off its row pattern." },
+    };
+    const api = fakeApi([...steps(...STEPS.map(([name]) => name)), ["view", one]]);
+    vi.stubGlobal("fetch", api.fetch);
+    await checkDemo();
+
+    const facts = await screen.findByRole("region", { name: "Investigation facts" });
+    expect(await within(facts).findByText(/^Chosen:/)).toBeInTheDocument();
+    expect(within(facts).queryByText(/Chosen among/)).toBeNull();
+  });
+
+  test("reads a margin question as percentages and drops shares of a ratio's change", async () => {
+    const margin: InvestigationView = {
+      ...REVIEW,
+      target: { sheet: "P&L", cell: "G11", label: "EBITDA margin", period: "2025A", value: 1.2, prior_cell: "F11", prior_value: 1.05 },
+      causal_tree: {
+        cell: "P&L!G11",
+        label: "EBITDA margin",
+        value_before: 1.05,
+        value_after: 1.2,
+        delta: 0.15,
+        share_of_change: 1,
+        suspicious: false,
+        children: [
+          { cell: "P&L!G10", label: "EBITDA", value_before: 28.24, value_after: 225.6, delta: 197.36, share_of_change: 13.16, suspicious: false, children: [] },
+          { cell: "P&L!G4", label: "Revenue", value_before: 176.5, value_after: 188, delta: 11.5, share_of_change: -12.16, suspicious: false, children: [] },
+        ],
+      },
+      hypotheses: [],
+      patch: null,
+      report: "EBITDA margin rose because COGS flipped sign.",
+    };
+    const api = fakeApi([...steps(...STEPS.map(([name]) => name)), ["view", margin]]);
+    vi.stubGlobal("fetch", api.fetch);
+    await checkDemo();
+
+    const facts = await screen.findByRole("region", { name: "Investigation facts" });
+    expect(await within(facts).findByText(/105\.0% → 120\.0%/)).toBeInTheDocument();
+    await waitFor(() => expect(document.querySelectorAll("[data-wire-label]").length).toBeGreaterThan(0));
+    const chips = Array.from(document.querySelectorAll("[data-wire-label]")).map((chip) => chip.textContent ?? "");
+    expect(chips.some((text) => text.includes("% of the move"))).toBe(false);
+    expect(chips.some((text) => text.includes("1316%"))).toBe(false);
+  });
+
+  test("keeps the page usable when a view arrives without the optional label table", async () => {
+    const withoutLabels: InvestigationView = { ...REVIEW, check_labels: undefined, target_choice: null };
+    const api = fakeApi([...steps(...STEPS.map(([name]) => name)), ["view", withoutLabels]]);
+    vi.stubGlobal("fetch", api.fetch);
+    await checkDemo();
+
+    const facts = await screen.findByRole("region", { name: "Investigation facts" });
+    expect(within(facts).getByText(/84\.7 → 285\.8/)).toBeInTheDocument();
+    expect(within(facts).getByRole("button", { name: "Why?" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Investigation steps" })).toBeInTheDocument();
   });
 
   test("keeps the model, the steps and the facts on screen while the fix has been tested but not checked", async () => {

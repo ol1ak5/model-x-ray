@@ -1,4 +1,5 @@
 import json
+import os
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -21,7 +22,7 @@ def app_for(path: Path, tmp_path: Path, scripted_verdict, clock: Callable[[], fl
     models = AgentModels(llm=ScriptedDiagnosis(turns=[(["P&L!H7"], "P&L!H7")]), verifier=scripted_verdict)
     app = create_app(
         source, XlsxSandbox(source, corrected), models, InMemorySaver(), UsageCap(per_visitor=10, total=100),
-        upload_dir=uploads, upload_ttl=ttl, clock=clock,
+        upload_dir=uploads, upload_ttl=ttl, clock=clock, copy_dir=corrected, copy_ttl=ttl,
     )
     return TestClient(app), source, uploads, corrected
 
@@ -94,3 +95,44 @@ def test_the_corrected_copy_is_served_once_and_removed_after_the_download(demo_w
     assert json.loads(json.dumps(done))["corrected_copy_id"] == name
 
     assert client.get(f"/investigations/{started['id']}/corrected").status_code == 404
+
+
+def approved(client: TestClient, spreadsheet_id: str) -> None:
+    started = client.post("/investigations", json={"spreadsheet_id": spreadsheet_id, "question": QUESTION})
+    assert started.status_code == 201, started.text
+    done = client.post(f"/investigations/{started.json()['id']}/resume", json={"action": "approve", "reason": "sign slip on COGS"})
+    assert done.status_code == 200, done.text
+    assert done.json()["corrected_copy_id"]
+
+
+def test_a_corrected_copy_nobody_downloads_is_swept_after_the_time_to_live(demo_workbook_path: Path, scripted_verdict, tmp_path: Path) -> None:
+    client, _, _, corrected = app_for(demo_workbook_path, tmp_path, scripted_verdict)
+    approved(client, "demo")
+    second = upload(client, demo_workbook_path, "Second model.xlsx")
+    approved(client, second)
+
+    stale, fresh = sorted(corrected.glob("*.xlsx"), key=lambda path: path.stat().st_mtime)
+    now = time.time()
+    os.utime(stale, (now - 3600, now - 3600))
+    os.utime(fresh, (now - 60, now - 60))
+
+    assert client.get("/spreadsheets").status_code == 200
+    assert not stale.exists(), "a copy nobody downloaded is deal data the server should not keep"
+    assert fresh.is_file(), "a copy inside the window is still available for the download"
+
+
+def test_the_sweep_leaves_a_copy_alone_while_its_download_is_in_flight(tmp_path: Path) -> None:
+    from model_x_ray.api import Copies
+
+    copy = tmp_path / "demo-corrected.xlsx"
+    copy.write_bytes(b"xlsx")
+    aged = time.time() - 3600
+    os.utime(copy, (aged, aged))
+    copies = Copies(tmp_path, ttl=1800.0)
+
+    copies.holding(copy)
+    assert copies.sweep() == []
+    assert copy.is_file()
+
+    copies.release(copy)
+    assert not copy.exists()
