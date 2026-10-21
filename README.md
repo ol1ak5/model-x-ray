@@ -1,36 +1,56 @@
 # Model X-Ray
 
-**The debugger for financial models.** Model X-Ray is an evidence-first Nemotron agent that investigates surprising outputs in financial spreadsheets. Given a question such as "Why did EBITDA jump in 2030E?", it locates the cell behind the question, traces the dependency graph, diagnoses the root cause, tests a fix in a sandbox copy of the workbook, verifies the result, explains it with clickable evidence, and returns a corrected copy only after a human approves the change.
+An AI agent built for financial model auditing, powered by NVIDIA Nemotron, that uncovers hidden errors, reasons through financial logic, and verifies every proposed fix through independent workbook recalculation. Every correction is evidence-based, and no changes are made without the user’s approval.
 
-Every number it reports comes from deterministic code or from the spreadsheet's own recalculation. The LLM never does arithmetic and may only quote tool results; a wrong hypothesis is shown, rejected with evidence, and replaced rather than quietly dropped.
+## Try it Live
 
-## Demo scenario
 
-The repository ships the model the app serves by default, `demo_models/demo.xlsx`: a three-sheet deal model (P&L, Assumptions, Summary; EUR m, 2024A–2028E) with two planted mistakes:
+## The Problem
 
-- `P&L!G5` (COGS, 2025A) reads `=G4*Assumptions!$C$5` where the row uses `=-G4*…`, so COGS flips sign and gross profit shows 285.8 instead of 84.7.
-- `P&L!I6` (gross profit, 2027E) is a typed `95.65` (the 2026E figure) where the row adds revenue and COGS.
+Financial models drive billion-dollar decisions, yet a single broken formula can distort an entire valuation without anyone noticing. In 2012, an error in JPMorgan’s Value-at-Risk model understated the bank’s risk exposure leading to the so-called “London Whale” scandal, that resulted in approximately $6Bn in trading losses for the bank.
 
-Run the API and investigate it:
+Even if AI looks like the obvious reviewer for errors that escape from the human's eyes, LLMs struggle with numerical precision and nested logic, and can produce convincing explanations while getting the number wrong. Financial models don’t need plausible explanations. They need verifiable results.
+
+## The Solution
+Model X-Ray that pairs NVIDIA Nemotron with a deterministic calculation engine, just as an experienced financial analyst combines expertise with reliable tools. Nemotron reasons through the model, interpreting formulas, distinguishing real errors from deliberate choices, and proposing fixes. The engine independently maps formula dependencies and recalculates values, grounding every conclusion in verifiable calculations rather than AI-generated numbers.
+
+## Setup
 
 ```bash
-scripts/serve.sh                # http://localhost:8000/docs
+uv sync                       # Python 3.13, installs the package
+cp .env.example .env          # then fill in NEBIUS_API_KEY
+uv run model-x-ray            # smoke check: prints the banner
 ```
 
-```json
-POST /investigations
-{"spreadsheet_id": "demo", "question": "Why did gross profit jump in 2025A?"}
+## Tests
+
+```bash
+uv run pytest                 # offline, no credits: deep end-to-end tests
+uv run pytest -m live         # live: calls Token Factory / Google APIs, spends credits
 ```
 
-The graph locates `P&L!G5`, traces the 2025A gross profit to it, proposes `=-G4*Assumptions!$C$5`, tests it in a sandbox copy and pauses for approval; approving writes a corrected workbook that `GET /investigations/{id}/corrected` returns once and then deletes, and an uploaded model is deleted from the server as soon as its run ends.
+## How it Works
 
-`demo/nvidia-pnl.xlsx` and `demo/nvidia-pnl-error.xlsx` are the second pair the docs and tests use (two sheets, FY2025–FY2032, one typed `45.0` at `P&L!G11` where the row sums `G7:G10`, which lifts the 2030E EBITDA margin); point the API at it with `MODEL_X_RAY_MODELS_DIR=demo`. Regenerate both files any time with `uv run tools/generate_demo_model.py`.
+```mermaid
+flowchart LR
+    A["Excel workbook"] --> B["Load and map<br/>lines, periods, formulas"]
+    B --> C["Rules flag suspects<br/>engine tests each fix on a copy"]
+    C --> D{"Nemotron judges<br/>every candidate"}
+    C -- "no rule fires" --> E["Nemotron logic review<br/>three votes, majority wins"]
+    D --> F["Sandbox test<br/>engine recalculates"]
+    E --> F
+    F --> G{"Verifier<br/>engine checks +<br/>adversarial Nemotron"}
+    G -- "rejected" --> D
+    G -- "confirmed" --> H["Report with<br/>clickable evidence"]
+    H --> I{"You approve?"}
+    I -- "yes" --> J["Corrected copy<br/>original untouched"]
+```
 
-## How it works
-
-![Investigation graph](docs/investigation-graph.png)
-
-Ten nodes over a LangGraph state machine: **load** opens the workbook and **map** labels its lines and periods, **locate** resolves the question to a cell (code first, Nemotron only when several cells match; the choice is recorded for the report), **trace** walks the dependency graph and records causal contributions as evidence, **diagnose** runs a hypothesis loop with an evidence budget, **test** applies the proposed patch in a sandbox copy and compares before/after values, **verify** has an adversarial Nemotron Verifier try to break the diagnosis with a fixed evidence package, and **explain** renders the narrative report citing the recorded evidence ids. **human_review** pauses for the decision and **apply_fix** writes the corrected copy after approval. Design details: [`docs/agent-architecture.md`](docs/agent-architecture.md).
+1. **Map.** The engine reads every sheet, labels each line and period, and builds the dependency graph of every formula.
+2. **Flag.** Pattern rules propose suspects (typed numbers, flipped signs, broken ranges, wrong periods), and the engine tests each candidate fix on a copy.
+3. **Judge.** Agent reads each candidate the way a senior analyst would and decides whether it is an error or a deliberate choice. When no rule fires, it reviews the model's logic line by line in plain words, three times, and keeps what a majority finds.
+4. **Verify.** The engine recalculates the patched copy, and a second Nemotron tries to break the fix; the engine re-checks every objection.
+5. **Approve.** You see the cell, the cause, the evidence and the numbers before and after. An approved fix is written to a corrected copy; the original workbook never changes.
 
 ## Built on Nebius × NVIDIA
 
@@ -45,47 +65,46 @@ All LLM calls run on **Nebius Token Factory** (OpenAI-compatible) through LangCh
 | Benchmark small-model set-up | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` ($0.06 / $0.24) |
 | Benchmark hardest-verification set-up | `nvidia/Nemotron-3-Ultra-550b-a55b` (1M context, $1.00 / $3.00) |
 
-- Base URL: `https://api.tokenfactory.nebius.com/v1/`, key in `NEBIUS_API_KEY` (`.env`, never committed); every role is overridable via `NEBIUS_MODEL_<ROLE>`.
-- Token Factory docs: <https://docs.tokenfactory.nebius.com/> (model list, function calling, structured output, rate limits).
-- Model IDs were verified live with `GET /v1/models` on 6 Oct 2026, and Nemotron 3.5 Super on 21 Oct 2026; prices and context windows come from the [Token Factory model catalog](https://tokenfactory.nebius.com/model-catalog.md) and are pinned in [`docs/agent-architecture.md`](docs/agent-architecture.md) §Models.
-- Nebius credits: the hackathon Token Factory allocation for the Nebius × NVIDIA Global AI Hackathon ([devpost](https://nebiusglobalaihackathon.devpost.com/)).
-
-## Setup
-
-```bash
-uv sync                       # Python 3.13, installs the package
-cp .env.example .env          # then fill in NEBIUS_API_KEY
-uv run model-x-ray            # smoke check: prints the banner
-```
-
-Optional in `.env`: `GOOGLE_APPLICATION_CREDENTIALS` (Google Sheets), `LANGSMITH_API_KEY` (tracing, off by default), model overrides and demo rate limits. The API serves `.xlsx` today; the Google Sheets source and sandbox sit behind the same `SpreadsheetSource` / `Sandbox` interface but are not wired into the server yet (#13, #14). The app ships with `demo_models/demo.xlsx`; the benchmark set is generated with `uv run tools/generate_dataset.py --output models --per-set 2`.
-
-## Tests
-
-```bash
-uv run pytest                 # offline, no credits: deep end-to-end tests
-uv run pytest -m live         # live: calls Token Factory / Google APIs, spends credits
-```
-
-The suite runs realistic scenarios end to end (a whole formula trace, a full investigation against a planted error, a benchmark scenario) on scripted models, so it proves the system works rather than that functions return defaults.
-
 ## Supported Excel functions
 
-Deliberately the small set real financial models use; an unsupported function is reported by name on the cell that uses it (and on anything downstream), never guessed or silently skipped.
+| Family | Functions |
+|---|---|
+| Maths | `SUM` `AVERAGE` `MIN` `MAX` `ROUND` `ROUNDDOWN` `INT` `MOD` `POWER` `ABS` `EXP` `LN` `SUMPRODUCT` `LARGE` `SMALL` |
+| Logic and information | `IF` `IFERROR` `AND` `OR` `NOT` `CHOOSE` `ISERROR` `ISNUMBER` `ISTEXT` `ISBLANK` |
+| Counting and conditional | `COUNT` `COUNTA` `SUMIF` `SUMIFS` `COUNTIF` `COUNTIFS` |
+| Lookups and references | `INDEX` `MATCH` `VLOOKUP` `HLOOKUP` `XLOOKUP` `OFFSET` |
+| Dates | `EOMONTH` `EDATE` `YEAR` `MONTH` `DAY` `DATE` |
+| Valuation, debt, statistics | `NPV` `XNPV` `IRR` `XIRR` `PMT` `PPMT` `NORMSDIST` |
+| Also | Cross-sheet references, ranges, whole rows and columns, defined names; circular references solved iteratively, like Excel, when the file has iteration on |
+| Not supported | Links to other workbooks, Data Tables, VBA |
 
-- Maths: `SUM`, `AVERAGE`, `MIN`, `MAX`, `ROUND`, `ROUNDDOWN`, `INT`, `MOD`, `POWER`, `ABS`, `EXP`, `LN`, `SUMPRODUCT`, `LARGE`, `SMALL`
-- Logic and information: `IF`, `IFERROR`, `AND`, `OR`, `NOT`, `CHOOSE`, `ISERROR`, `ISNUMBER`, `ISTEXT`, `ISBLANK`
-- Counting and conditional: `COUNT`, `COUNTA`, `SUMIF`, `SUMIFS`, `COUNTIF`, `COUNTIFS`
-- Lookups: `INDEX`, `MATCH`, `VLOOKUP`, `HLOOKUP`, `XLOOKUP`
-- Dates: `EOMONTH`, `EDATE`, `YEAR`, `MONTH`, `DAY`, `DATE`
-- Valuation, debt and statistics: `NPV`, `XNPV`, `IRR`, `XIRR`, `PMT`, `PPMT`, `NORMSDIST` / `NORM.S.DIST`
-- References: `OFFSET`
+Full spec: [`docs/spreadsheet-core.md`](docs/spreadsheet-core.md).
 
-Plus references (`A1`, `$C$7`, ranges, whole rows and columns such as `70:70`, other sheets, quoted names, workbook defined names), operators (`+ - * / ^ &`, comparisons), percentages, `_xlfn.` prefixes, and Excel-faithful error semantics (`IF` evaluates only the branch it returns, `IFERROR` never hides an unsupported function). Full spec: [`docs/spreadsheet-core.md`](docs/spreadsheet-core.md).
+### The Models We Built It On
 
-Circular references (interest on average debt, cash sweeps) are calculated iteratively, like Excel, when the file has iterative calculation switched on, with the file's own iteration limit and precision.
+Model X-Ray was developed and tuned on three sets of workbooks, keeping part of the real models aside for the final score:
 
-Not supported: links to other workbooks (`=[1]May!J10`; the values live in another file, so open it and paste its values), Data Tables and VBA functions. Each is reported by name instead of computed wrongly.
+| Set | What it is | Errors |
+|---|---|---|
+| **Damodaran valuation models** | 26 public spreadsheets by Aswath Damodaran (NYU Stern): DCFs, cost of capital, capital budgeting; a median of 125 rows and 218 formulas | 95 planted (typed values, wrong references, flipped signs, period slips); 21 models for tuning, 5 held out |
+| **Synthetic deal models** | A three-sheet deal model (assumptions, five-year P&L, summary) and 174 copies of it, each with one planted error, plus clean copies and copies with deliberate, documented values | 150 planted, 24 controls |
+| **Logic test models** | A five-year budget and a SaaS subscription forecast the agent had never seen, in [`demo/`](demo) | 15 planted, including 7 logic errors where a formula contradicts its own label |
+
+## What Nemotron Adds
+
+Measured on the synthetic deal models (12 variants per error type plus 24 controls, one run each).
+
+| Error type | Rules only | Rules + Nemotron 3.5 Super |
+|---|---|---|
+| Typed number in place of a formula | 12 of 12 | **12 of 12** |
+| Formula pointing to the wrong cell | 8 of 12 | **11 of 12** |
+| SUM over the wrong range | 10 of 12 | **12 of 12** |
+| Flipped sign | 11 of 12 | **12 of 12** |
+| Formula pointing to the wrong period | 8 of 12 | **12 of 12** |
+| Blended error (the symptom is not the cause) | 11 of 12 | **11 of 12** |
+| **Planted errors fixed** | 72 of 84 (86%) | **82 of 84 (98%)** |
+| False alarms on deliberate values | 12 of 12 | **0 of 12** |
+| False alarms on clean models | 0 of 12 | **0 of 12** |
 
 ## Why these Nemotron models
 
