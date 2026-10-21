@@ -85,6 +85,11 @@ Verified 21 Oct 2026. Do not assume tooling that is not there — re-check the t
 Work is issue-driven and expected to be executed by agents as much as people.
 
 - **Branches and PRs**: never commit to `main` directly. Create `feat/<issue-number>-<slug>`, `fix/...`, `research/...`, `bench/...` branches; open a PR referencing the issue (`Closes #123`); get review before merge. One issue per PR when possible.
+- **A merge is a decision, not a click.** On 20 Oct #169 was merged while its author was still pushing to it, and a day of work (#181) was left outside `main`. To keep that from happening again:
+  - Open a PR as a **draft** while you are still working on it (`gh pr create --draft`), and mark it ready only when it is finished (`gh pr ready <n>`). Merge only PRs marked ready.
+  - The reviewer merges only after leaving a review comment that says, in a few lines, what they checked (the tests they ran, the numbers they looked at, what they did not check). Approving without reading is not a review.
+  - Before every push, an agent or a person checks that the branch's PR is still open: `gh pr view --json state -q .state`. Once it is `MERGED`, the branch is closed: new commits go to a fresh branch and a new PR.
+  - Keep PRs small: one coherent change, opened as soon as it is done, instead of one PR that keeps growing for a day.
 - **Delete branches after merge** — a branch exists only to carry one PR. Once merged: `gh pr merge <n> --merge --delete-branch`, or manually `git branch -d <branch>` and `git push origin --delete <branch>`. Never reuse a merged branch for new work; open a fresh one. Keep the repo at `main` plus at most the branches with open PRs.
 - **Issue labels**: `research`, `agent`, `engine`, `benchmark`, `frontend`, `docs`, `roadmap`, plus `bug`, `chore`, `blocked`. Add more as needed, but keep this set stable — agents filter on it.
 - **Standardized issue format** (contract between agents): title `[label] one-line goal`, body with context, concrete acceptance criteria (checkable), links to related issues/contracts, and a final "Follow-ups" section. An issue without acceptance criteria is not ready to be worked.
