@@ -101,6 +101,10 @@ Implementation: `src/model_x_ray/agents/locator.py`, prompt `prompts/locate.md`,
 
 Nemotron never writes a cell address: it can only pick names that exist, and code turns them into cells.
 
+### Edge candidates (last period)
+
+The period rules skip the first and last period, because a base or terminal year often differs on purpose. In check mode a last period that breaks the pattern its two previous periods share is still offered to the Investigator as a candidate (`rules.edge_breaks`), with the row's formula as the fix and a reason that says a terminal year can differ on purpose. It carries `needs_judgement`: it is applied only when the Investigator judges it an error, never by the rule fallback, so rules-only results are unchanged. The Verifier counts the edge break as the anomaly a fix resolves. On a 12-variant sample with Nemotron 3.5 Super this raised wrong references from 8 to 11 and wrong periods from 8 to 12, with no false alarm on deliberate cells.
+
 ### Table rules (check mode without a timeline)
 
 When no question is asked and no row breaks its period pattern, `rules.scan_tables` looks for table-shaped errors. Each finding carries a `kind`, a plain-English `reason` and the `fix` formula the engine tests on a copy:

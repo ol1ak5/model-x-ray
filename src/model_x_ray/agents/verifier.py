@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from model_x_ray.agents.investigator import formula_in_words, label_of, standard_definition
 from model_x_ray.llm import invoke_with_usage
-from model_x_ray.rules import AGGREGATE_FORMULA, scan_model, scan_tables
+from model_x_ray.rules import AGGREGATE_FORMULA, edge_breaks, scan_model, scan_tables
 from model_x_ray.prompts import load_prompt
 from model_x_ray.spreadsheet.engine import CellAddress, FormulaError, Workbook, is_number, make_ref, normalize_ref, split_ref
 from model_x_ray.spreadsheet.sandbox import patch_cells, patched_book
@@ -26,7 +26,7 @@ class Objection(BaseModel):
 
 class Verdict(BaseModel):
     verdict: Literal["confirmed", "rejected"]
-    reason: str
+    reason: str = ""
     objections: list[Objection] = Field(default_factory=list, description="Required when rejecting: every claim behind the rejection, so the engine can check it")
 
 
@@ -178,8 +178,8 @@ def deterministic_checks(book: Workbook, state: InvestigationState, verification
     )
     patched = patched_book(book, patch)
     if not anomaly_resolved:
-        was_flagged = patch["cell"] in {o["cell"] for o in scan_model(book)}
-        anomaly_resolved = was_flagged and patch["cell"] not in {o["cell"] for o in scan_model(patched)}
+        was_flagged = patch["cell"] in {o["cell"] for o in [*scan_model(book), *edge_breaks(book)]}
+        anomaly_resolved = was_flagged and patch["cell"] not in {o["cell"] for o in [*scan_model(patched), *edge_breaks(patched)]}
     dependents_consistent = all(
         _dependent_matches(patched, dependent, after)
         for dependent in book.all_dependents(patch["cell"])
@@ -211,7 +211,7 @@ def anomaly_of(book: Workbook, state: InvestigationState) -> dict:
         return {"kind": "line logic error", "finding": finding + standard_definition(label)}
     if target.get("mode") in ("table", "review"):
         return {"kind": "table finding", "finding": target.get("finding", "")}
-    flagged = {o["cell"]: o["reason"] for o in scan_model(book)}
+    flagged = {o["cell"]: o["reason"] for o in [*scan_model(book), *edge_breaks(book)]}
     if patch["cell"] in flagged:
         return {"kind": "pattern break", "finding": f"{patch['cell']}: {flagged[patch['cell']]}"}
     return {"kind": "jump against the prior period", "finding": ""}
