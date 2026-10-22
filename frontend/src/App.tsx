@@ -28,7 +28,7 @@ import { type Step, railOf } from "./steps";
 import { APPROVED, RUNNING, REVIEW, SHEET, fakeSteps } from "./test/fakeApi";
 import styles from "./App.module.css";
 
-type Phase = "idle" | "running" | "paused" | "done";
+type Phase = "idle" | "running" | "paused" | "done" | "interrupted";
 
 type Run = { id: string; spreadsheetId: string; name: string; question: string; startedAt: number };
 
@@ -92,7 +92,7 @@ export default function App() {
     setView(saved.view);
     setSheet(saved.sheet);
     setModelName(saved.name);
-    setPhase(saved.view ? (saved.view.status === "done" ? "done" : "paused") : "idle");
+    setPhase(saved.view ? (saved.view.status === "done" ? "done" : saved.view.status === "running" ? "interrupted" : "paused") : "idle");
   }, []);
 
   useEffect(() => {
@@ -192,7 +192,9 @@ export default function App() {
       ? { label: "Checking…", tone: "blue" as const }
       : phase === "paused"
         ? { label: "Review needed", tone: "amber" as const }
-        : phase === "done"
+        : phase === "interrupted"
+          ? { label: "Interrupted", tone: "neutral" as const }
+          : phase === "done"
           ? { label: "Done", tone: "green" as const }
           : { label: "Stopped", tone: "neutral" as const };
 
@@ -220,9 +222,16 @@ export default function App() {
                 </Chip>
               </h1>
             </div>
-            <Button variant="ghost" disabled={phase === "running"} onClick={reset}>
-              Check another model
-            </Button>
+            <div className={styles.topbarActions}>
+              {phase === "interrupted" && check && (
+                <Button variant="primary" onClick={() => start(check.spreadsheetId, check.question, check.name)}>
+                  Run again
+                </Button>
+              )}
+              <Button variant="ghost" disabled={phase === "running"} onClick={reset}>
+                Check another model
+              </Button>
+            </div>
           </div>
           <Boundary onReset={reset}>
             {(error || sheetError) && (

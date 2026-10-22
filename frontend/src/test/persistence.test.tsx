@@ -5,7 +5,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import App from "../App";
 import type { StoredRun } from "../storage";
 import { STORAGE_BYTES, STORAGE_KEY, currentRun, listRuns, saveRun } from "../storage";
-import { APPROVED, REVIEW, STEPS, fakeApi, steps } from "./fakeApi";
+import { APPROVED, REVIEW, RUNNING, SHEET, STEPS, fakeApi, steps } from "./fakeApi";
 
 function heavyRun(id: string, updatedAt: number, factor = 20): StoredRun {
   const columns = ["F", "G", "H"].map((letter, index) => ({ letter, header: `${2024 + index}A` }));
@@ -168,6 +168,36 @@ describe("a run kept in the browser", () => {
     expect(stored?.view?.id).toBe("huge");
     expect(stored?.sheet).toBeNull();
     expect((window.localStorage.getItem(STORAGE_KEY) ?? "").length).toBeLessThanOrEqual(STORAGE_BYTES);
+  });
+
+  test("a check interrupted by a reload says so, instead of asking for a decision nobody can make, and can be run again", async () => {
+    const run = {
+      id: RUNNING.id,
+      spreadsheetId: "demo",
+      name: "Demo model",
+      question: "",
+      startedAt: 1,
+      updatedAt: 1,
+      steps: STEPS.slice(0, 5).map(([step, label]) => ({ step, label })),
+      view: RUNNING,
+      sheet: SHEET,
+    };
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, current: RUNNING.id, runs: [run] }));
+    const api = fakeApi([...steps("explain"), ["view", REVIEW]]);
+    vi.stubGlobal("fetch", api.fetch);
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    expect(await screen.findByText("Interrupted")).toBeInTheDocument();
+    expect(screen.queryByText("Review needed")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Approve fix" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Run again" }));
+
+    await screen.findByRole("region", { name: "Investigation facts" });
+    expect(sentTo(api, "/investigations/stream")).toMatchObject({ body: { spreadsheet_id: "demo", question: "" } });
+    expect(currentRun()?.view?.id).toBe(REVIEW.id);
   });
 
   test("a check stored without its sheet still restores its facts and its report", async () => {
