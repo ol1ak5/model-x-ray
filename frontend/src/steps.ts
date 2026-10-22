@@ -57,6 +57,11 @@ function finding(key: string, view: InvestigationView | null): string | null {
   return null;
 }
 
+function titleOf(entry: { key: string; title: string }, view: InvestigationView | null, settled: boolean): string {
+  if (entry.key === "diagnose" && settled && view && !view.patch) return "Looked for the root cause";
+  return entry.title;
+}
+
 export function railOf(view: InvestigationView | null, steps: Step[], running: boolean): RailStep[] {
   const arrived = new Map(steps.map((item) => [item.step, item.label]));
   const settled = view !== null && !running;
@@ -65,9 +70,9 @@ export function railOf(view: InvestigationView | null, steps: Step[], running: b
 
   const rows: RailStep[] = PIPELINE.map((entry) => {
     if (settled || arrived.has(entry.key) || proven(entry.key)) {
-      return { key: entry.key, title: entry.title, detail: finding(entry.key, view) ?? arrived.get(entry.key) ?? entry.hint, tone: "done" };
+      return { key: entry.key, title: titleOf(entry, view, settled), detail: finding(entry.key, view) ?? arrived.get(entry.key) ?? entry.hint, tone: "done" };
     }
-    return { key: entry.key, title: entry.title, detail: entry.hint, tone: entry.key === next ? "active" : "pending" };
+    return { key: entry.key, title: titleOf(entry, view, settled), detail: entry.hint, tone: entry.key === next ? "active" : "pending" };
   });
 
   const extra: RailStep[] = steps
