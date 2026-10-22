@@ -20,6 +20,17 @@ export const SHEET = sheet as unknown as SheetWindow;
 
 export const REJECTED: InvestigationView = { ...REVIEW, status: "done", pause: null, corrected_copy_id: null };
 
+export const CLEAR: InvestigationView = {
+  ...REVIEW,
+  status: "needs_review",
+  pause: null,
+  patch: null,
+  hypotheses: (REVIEW.hypotheses ?? []).map((hypothesis) => ({ ...hypothesis, status: "rejected" })),
+  verifications: [],
+  report:
+    "No error found. Gross profit 2025A moved from 84.72 to 285.76 (ev-1) because COGS (P&L!G5) is 97.84, the same sign as the cost rows below it (ev-2, ev-3). The formula matches the row pattern and no cell broke its own pattern, so no fix was written.",
+};
+
 export const TESTED: InvestigationView = {
   ...REVIEW,
   status: "running",

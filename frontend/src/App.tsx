@@ -25,7 +25,7 @@ import Stage from "./components/Stage";
 import StepRail from "./components/StepRail";
 import { clearCurrent, currentRun, newRunId, saveRun } from "./storage";
 import { type Step, railOf } from "./steps";
-import { APPROVED, RUNNING, REVIEW, SHEET, fakeSteps } from "./test/fakeApi";
+import { APPROVED, CLEAR, RUNNING, REVIEW, SHEET, fakeSteps } from "./test/fakeApi";
 import styles from "./App.module.css";
 
 type Phase = "idle" | "running" | "paused" | "done" | "interrupted";
@@ -65,8 +65,10 @@ export default function App() {
   const [demos, setDemos] = useState<Spreadsheet[]>([]);
   const [phase, setPhase] = useState<Phase>(story === "starting" || story === "running" ? "running" : story === "done" ? "done" : story ? "paused" : "idle");
   const [steps, setSteps] = useState<Step[]>(story ? fakeSteps(story) : []);
-  const [view, setView] = useState<InvestigationView | null>(story === "workspace" ? REVIEW : story === "running" ? RUNNING : story === "done" ? APPROVED : null);
-  const [sheet, setSheet] = useState<SheetWindow | null>(story === "workspace" || story === "running" || story === "done" ? SHEET : null);
+  const [view, setView] = useState<InvestigationView | null>(
+    story === "workspace" ? REVIEW : story === "running" ? RUNNING : story === "done" ? APPROVED : story === "clear" ? CLEAR : null,
+  );
+  const [sheet, setSheet] = useState<SheetWindow | null>(story === "workspace" || story === "running" || story === "done" || story === "clear" ? SHEET : null);
   const [check, setCheck] = useState<Run | null>(null);
   const [modelName, setModelName] = useState(story ? "My model.xlsx" : "");
   const [error, setError] = useState<string | null>(params?.get("error") ?? null);

@@ -68,7 +68,6 @@ describe("a run kept in the browser", () => {
 
     render(<App />);
     const facts = await screen.findByRole("region", { name: "Investigation facts" });
-    await user.click(within(facts).getByRole("button", { name: "Why?" }));
     const report = within(facts).getByRole("region", { name: "Report" });
     expect(within(report).getByText(/Gross profit 2025A moved from 84\.72 to 285\.76/)).toBeInTheDocument();
     const rail = screen.getByRole("region", { name: "Investigation steps" });
@@ -99,7 +98,6 @@ describe("a run kept in the browser", () => {
     render(<App />);
 
     const restored = await screen.findByRole("region", { name: "Investigation facts" });
-    await user.click(within(restored).getByRole("button", { name: "Why?" }));
     expect(within(restored).getByRole("region", { name: "Report" })).toHaveTextContent(/Gross profit 2025A moved from 84\.72 to 285\.76/);
     expect(within(restored).getByRole("link", { name: "Download corrected model" })).toHaveAttribute(
       "href",
@@ -211,7 +209,6 @@ describe("a run kept in the browser", () => {
 
     const facts = await screen.findByRole("region", { name: "Investigation facts" });
     const user = userEvent.setup();
-    await user.click(within(facts).getByRole("button", { name: "Why?" }));
     expect(within(facts).getByRole("region", { name: "Report" })).toHaveTextContent(/Gross profit 2025A moved from 84\.72 to 285\.76/);
   });
 
