@@ -125,6 +125,12 @@
   padding: 0 1rem;
 }
 
+.topbarActions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .alertRow {
   padding: 0 1rem;
 }
