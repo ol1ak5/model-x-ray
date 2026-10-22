@@ -113,9 +113,9 @@ export default function FactsBar({
         </div>
       )}
 
-      {view.status === "needs_review" && (
+      {view.status === "needs_review" && view.patch && (
         <div className={styles.decision}>
-          {editing && view.patch && (
+          {editing && (
             <>
               <label className={styles.sr} htmlFor="formula">
                 New formula for {view.patch.cell}
@@ -132,8 +132,7 @@ export default function FactsBar({
             Never flag again
           </label>
           <div className={styles.buttons}>
-            {!view.patch && <p className={styles.nothing}>No fix was proven, so there is nothing to apply. Reject closes the check.</p>}
-            {editing && view.patch ? (
+            {editing ? (
               <Button
                 variant="primary"
                 disabled={!formula.trim()}
@@ -142,16 +141,14 @@ export default function FactsBar({
                 Test my fix
               </Button>
             ) : (
-              view.patch && (
-                <>
-                  <Button variant="primary" onClick={() => onDecide({ action: "approve", reason })}>
-                    Approve fix
-                  </Button>
-                  <Button variant="secondary" onClick={() => setEditing(true)}>
-                    Edit fix
-                  </Button>
-                </>
-              )
+              <>
+                <Button variant="primary" onClick={() => onDecide({ action: "approve", reason })}>
+                  Approve fix
+                </Button>
+                <Button variant="secondary" onClick={() => setEditing(true)}>
+                  Edit fix
+                </Button>
+              </>
             )}
             <Button variant="danger" onClick={() => onDecide(intentional ? { action: "reject", reason, intentional: true } : { action: "reject", reason })}>
               Reject
