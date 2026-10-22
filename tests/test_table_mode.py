@@ -97,16 +97,17 @@ def write_deal_pnl(path: Path, complete: bool = True) -> Path:
     sheet.append(["Revenue", 700])
     sheet.append(["COGS", "=-B2*0.4"])
     sheet.append(["Gross profit", "=B2+B3"])
+    sheet.append(["Gross margin", "=B4/B2"])
     sheet.append(["Direct costs", "=-B2*0.21"])
     sheet.append(["Overhead", "=-B2*0.1"])
     sheet.append(["Marketing", "=-B2*0.05"])
-    sheet.append(["Operating expenses", "=SUM(B5:B7)" if complete else "=SUM(B5:B6)"])
-    sheet.append(["EBITDA", "=B4+B8"])
+    sheet.append(["Operating expenses", "=SUM(B6:B8)" if complete else "=SUM(B6:B7)"])
+    sheet.append(["EBITDA", "=B4+B9"])
     workbook.save(path)
     return path
 
 
-def test_a_cost_total_under_a_gross_profit_subtotal_is_not_called_incomplete(tmp_path: Path) -> None:
+def test_a_cost_total_under_a_subtotal_and_a_margin_row_is_not_called_incomplete(tmp_path: Path) -> None:
     book = load_xlsx(write_deal_pnl(tmp_path / "pnl.xlsx"))
 
     assert scan_tables(book) == []
@@ -116,8 +117,17 @@ def test_a_cost_total_that_really_leaves_out_a_cost_line_is_still_found(tmp_path
     book = load_xlsx(write_deal_pnl(tmp_path / "pnl.xlsx", complete=False))
 
     found = {finding["cell"]: finding for finding in scan_tables(book)}
-    assert set(found) == {"P&L!B8"}
-    assert (found["P&L!B8"]["kind"], found["P&L!B8"]["fix"]) == ("incomplete_total", "=SUM(B5:B7)")
+    assert set(found) == {"P&L!B9"}
+    assert (found["P&L!B9"]["kind"], found["P&L!B9"]["fix"]) == ("incomplete_total", "=SUM(B6:B8)")
+
+
+def test_the_nvidia_pnl_raises_no_incomplete_total_on_its_operating_expenses_row() -> None:
+    book = load_xlsx(Path("demo/nvidia-pnl.xlsx"))
+
+    found = scan_tables(book)
+
+    assert [finding["cell"] for finding in found if finding["kind"] == "incomplete_total"] == []
+    assert [finding["cell"] for finding in found if finding["cell"].startswith("P&L!") and finding["cell"].endswith("11")] == []
 
 
 def test_the_served_demo_raises_no_incomplete_total_on_its_operating_expenses_row() -> None:

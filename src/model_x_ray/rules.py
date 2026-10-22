@@ -165,16 +165,19 @@ def column_findings(book: Workbook) -> list[dict[str, str]]:
     return findings
 
 
-SUM_OF_CELLS = re.compile(r"^[A-Za-z]{1,3}\$?\d+(?:\s*[-+]\s*\$?[A-Za-z]{1,3}\$?\d+)+$")
+COMBINES_CELLS = re.compile(r"^[A-Za-z]{1,3}\d+(?:[-+*/][A-Za-z]{1,3}\d+)+$")
 
 
-def sums_cells_above(book: Workbook, ref: str) -> bool:
-    formula = (book.formula(ref) or "").replace("=", "").replace(" ", "")
-    if not SUM_OF_CELLS.match(formula):
+def combines_cells_above(book: Workbook, ref: str) -> bool:
+    formula = (book.formula(ref) or "").replace("=", "").replace(" ", "").replace("$", "")
+    if not COMBINES_CELLS.match(formula):
+        return False
+    parts = re.findall(r"[A-Za-z]{1,3}\d+", formula)
+    if len(parts) < 2:
         return False
     sheet, address = split_ref(ref)
-    for part in re.findall(r"\$?[A-Za-z]{1,3}\$?\d+", formula):
-        other_sheet, other = split_ref(normalize_ref(f"{sheet}!{part.replace('$', '')}"))
+    for part in parts:
+        other_sheet, other = split_ref(f"{sheet}!{part}")
         if other_sheet != sheet or other.column != address.column or other.row >= address.row:
             return False
     return True
@@ -189,7 +192,7 @@ def block_above(book: Workbook, ref: str) -> list[str]:
     while row > 0:
         cell = make_ref(sheet, CellAddress(address.column, row))
         content = book.raw(cell)
-        if content is None or TOTAL_FORMULA.match(str(content)) or sums_cells_above(book, cell) or not (is_number(content) or book.formula(cell) is not None):
+        if content is None or TOTAL_FORMULA.match(str(content)) or combines_cells_above(book, cell) or not (is_number(content) or book.formula(cell) is not None):
             break
         block.append(cell)
         row -= 1
