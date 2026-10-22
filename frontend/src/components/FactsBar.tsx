@@ -130,6 +130,7 @@ export default function FactsBar({
 
       {settled && view.status === "needs_review" && (
         <div className={styles.outcome} data-tone={view.patch ? "fix" : "clear"}>
+          <p className={styles.sectionLabel}>Outcome</p>
           <p className={styles.outcomeTitle}>
             {view.patch ? (
               <>
@@ -158,6 +159,7 @@ export default function FactsBar({
 
       {settled && view.status === "done" && view.corrected_copy_id && (
         <div className={styles.outcome} data-tone="fix">
+          <p className={styles.sectionLabel}>Outcome</p>
           <p className={styles.outcomeTitle}>
             Fixed and checked{view.patch ? <> in <span className="mono">{view.patch.cell}</span></> : null}
           </p>
@@ -169,7 +171,7 @@ export default function FactsBar({
 
       {view.report && (
         <div className={styles.report} role="region" aria-label="Report">
-          <p className={styles.reportLabel}>What was checked</p>
+          <p className={styles.sectionLabel}>What was checked</p>
           <p className={styles.reportText}>{withEvidenceLinks(view.report, onEvidence)}</p>
         </div>
       )}
