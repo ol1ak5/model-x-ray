@@ -89,6 +89,54 @@ def test_a_table_without_a_timeline_is_checked_end_to_end_and_the_total_is_fixed
     assert final["corrected_copy_id"]
 
 
+def write_deal_pnl(path: Path, complete: bool = True) -> Path:
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.title = "P&L"
+    sheet.append(["Line", "2025A"])
+    sheet.append(["Revenue", 700])
+    sheet.append(["COGS", "=-B2*0.4"])
+    sheet.append(["Gross profit", "=B2+B3"])
+    sheet.append(["Direct costs", "=-B2*0.21"])
+    sheet.append(["Overhead", "=-B2*0.1"])
+    sheet.append(["Marketing", "=-B2*0.05"])
+    sheet.append(["Operating expenses", "=SUM(B5:B7)" if complete else "=SUM(B5:B6)"])
+    sheet.append(["EBITDA", "=B4+B8"])
+    workbook.save(path)
+    return path
+
+
+def test_a_cost_total_under_a_gross_profit_subtotal_is_not_called_incomplete(tmp_path: Path) -> None:
+    book = load_xlsx(write_deal_pnl(tmp_path / "pnl.xlsx"))
+
+    assert scan_tables(book) == []
+
+
+def test_a_cost_total_that_really_leaves_out_a_cost_line_is_still_found(tmp_path: Path) -> None:
+    book = load_xlsx(write_deal_pnl(tmp_path / "pnl.xlsx", complete=False))
+
+    found = {finding["cell"]: finding for finding in scan_tables(book)}
+    assert set(found) == {"P&L!B8"}
+    assert (found["P&L!B8"]["kind"], found["P&L!B8"]["fix"]) == ("incomplete_total", "=SUM(B5:B7)")
+
+
+def test_the_served_demo_raises_no_incomplete_total_on_its_operating_expenses_row() -> None:
+    book = load_xlsx(Path("demo_models/demo.xlsx"))
+
+    found = scan_tables(book)
+
+    assert [finding["cell"] for finding in found if finding["kind"] == "incomplete_total"] == []
+    assert [finding["cell"] for finding in found if finding["cell"].startswith("P&L!") and finding["cell"].endswith("9")] == []
+
+
+def test_a_real_cost_line_missing_from_a_total_is_still_found_and_fixed() -> None:
+    book = load_xlsx(Path("demo/simple-errors/03-sum-leaves-out-a-row.xlsx"))
+
+    found = {finding["cell"]: finding for finding in scan_tables(book)}
+
+    assert found["Budget!D10"]["fix"] == "=SUM(D7:D9)"
+
+
 def test_a_subtotal_counted_twice_is_found() -> None:
     from model_x_ray.spreadsheet.engine import Workbook
 
