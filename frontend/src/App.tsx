@@ -191,7 +191,9 @@ export default function App() {
     phase === "running"
       ? { label: "Checking…", tone: "blue" as const }
       : phase === "paused"
-        ? { label: "Review needed", tone: "amber" as const }
+        ? view && !view.patch
+          ? { label: "No fix to approve", tone: "neutral" as const }
+          : { label: "Review needed", tone: "amber" as const }
         : phase === "done"
           ? { label: "Done", tone: "green" as const }
           : { label: "Stopped", tone: "neutral" as const };

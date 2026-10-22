@@ -146,6 +146,27 @@ describe("an investigation in the browser", () => {
     expect(within(facts).getByRole("button", { name: "Test my fix" })).toBeInTheDocument();
   });
 
+  test("a check with no proven fix says there is nothing to approve instead of offering a dead button", async () => {
+    const unproven: InvestigationView = {
+      ...REVIEW,
+      patch: null,
+      report: "No error found. Total operating expenses (P&L!G9) is 60.16: the total sums G7:G8 and leaves out G6 in the same block, which gives 60.9 (ev-1).",
+    };
+    const api = fakeApi([...steps(...STEPS.map(([name]) => name)), ["view", unproven]]);
+    vi.stubGlobal("fetch", api.fetch);
+
+    await checkDemo();
+
+    const facts = await screen.findByRole("region", { name: "Investigation facts" });
+    expect(screen.getByText("No fix to approve")).toBeInTheDocument();
+    expect(within(facts).queryByRole("button", { name: "Approve fix" })).not.toBeInTheDocument();
+    expect(within(facts).getByText(/nothing to apply/i)).toBeInTheDocument();
+    expect(within(facts).getByRole("button", { name: "Reject" })).toBeInTheDocument();
+    const rail = screen.getByRole("region", { name: "Investigation steps" });
+    expect(within(rail).getByText("Looked for the root cause")).toBeInTheDocument();
+    expect(within(rail).queryByText("Found the root cause")).not.toBeInTheDocument();
+  });
+
   test("keeps the page on screen when the service sends no check labels", async () => {
     const withoutLabels: Record<string, unknown> = { ...REVIEW };
     delete withoutLabels.check_labels;
