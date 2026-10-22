@@ -146,7 +146,7 @@ describe("an investigation in the browser", () => {
     expect(within(facts).getByRole("button", { name: "Test my fix" })).toBeInTheDocument();
   });
 
-  test("a check with no proven fix says there is nothing to approve instead of offering a dead button", async () => {
+  test("a check with no proven fix says there is nothing to approve and shows no decision menu", async () => {
     const unproven: InvestigationView = {
       ...REVIEW,
       patch: null,
@@ -160,8 +160,10 @@ describe("an investigation in the browser", () => {
     const facts = await screen.findByRole("region", { name: "Investigation facts" });
     expect(screen.getByText("No fix to approve")).toBeInTheDocument();
     expect(within(facts).queryByRole("button", { name: "Approve fix" })).not.toBeInTheDocument();
-    expect(within(facts).getByText(/nothing to apply/i)).toBeInTheDocument();
-    expect(within(facts).getByRole("button", { name: "Reject" })).toBeInTheDocument();
+    expect(within(facts).queryByRole("button", { name: "Reject" })).not.toBeInTheDocument();
+    expect(within(facts).queryByRole("button", { name: "Edit fix" })).not.toBeInTheDocument();
+    expect(within(facts).queryByPlaceholderText("Reason (optional)")).not.toBeInTheDocument();
+    expect(within(facts).queryByLabelText("Never flag again")).not.toBeInTheDocument();
     const rail = screen.getByRole("region", { name: "Investigation steps" });
     expect(within(rail).getByText("Looked for the root cause")).toBeInTheDocument();
     expect(within(rail).queryByText("Found the root cause")).not.toBeInTheDocument();
