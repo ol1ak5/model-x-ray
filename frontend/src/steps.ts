@@ -58,7 +58,11 @@ function finding(key: string, view: InvestigationView | null): string | null {
 }
 
 function titleOf(entry: { key: string; title: string }, view: InvestigationView | null, settled: boolean): string {
-  if (entry.key === "diagnose" && settled && view && !view.patch) return "Looked for the root cause";
+  if (!settled || !view || view.patch) return entry.title;
+  if (entry.key === "diagnose") return "Looked for the root cause";
+  if (entry.key === "test") return "Tried a fix in a copy";
+  if (entry.key === "verify") return "Checked the result";
+  if (entry.key === "explain") return "Wrote the explanation";
   return entry.title;
 }
 

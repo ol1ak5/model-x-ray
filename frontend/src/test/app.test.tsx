@@ -49,11 +49,11 @@ describe("an investigation in the browser", () => {
     const facts = await screen.findByRole("region", { name: "Investigation facts" });
     expect(within(facts).getByText("Gross profit 2025A")).toBeInTheDocument();
     expect(within(facts).getByText(/84\.7 → 285\.8/)).toBeInTheDocument();
-    expect(within(facts).getByText("Proof passed")).toBeInTheDocument();
+    expect(within(facts).getByText("3 of 3 checks")).toBeInTheDocument();
+    expect(within(facts).getByText(/Fix ready in/)).toBeInTheDocument();
     const checks = within(facts).getByLabelText("Deterministic checks");
     expect(checks.querySelectorAll('[data-state="pass"]')).toHaveLength(3);
 
-    await user.click(within(facts).getByRole("button", { name: "Why?" }));
     const report = within(facts).getByRole("region", { name: "Report" });
     expect(within(report).getByText(/Gross profit 2025A moved from 84\.72 to 285\.76/)).toBeInTheDocument();
     const cited = (REVIEW.report ?? "").match(/ev-\d+/g) ?? [];
@@ -159,6 +159,10 @@ describe("an investigation in the browser", () => {
 
     const facts = await screen.findByRole("region", { name: "Investigation facts" });
     expect(screen.getByText("No fix to approve")).toBeInTheDocument();
+    expect(within(facts).getByText("The model checks out — nothing to change")).toBeInTheDocument();
+    expect(within(facts).getByText(/No cell broke the pattern of its own row, so there is no fix to approve/)).toBeInTheDocument();
+    expect(within(facts).getByRole("region", { name: "Report" })).toHaveTextContent(/No error found/);
+    expect(within(facts).queryByLabelText("Deterministic checks")).not.toBeInTheDocument();
     expect(within(facts).queryByRole("button", { name: "Approve fix" })).not.toBeInTheDocument();
     expect(within(facts).queryByRole("button", { name: "Reject" })).not.toBeInTheDocument();
     expect(within(facts).queryByRole("button", { name: "Edit fix" })).not.toBeInTheDocument();
@@ -182,7 +186,6 @@ describe("an investigation in the browser", () => {
     expect(screen.getByRole("region", { name: "Sheet" })).toBeInTheDocument();
     const rail = screen.getByRole("region", { name: "Investigation steps" });
     expect(within(rail).getByText(/3 of 3 checks passed/)).toBeInTheDocument();
-    await user.click(within(facts).getByRole("button", { name: "Why?" }));
     expect(within(facts).getByRole("region", { name: "Report" })).toBeInTheDocument();
   });
 
@@ -320,7 +323,7 @@ describe("an investigation in the browser", () => {
 
     const facts = await screen.findByRole("region", { name: "Investigation facts" });
     expect(within(facts).getByText(/84\.7 → 285\.8/)).toBeInTheDocument();
-    expect(within(facts).getByRole("button", { name: "Why?" })).toBeInTheDocument();
+    expect(within(facts).getByRole("region", { name: "Report" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Investigation steps" })).toBeInTheDocument();
   });
 

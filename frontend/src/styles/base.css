@@ -45,8 +45,9 @@ p {
 }
 
 .mono {
-  font-family: var(--sans);
+  font-family: var(--mono);
   font-size: 0.86em;
+  font-variant-numeric: tabular-nums;
 }
 
 @keyframes fade-up {

@@ -31,6 +31,10 @@ function asFormula(text: string): string {
   return `=${trimmed}`;
 }
 
+function plural(count: number, one: string, many: string): string {
+  return count === 1 ? `1 ${one}` : `${count} ${many}`;
+}
+
 export default function FactsBar({
   view,
   onDecide,
@@ -40,7 +44,6 @@ export default function FactsBar({
   onDecide: (decision: Decision) => void;
   onEvidence: (id: string) => void;
 }) {
-  const [why, setWhy] = useState(false);
   const [choiceWhy, setChoiceWhy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [reason, setReason] = useState("");
@@ -52,7 +55,26 @@ export default function FactsBar({
   const kind = kindOf(view.model_map, target?.label);
   const verification = view.verifications?.at(-1) ?? null;
   const checks = verification?.checks ?? {};
-  const verdict = verification?.verdict ?? null;
+  const labels = Object.keys(view.check_labels ?? {});
+  const passed = labels.filter((key) => checks[key]).length;
+  const suspects = view.hypotheses?.length ?? 0;
+  const evidence = view.evidence?.length ?? 0;
+  const traced = target ? `${target.sheet}!${target.cell}` : null;
+  const lines = view.model_map ? new Set(view.model_map.rows.map((row) => row.label)).size : 0;
+  const settled = view.status !== "running";
+  const clean = (view.report ?? "").startsWith("No error found");
+  const showChecks = Boolean(view.patch) || Boolean(view.corrected_copy_id);
+
+  const facts = [
+    traced ? (
+      <>
+        traced <span className="mono">{traced}</span>
+      </>
+    ) : null,
+    lines > 0 ? `${lines} lines read` : null,
+    suspects > 0 ? `${plural(suspects, "suspect", "suspects")} examined` : null,
+    evidence > 0 ? plural(evidence, "evidence link", "evidence links") : null,
+  ].filter((item) => item !== null);
 
   return (
     <section className={styles.bar} aria-label="Investigation facts">
@@ -92,24 +114,63 @@ export default function FactsBar({
       {view.causal_tree && <WireKey />}
 
       <div className={styles.trailing}>
-        {Object.keys(view.check_labels ?? {}).length > 0 && (
+        {labels.length > 0 && showChecks && (
           <p className={styles.checks} aria-label="Deterministic checks">
-            {Object.entries(view.check_labels ?? {}).map(([key, label]) => (
-              <span key={key} className={styles.check} data-state={checks[key] ? "pass" : checks[key] === false ? "fail" : "wait"} title={label} />
+            {labels.map((key) => (
+              <span key={key} className={styles.check} data-state={checks[key] ? "pass" : checks[key] === false ? "fail" : "wait"} title={view.check_labels?.[key]} />
             ))}
           </p>
         )}
-        {verdict && <span className={styles.verdict}>{verdict === "confirmed" ? "Proof passed" : verdict === "rejected" ? "Fix rejected" : "Unproven"}</span>}
-        {view.report && (
-          <button type="button" className={styles.why} aria-expanded={why} onClick={() => setWhy((value) => !value)}>
-            {why ? "Hide" : "Why?"}
-          </button>
+        {labels.length > 0 && showChecks && settled && (
+          <span className={styles.verdict}>
+            {passed} of {labels.length} checks
+          </span>
         )}
       </div>
 
-      {view.report && why && (
-        <div className={styles.narrative} role="region" aria-label="Report">
-          <p>{withEvidenceLinks(view.report, onEvidence)}</p>
+      {settled && view.status === "needs_review" && (
+        <div className={styles.outcome} data-tone={view.patch ? "fix" : "clear"}>
+          <p className={styles.outcomeTitle}>
+            {view.patch ? (
+              <>
+                Fix ready in <span className="mono">{view.patch.cell}</span>
+              </>
+            ) : clean ? (
+              "The model checks out — nothing to change"
+            ) : (
+              "Nothing to change in this model"
+            )}
+          </p>
+          <p className={styles.outcomeFacts}>{facts.length > 0 ? facts.map((item, index) => <span key={index}>{index > 0 && <span className={styles.dot}> · </span>}{item}</span>) : null}</p>
+          <p className={styles.outcomeNote}>
+            {view.patch ? (
+              <>
+                <span className={`mono ${styles.old}`}>{view.patch.old_formula}</span> → <span className={`mono ${styles.new}`}>{view.patch.new_formula}</span>. Your file is untouched: the fix goes to a copy only if you approve it.
+              </>
+            ) : clean ? (
+              "No cell broke the pattern of its own row, so there is no fix to approve. The report below lists what was checked."
+            ) : (
+              "No formula was rewritten, so there is nothing to approve. The report below lists what was checked."
+            )}
+          </p>
+        </div>
+      )}
+
+      {settled && view.status === "done" && view.corrected_copy_id && (
+        <div className={styles.outcome} data-tone="fix">
+          <p className={styles.outcomeTitle}>
+            Fixed and checked{view.patch ? <> in <span className="mono">{view.patch.cell}</span></> : null}
+          </p>
+          <p className={styles.outcomeFacts}>
+            {passed} of {labels.length} checks passed · written to a copy, never your file
+          </p>
+        </div>
+      )}
+
+      {view.report && (
+        <div className={styles.report} role="region" aria-label="Report">
+          <p className={styles.reportLabel}>What was checked</p>
+          <p className={styles.reportText}>{withEvidenceLinks(view.report, onEvidence)}</p>
         </div>
       )}
 
