@@ -1,7 +1,6 @@
 import { type ChangeEvent, useState } from "react";
 
 import { ApiError, type Spreadsheet, uploadSpreadsheet } from "../api";
-import Button from "./Button";
 import Spinner from "./Spinner";
 import styles from "./QuestionForm.module.css";
 
@@ -24,18 +23,24 @@ export default function QuestionForm({ demos, onStart, onError }: { demos: Sprea
 
   const demo = demos[0];
   return (
-    <div className={styles.row}>
-      <input id="upload" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="visually-hidden" onChange={upload} disabled={uploading} />
-      <Button variant="primary" htmlFor="upload" className={styles.upload}>
-        {uploading && <Spinner size={1.125} />}
-        {uploading ? "Uploading…" : "Upload your model"}
-      </Button>
+    <div className={styles.boxes}>
       {demo && (
-        <Button variant="secondary" className={styles.demo} onClick={() => onStart(demo.id, "", "Demo model")}>
-          See it in action
-        </Button>
+        <button type="button" className={`${styles.box} ${styles.demo}`} aria-label="See it in action" onClick={() => onStart(demo.id, "", "Demo model")}>
+          <span className={styles.icon} aria-hidden="true">
+            ▶
+          </span>
+          <span className={styles.title}>See it in action</span>
+          <span className={styles.text}>A live check of a sample deal model</span>
+        </button>
       )}
-      <p className={styles.note}>Excel .xlsx, up to 10 MB. Your file stays private. Approved changes are saved to a new copy.</p>
+      <input id="upload" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="visually-hidden" onChange={upload} disabled={uploading} />
+      <label htmlFor="upload" className={`${styles.box} ${styles.upload}`}>
+        <span className={styles.icon} aria-hidden="true">
+          {uploading ? <Spinner size={1} /> : "↑"}
+        </span>
+        <span className={styles.title}>{uploading ? "Uploading…" : "Upload your model"}</span>
+        <span className={styles.text}>Excel .xlsx up to 10 MB, kept private</span>
+      </label>
     </div>
   );
 }

@@ -29,22 +29,23 @@ describe("the home page", () => {
     render(<App />);
     const sections = screen.getByRole("navigation", { name: "Sections" });
     for (const [link, heading] of [
+      ["How it works", "Ten steps, one agent."],
       ["Why", "One broken formula can move a valuation."],
       ["Strengths", "Built the way an analyst checks a model."],
-      ["How it works", "Ten steps, one state machine."],
       ["Stack", "Built on Nebius × NVIDIA."],
     ]) {
       const target = within(sections).getByRole("link", { name: link }).getAttribute("href") as string;
       expect(document.querySelector(target)).toContainElement(screen.getByRole("heading", { level: 2, name: heading }));
     }
-    const results = screen.getByRole("table", { name: "Results" });
-    expect(within(results).getByText("98%")).toBeInTheDocument();
-    expect(within(results).getByText(/against 86% with rules alone/)).toBeInTheDocument();
+    const flow = document.querySelector("#how ol") as HTMLElement;
+    expect(within(flow).getAllByRole("listitem")).toHaveLength(10);
+    expect(within(flow).getByText("Tries to break the fix")).toBeInTheDocument();
+    expect(screen.getByText("planted errors fixed (86% with rules alone)")).toBeInTheDocument();
 
     await user.click(await screen.findByRole("button", { name: "See it in action" }));
     expect(await screen.findByText("Review needed")).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "Sections" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { level: 2, name: "Ten steps, one state machine." })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 2, name: "Ten steps, one agent." })).not.toBeInTheDocument();
   });
 });
 

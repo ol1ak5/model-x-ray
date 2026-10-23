@@ -54,15 +54,12 @@ export default function Hero({ demos, error, onStart, onError }: { demos: Spread
     <div className={styles.home}>
       <section className={!GLOW ? `${styles.hero} ${styles.demo}` : styles.hero} style={shiftStyle}>
         <div className={styles.lead}>
-          <p className={styles.eyebrow}>
-            <span className={styles.spark} aria-hidden="true">✦</span>
-            The financial model debugger · NVIDIA Nemotron on Nebius
-          </p>
+          <p className={styles.eyebrow}>The financial model debugger</p>
           <h1 className={styles.headline}>
             <span className={styles.hl1}>Every formula, checked.{"\u00A0"}</span>
             <span className={styles.accent}>Under the X-Ray.</span>
           </h1>
-          <p className={styles.sub}>An AI agent that reads every formula like an analyst, recalculates every number like Excel, and proves each fix before you approve it.</p>
+          <p className={styles.sub}>An AI agent that reads every formula like an analyst and checks every number like Excel.</p>
           <p className={styles.try}>
             <span className={`${styles.q} ${styles.q1}`}>Why did 2027 EBITDA drop to −77.5?</span>
             <span className={`${styles.q} ${styles.q2}`}>Is the H6 gross profit figure reliable?</span>
@@ -72,6 +69,9 @@ export default function Hero({ demos, error, onStart, onError }: { demos: Spread
             <QuestionForm demos={demos} onStart={onStart} onError={onError} />
             {error && <Alert>{error}</Alert>}
           </div>
+          <p className={styles.proof}>
+            <strong>98%</strong> of planted errors fixed · <strong>0</strong> false alarms on deliberate values
+          </p>
         </div>
         <div className={styles.stage}>
           <div className={styles.framepos}>
@@ -103,9 +103,6 @@ export default function Hero({ demos, error, onStart, onError }: { demos: Spread
               </li>
             ))}
           </ol>
-          <p className={styles.proof}>
-            <strong>98%</strong> of planted errors fixed · <strong>0</strong> false alarms on deliberate values · every fix recalculated
-          </p>
         </div>
       </section>
       {GLOW && <Waves />}

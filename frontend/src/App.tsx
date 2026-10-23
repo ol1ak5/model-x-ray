@@ -214,9 +214,9 @@ export default function App() {
           <p className={styles.powered}>Powered by NVIDIA Nemotron on Nebius Token Factory</p>
         ) : (
           <nav className={styles.links} aria-label="Sections">
+            <a href="#how">How it works</a>
             <a href="#why">Why</a>
             <a href="#strengths">Strengths</a>
-            <a href="#how">How it works</a>
             <a href="#stack">Stack</a>
           </nav>
         )}
