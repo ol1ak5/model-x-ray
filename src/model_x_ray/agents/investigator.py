@@ -532,6 +532,16 @@ def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_t
         diagnosis = runs[0]["diagnosis"]
         if voting:
             diagnosis, votes = majority_diagnosis([run["diagnosis"] for run in runs], sheet)
+        numbers = {c["number"] for c in candidates}
+        judged = [j for j in diagnosis.judgements if j.number in numbers]
+        if candidates and state["target"].get("checked") and not diagnosis.hypotheses and diagnosis.patch is None and len(judged) == len(candidates) and all(j.verdict == "intentional" for j in judged):
+            set_aside = "; ".join(f"{c['cell']} ({j.reason})" for c in candidates for j in judged if j.number == c["number"])
+            followup = "\n".join([investigation_brief(state), f"Every rule candidate was judged deliberate: {set_aside}. Look past them.", "", logic_review_brief(book, state)])
+            more = [investigator.invoke({"messages": [HumanMessage(content=followup)]}) for _ in range(LOGIC_VOTES)]
+            result = {"messages": [*result["messages"], *[m for run in more for m in run["messages"]]], "run_log": [*result["run_log"], *[e for run in more for e in run.get("run_log", [])]], "tool_calls_used": result["tool_calls_used"] + sum(run.get("tool_calls_used", 0) for run in more)}
+            reviewed, votes = majority_diagnosis([run["diagnosis"] for run in more], sheet)
+            runs = [*runs, *more]
+            diagnosis = reviewed.model_copy(update={"judgements": diagnosis.judgements, "choice": None})
         existing = state.get("evidence", [])
         new_evidence = collect_evidence(result["messages"], sheet, existing, len(existing))
         all_evidence = [*existing, *new_evidence]

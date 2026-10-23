@@ -182,3 +182,32 @@ def test_a_finding_only_one_of_the_three_reviews_makes_is_dropped(tmp_path: Path
     assert final["hypotheses"] == []
     assert final["decisions"][0]["votes"] == {"Budget!D8": 1}
     assert final["report"].startswith("No error found")
+
+
+def test_when_every_rule_candidate_is_judged_deliberate_the_logic_review_still_runs_and_finds_the_savings_error(tmp_path: Path) -> None:
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.title = "Budget"
+    sheet["A3"] = "EUR"
+    for index, column in enumerate("BCDE"):
+        sheet[f"{column}3"] = str(2025 + index)
+    for row, (label, values) in {4: ("Net income", [42000, 43500, 45000, 46500]), 5: ("Rent", [14400, 14800, 15200, 15600]), 6: ("Food", [6000, 6200, 6400, 6600]), 7: ("Transport", [2400, 2450, 2500, 2550])}.items():
+        sheet[f"A{row}"] = label
+        for column, value in zip("BCDE", values):
+            sheet[f"{column}{row}"] = value
+    sheet["A8"], sheet["A9"] = "Total spending", "Savings"
+    for column in "BCDE":
+        sheet[f"{column}8"] = f"=SUM({column}5:{column}7)"
+        sheet[f"{column}9"] = f"={column}4-{column}6-{column}7+{column}5"
+    workbook.save(tmp_path / "household.xlsx")
+    deliberate = [{"number": n, "verdict": "intentional", "reason": "net income is not spending"} for n in range(1, 5)]
+    savings = (["Budget!B9"], "Budget!B9", "=B4-B8", "logic_error")
+    model = ScriptedDiagnosis(briefs=[], turns=[([], None), savings, savings, savings], judgements=deliberate)
+
+    final = investigate(tmp_path, tmp_path / "household.xlsx", model)
+
+    assert "Engine-tested candidate fixes" in model.briefs[0]
+    assert len(model.briefs) == 4 and all("Lines in words:" in brief for brief in model.briefs[1:])
+    assert (final["patch"]["cell"], final["patch"]["new_formula"]) == ("Budget!B9", "=B4-B8")
+    assert len(final["patch"]["also"]) == 3
+    assert final["verifications"][-1]["verdict"] == "confirmed"
