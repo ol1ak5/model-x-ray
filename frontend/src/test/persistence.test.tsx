@@ -112,7 +112,7 @@ describe("a run kept in the browser", () => {
     vi.stubGlobal("fetch", api.fetch);
     window.localStorage.setItem(STORAGE_KEY, '{"version":1,"current":"gone","runs":[');
     const broken = render(<App />);
-    expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent("Your Excel models. Under the X-Ray.");
+    expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent("Every formula, checked. Under the X-Ray.");
     broken.unmount();
 
     window.localStorage.setItem(

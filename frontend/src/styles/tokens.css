@@ -26,10 +26,7 @@
 
   --input-bg: #ffffff;
 
-  --bg-image: radial-gradient(64rem 40rem at 88% -8%, rgba(18, 129, 74, 0.16) 0%, rgba(18, 129, 74, 0) 62%),
-    radial-gradient(52rem 38rem at -6% 38%, rgba(52, 211, 153, 0.13) 0%, rgba(52, 211, 153, 0) 64%),
-    radial-gradient(48rem 34rem at 70% 108%, rgba(13, 92, 51, 0.1) 0%, rgba(13, 92, 51, 0) 64%),
-    linear-gradient(180deg, #f4faf6 0%, #ffffff 45%, #f2f8f4 100%);
+  --bg-image: var(--paper);
 
   --sans: "Inter", system-ui, sans-serif;
   --mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

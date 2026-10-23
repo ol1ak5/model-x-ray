@@ -1,80 +1,54 @@
-.boxes {
+.row {
   display: flex;
   flex-wrap: wrap;
+  flex-direction: row;
   align-items: center;
-  gap: 0.625rem;
+  justify-content: flex-start;
+  gap: 0.875rem 1rem;
 }
 
-.box {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.625rem;
-  padding: 0.5rem 1rem 0.5rem 0.5rem;
-  border: 1px solid var(--line-strong);
-  border-radius: 0.875rem;
-  background: var(--bg);
-  color: var(--ink);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
+.row > * {
   animation: fade-up var(--dur-slow) var(--ease) both;
-  transition: transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
-    background-color var(--dur-fast) var(--ease);
 }
 
-.box:hover {
-  transform: translateY(-0.125rem);
-  box-shadow: 0 0.75rem 1.75rem rgba(13, 92, 51, 0.18);
+.row > *:nth-child(2) {
+  animation-delay: 0.26s;
 }
 
-.box + input + .box,
-.box + .box {
-  animation-delay: 0.08s;
+.row > *:nth-child(3) {
+  animation-delay: 0.32s;
 }
 
-.icon {
-  display: grid;
-  place-items: center;
-  width: 1.875rem;
-  height: 1.875rem;
-  border-radius: 0.5rem;
-  font-size: 0.8125rem;
-  background: var(--accent-soft);
-  color: var(--accent);
+.row > *:nth-child(4) {
+  animation-delay: 0.38s;
+}
+
+.upload::before {
+  content: "↓";
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
-.title {
-  font-weight: 600;
-  font-size: 0.9375rem;
+.demo::before {
+  content: "→";
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.upload,
+.demo {
+  min-width: 11.5rem;
+}
+
+:global(#upload):focus-visible + .upload {
+  outline: 2px solid var(--accent-bright);
+  outline-offset: 0.1875rem;
 }
 
 .note {
   flex-basis: 100%;
   color: var(--muted);
   font-size: 0.78125rem;
-}
-
-.demo {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--on-accent);
-}
-
-.demo:hover {
-  background: var(--accent-deep);
-}
-
-.demo .icon {
-  background: rgba(255, 255, 255, 0.16);
-  color: var(--on-accent);
-}
-
-.upload:hover {
-  border-color: var(--accent);
-}
-
-:global(#upload):focus-visible + .upload {
-  outline: 2px solid var(--accent-bright);
-  outline-offset: 0.1875rem;
+  text-align: left;
+  margin-top: 0.25rem;
 }

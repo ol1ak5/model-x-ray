@@ -40,6 +40,13 @@ const WIDE_SAMPLE: SheetWindow = {
   })),
 };
 
+const STEPS = [
+  { name: "Scan", text: "Every formula, typed value and input" },
+  { name: "Anomaly", text: "P&L!H6 breaks the pattern of its row" },
+  { name: "Trace", text: "EBITDA 2027E absorbs the bad −25.0" },
+  { name: "Fix & verify", text: "=H4+H5 applied · EBITDA recalculates to 44.7" },
+];
+
 export default function Hero({ demos, error, onStart, onError }: { demos: Spreadsheet[]; error: string | null; onStart: (id: string, question: string, name: string) => void; onError: (message: string) => void }) {
   const demoShift = import.meta.env.DEV ? new URLSearchParams(window.location.search).get("demo-t") : null;
   const shiftStyle = demoShift ? ({ "--demo-shift": `-${demoShift}s` } as CSSProperties) : undefined;
@@ -47,13 +54,11 @@ export default function Hero({ demos, error, onStart, onError }: { demos: Spread
     <div className={styles.home}>
       <section className={!GLOW ? `${styles.hero} ${styles.demo}` : styles.hero} style={shiftStyle}>
         <div className={styles.lead}>
+          <p className={styles.eyebrow}>The financial model debugger</p>
           <h1 className={styles.headline}>
-            <span className={styles.hl1}>Your Excel models.{"\u00A0"}</span>
-            <span className={styles.hl2}>
-              Under the <span className={styles.accent}>X-Ray.</span>
-            </span>
+            <span className={styles.hl1}>Every formula, checked.{"\u00A0"}</span>
+            <span className={styles.accent}>Under the X-Ray.</span>
           </h1>
-          <p className={styles.sub}>An AI agent that reads your model the way a financial analyst checks it.</p>
           <p className={styles.try}>
             <span className={`${styles.q} ${styles.q1}`}>Why did 2027 EBITDA drop to −77.5?</span>
             <span className={`${styles.q} ${styles.q2}`}>Is the H6 gross profit figure reliable?</span>
@@ -63,20 +68,21 @@ export default function Hero({ demos, error, onStart, onError }: { demos: Spread
             <QuestionForm demos={demos} onStart={onStart} onError={onError} />
             {error && <Alert>{error}</Alert>}
           </div>
+          <ol className={styles.steps}>
+            {STEPS.map((step, index) => (
+              <li key={step.name} className={`${styles.step} ${styles[`step${index + 1}`]}`}>
+                <span className={styles.dot} />
+                <div className={styles.stepBody}>
+                  <p className={styles.stepName}>{step.name}</p>
+                  <p className={styles.stepText}>{step.text}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
         </div>
         <div className={styles.stage}>
           <div className={styles.framepos}>
             <div className={styles.frame}>
-              <div className={styles.titlebar} aria-hidden="true">
-                <span className={styles.excel}>X</span>
-                <span className={styles.file}>Deal model.xlsx</span>
-                <span className={styles.saved}>Saved</span>
-                <span className={styles.controls}>
-                  <i />
-                  <i />
-                  <i />
-                </span>
-              </div>
               <span className={styles.scan} aria-hidden="true" />
               <span className={styles.chip} aria-hidden="true">
                 EBITDA 44.7 ✓
@@ -90,32 +96,7 @@ export default function Hero({ demos, error, onStart, onError }: { demos: Spread
                   <span className={styles.circuitRight} />
                 </>
               )}
-              <SheetGrid
-                sheet={GLOW ? WIDE_SAMPLE : SAMPLE}
-                title="Example sheet"
-                light
-                formula={
-                  <>
-                    <span className={styles.nameBox}>H6</span>
-                    <span className={styles.fx}>fx</span>
-                    <span className={styles.fxValue}>
-                      <span className={styles.fxTyped}>-25.0</span>
-                      <span className={styles.fxFixed}>=H4+H5</span>
-                    </span>
-                  </>
-                }
-                marks={{ suspicious: new Set(), confirmed: new Set(GLOW ? ["P&L!G6"] : []), traced: new Set<string>(), target: null, after: {}, patch: null }}
-              />
-              <div className={styles.tabs} aria-hidden="true">
-                <span className={styles.activeTab}>P&amp;L</span>
-                <span>Assumptions</span>
-                <span>Summary</span>
-                <span className={styles.plus}>+</span>
-              </div>
-              <div className={styles.status} aria-hidden="true">
-                <span>Ready</span>
-                <span>100%</span>
-              </div>
+              <SheetGrid sheet={GLOW ? WIDE_SAMPLE : SAMPLE} title="Example sheet" light marks={{ suspicious: new Set(), confirmed: new Set(GLOW ? ["P&L!G6"] : []), traced: new Set<string>(), target: null, after: {}, patch: null }} />
             </div>
           </div>
         </div>
