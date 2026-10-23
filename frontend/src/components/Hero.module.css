@@ -22,26 +22,6 @@
   animation: fade-up var(--dur-slow) var(--ease) both;
 }
 
-.eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: var(--muted);
-  font-size: 0.71875rem;
-  font-weight: 600;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  margin-bottom: 1.125rem;
-}
-
-.eyebrow::before {
-  content: "";
-  width: 0.4375rem;
-  height: 0.4375rem;
-  background: var(--accent);
-  animation: pulse-dot 2.2s var(--ease) infinite;
-}
-
 .headline {
   font-weight: 750;
   font-size: clamp(1.9rem, 3vw, 2.875rem);
@@ -56,17 +36,6 @@
   font-size: 1.0625rem;
   line-height: 1.55;
   animation: fade-up var(--dur-slow) var(--ease) 0.16s both;
-}
-
-.proof {
-  margin-top: 1.5rem;
-  color: var(--muted);
-  font-size: 0.875rem;
-}
-
-.proof strong {
-  color: var(--accent);
-  font-weight: 700;
 }
 
 .hl1 {
@@ -190,237 +159,6 @@
   align-items: flex-start;
   gap: 0.75rem;
   margin-top: 1.5rem;
-}
-
-.steps {
-  list-style: none;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1rem;
-  margin: 1.5rem auto 0;
-  padding: 0;
-  width: min(100%, 50rem);
-}
-
-.step {
-  position: relative;
-  display: grid;
-  grid-template-rows: auto 1fr;
-  row-gap: 0.5rem;
-}
-
-.step:not(:last-child)::before {
-  content: "";
-  position: absolute;
-  top: 0.6rem;
-  left: 1.5rem;
-  right: 0.25rem;
-  height: 1.5px;
-  background: color-mix(in srgb, var(--muted) 30%, transparent);
-}
-
-.stepName {
-  font-weight: 650;
-  font-size: 0.9375rem;
-  color: inherit;
-  transition: color var(--dur) var(--ease);
-}
-
-.stepText {
-  color: var(--muted);
-  font-size: 0.875rem;
-  font-variant-numeric: tabular-nums;
-  margin-top: 0.25rem;
-}
-
-.dot {
-  position: relative;
-  width: 0.8125rem;
-  height: 0.8125rem;
-  margin-top: 0.2rem;
-  border-radius: 999px;
-  border: 1.5px solid color-mix(in srgb, var(--muted) 65%, transparent);
-  background: transparent;
-  z-index: 1;
-}
-
-
-
-.step1 {
-  color: var(--accent);
-}
-
-.step1 .dot {
-  border-color: var(--accent);
-  background: var(--accent);
-}
-
-.step2,
-.step3,
-.step4 {
-  color: var(--muted);
-}
-
-.demo .step2 {
-  animation: step-lit2 var(--cycle) linear var(--demo-shift, 0s) infinite;
-}
-
-.demo .step3 {
-  animation: step-lit3 var(--cycle) linear var(--demo-shift, 0s) infinite;
-}
-
-.demo .step4 {
-  animation: step-lit4 var(--cycle) linear var(--demo-shift, 0s) infinite;
-}
-
-.demo .step2 .dot,
-.demo .step3 .dot,
-.demo .step4 .dot {
-  animation: dot-lit var(--cycle) linear var(--demo-shift, 0s) infinite;
-}
-
-.demo .step2 .dot {
-  animation-name: dot-lit2;
-}
-
-.demo .step3 .dot {
-  animation-name: dot-lit3;
-}
-
-.demo .step4 .dot {
-  animation-name: dot-lit4;
-}
-
-@keyframes step-lit2 {
-  0%,
-  18% {
-    color: var(--muted);
-  }
-  20%,
-  93% {
-    color: var(--accent);
-  }
-  96%,
-  100% {
-    color: var(--muted);
-  }
-}
-
-@keyframes step-lit3 {
-  0%,
-  45% {
-    color: var(--muted);
-  }
-  47%,
-  93% {
-    color: var(--accent);
-  }
-  96%,
-  100% {
-    color: var(--muted);
-  }
-}
-
-@keyframes step-lit4 {
-  0%,
-  67% {
-    color: var(--muted);
-  }
-  69%,
-  93% {
-    color: var(--accent);
-  }
-  96%,
-  100% {
-    color: var(--muted);
-  }
-}
-
-@keyframes dot-lit2 {
-  0%,
-  18% {
-    background: transparent;
-    border-color: color-mix(in srgb, var(--muted) 55%, transparent);
-    box-shadow: none;
-  }
-  20% {
-    background: var(--accent);
-    border-color: var(--accent);
-    box-shadow: 0 0 0 0.3rem color-mix(in srgb, var(--accent) 18%, transparent);
-  }
-  28% {
-    box-shadow: 0 0 0 0.5rem color-mix(in srgb, var(--accent) 6%, transparent);
-  }
-  36%,
-  93% {
-    background: var(--accent);
-    border-color: var(--accent);
-    box-shadow: none;
-  }
-  96%,
-  100% {
-    background: transparent;
-    border-color: color-mix(in srgb, var(--muted) 55%, transparent);
-    box-shadow: none;
-  }
-}
-
-@keyframes dot-lit3 {
-  0%,
-  45% {
-    background: transparent;
-    border-color: color-mix(in srgb, var(--muted) 55%, transparent);
-    box-shadow: none;
-  }
-  47% {
-    background: var(--accent);
-    border-color: var(--accent);
-    box-shadow: 0 0 0 0.3rem color-mix(in srgb, var(--accent) 18%, transparent);
-  }
-  55% {
-    box-shadow: 0 0 0 0.5rem color-mix(in srgb, var(--accent) 6%, transparent);
-  }
-  63%,
-  93% {
-    background: var(--accent);
-    border-color: var(--accent);
-    box-shadow: none;
-  }
-  96%,
-  100% {
-    background: transparent;
-    border-color: color-mix(in srgb, var(--muted) 55%, transparent);
-    box-shadow: none;
-  }
-}
-
-@keyframes dot-lit4 {
-  0%,
-  67% {
-    background: transparent;
-    border-color: color-mix(in srgb, var(--muted) 55%, transparent);
-    box-shadow: none;
-  }
-  69% {
-    background: var(--accent);
-    border-color: var(--accent);
-    box-shadow: 0 0 0 0.3rem color-mix(in srgb, var(--accent) 18%, transparent);
-  }
-  77% {
-    box-shadow: 0 0 0 0.5rem color-mix(in srgb, var(--accent) 6%, transparent);
-  }
-  85%,
-  93% {
-    background: var(--accent);
-    border-color: var(--accent);
-    box-shadow: none;
-  }
-  96%,
-  100% {
-    background: transparent;
-    border-color: color-mix(in srgb, var(--muted) 55%, transparent);
-    box-shadow: none;
-  }
 }
 
 .stage {
@@ -721,19 +459,6 @@
     transform: none;
   }
 
-  .step2,
-  .step3,
-  .step4 {
-    --step-color: var(--accent);
-  }
-
-  .step2 .dot,
-  .step3 .dot,
-  .step4 .dot {
-    background: var(--accent);
-    border-color: var(--accent);
-  }
-
   .chip {
     opacity: 1;
     transform: none;
@@ -742,14 +467,6 @@
 }
 
 @media (max-width: 62rem) {
-  .steps {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .step:nth-child(2)::before {
-    display: none;
-  }
-
   .hero {
     grid-template-columns: 1fr;
     align-content: start;

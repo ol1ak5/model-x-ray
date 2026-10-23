@@ -30,7 +30,6 @@ export default function QuestionForm({ demos, onStart, onError }: { demos: Sprea
             ▶
           </span>
           <span className={styles.title}>See it in action</span>
-          <span className={styles.text}>A live check of a sample deal model</span>
         </button>
       )}
       <input id="upload" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="visually-hidden" onChange={upload} disabled={uploading} />
@@ -39,8 +38,8 @@ export default function QuestionForm({ demos, onStart, onError }: { demos: Sprea
           {uploading ? <Spinner size={1} /> : "↑"}
         </span>
         <span className={styles.title}>{uploading ? "Uploading…" : "Upload your model"}</span>
-        <span className={styles.text}>Excel .xlsx up to 10 MB, kept private</span>
       </label>
+      <p className={styles.note}>Excel .xlsx up to 10 MB. Your file stays private.</p>
     </div>
   );
 }

@@ -40,13 +40,6 @@ const WIDE_SAMPLE: SheetWindow = {
   })),
 };
 
-const STEPS = [
-  { name: "Scan", text: "Every formula, typed value and input" },
-  { name: "Anomaly", text: "P&L!H6 breaks the pattern of its row" },
-  { name: "Trace", text: "EBITDA 2027E absorbs the bad −25.0" },
-  { name: "Fix & verify", text: "=H4+H5 applied · EBITDA recalculates to 44.7" },
-];
-
 export default function Hero({ demos, error, onStart, onError }: { demos: Spreadsheet[]; error: string | null; onStart: (id: string, question: string, name: string) => void; onError: (message: string) => void }) {
   const demoShift = import.meta.env.DEV ? new URLSearchParams(window.location.search).get("demo-t") : null;
   const shiftStyle = demoShift ? ({ "--demo-shift": `-${demoShift}s` } as CSSProperties) : undefined;
@@ -54,12 +47,11 @@ export default function Hero({ demos, error, onStart, onError }: { demos: Spread
     <div className={styles.home}>
       <section className={!GLOW ? `${styles.hero} ${styles.demo}` : styles.hero} style={shiftStyle}>
         <div className={styles.lead}>
-          <p className={styles.eyebrow}>The financial model debugger</p>
           <h1 className={styles.headline}>
             <span className={styles.hl1}>Every formula, checked.{"\u00A0"}</span>
             <span className={styles.accent}>Under the X-Ray.</span>
           </h1>
-          <p className={styles.sub}>An AI agent that reads every formula like an analyst and checks every number like Excel.</p>
+          <p className={styles.sub}>An AI agent that reads your model the way a financial analyst checks it.</p>
           <p className={styles.try}>
             <span className={`${styles.q} ${styles.q1}`}>Why did 2027 EBITDA drop to −77.5?</span>
             <span className={`${styles.q} ${styles.q2}`}>Is the H6 gross profit figure reliable?</span>
@@ -69,9 +61,6 @@ export default function Hero({ demos, error, onStart, onError }: { demos: Spread
             <QuestionForm demos={demos} onStart={onStart} onError={onError} />
             {error && <Alert>{error}</Alert>}
           </div>
-          <p className={styles.proof}>
-            <strong>98%</strong> of planted errors fixed · <strong>0</strong> false alarms on deliberate values
-          </p>
         </div>
         <div className={styles.stage}>
           <div className={styles.framepos}>
@@ -92,17 +81,6 @@ export default function Hero({ demos, error, onStart, onError }: { demos: Spread
               <SheetGrid sheet={GLOW ? WIDE_SAMPLE : SAMPLE} title="Example sheet" light marks={{ suspicious: new Set(), confirmed: new Set(GLOW ? ["P&L!G6"] : []), traced: new Set<string>(), target: null, after: {}, patch: null }} />
             </div>
           </div>
-          <ol className={styles.steps}>
-            {STEPS.map((step, index) => (
-              <li key={step.name} className={`${styles.step} ${styles[`step${index + 1}`]}`}>
-                <span className={styles.dot} />
-                <div className={styles.stepBody}>
-                  <p className={styles.stepName}>{step.name}</p>
-                  <p className={styles.stepText}>{step.text}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
         </div>
       </section>
       {GLOW && <Waves />}
