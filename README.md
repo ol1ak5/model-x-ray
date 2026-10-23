@@ -31,39 +31,49 @@ uv run pytest -m live         # live: calls Token Factory / Google APIs, spends 
 
 ## How it Works
 
-```mermaid
-flowchart LR
-    A["Excel workbook"] --> B["Load and map<br/>lines, periods, formulas"]
-    B --> C["Rules flag suspects<br/>engine tests each fix on a copy"]
-    C --> D{"Nemotron judges<br/>every candidate"}
-    C -- "no rule fires" --> E["Nemotron logic review<br/>three votes, majority wins"]
-    D --> F["Sandbox test<br/>engine recalculates"]
-    E --> F
-    F --> G{"Verifier<br/>engine checks +<br/>adversarial Nemotron"}
-    G -- "rejected" --> D
-    G -- "confirmed" --> H["Report with<br/>clickable evidence"]
-    H --> I{"You approve?"}
-    I -- "yes" --> J["Corrected copy<br/>original untouched"]
-```
+The agent is a LangGraph state machine. Each step uses the NVIDIA Nemotron model that fits its job. The steps that compute use the engine and no model at all.
 
-1. **Map.** The engine reads every sheet, labels each line and period, and builds the dependency graph of every formula.
-2. **Flag.** Pattern rules propose suspects (typed numbers, flipped signs, broken ranges, wrong periods), and the engine tests each candidate fix on a copy.
-3. **Judge.** Agent reads each candidate the way a senior analyst would and decides whether it is an error or a deliberate choice. When no rule fires, it reviews the model's logic line by line in plain words, three times, and keeps what a majority finds.
-4. **Verify.** The engine recalculates the patched copy, and a second Nemotron tries to break the fix; the engine re-checks every objection.
-5. **Approve.** You see the cell, the cause, the evidence and the numbers before and after. An approved fix is written to a corrected copy; the original workbook never changes.
+```mermaid
+flowchart TD
+    __start__([Excel workbook]) --> load_sheet["load_sheet<br/>engine"]
+    load_sheet --> map_model["map_model<br/>Nemotron 3 Super"]
+    map_model --> locate["locate<br/>code, Nemotron 3 Super if needed"]
+    locate --> trace["trace<br/>engine"]
+    trace --> diagnose["diagnose · Investigator<br/>Nemotron 3.5 Super"]
+    diagnose --> test["test<br/>engine, sandbox copy"]
+    test --> verify["verify · Verifier<br/>engine checks + Nemotron 3.5 Super"]
+    verify -. "rejected, retry" .-> diagnose
+    verify -. "confirmed" .-> explain["explain<br/>Nemotron 3.5 Lightning"]
+    explain --> human_review{"human_review<br/>you"}
+    human_review -. "edit the fix" .-> test
+    human_review -. "approve" .-> apply_fix["apply_fix<br/>engine, corrected copy"]
+    human_review -. "reject" .-> __end__([End])
+    apply_fix --> __end__
+```
+| Step | What it does | Model |
+|---|---|---|
+| `load_sheet` | Opens the workbook and reads every formula | Engine |
+| `map_model` | Labels every line and period (revenue, cost, ratio) | Nemotron 3 Super |
+| `locate` | Picks the cell to investigate; checks the whole model when there is no question | Code, Nemotron 3 Super only if needed |
+| `trace` | Follows the dependency graph and measures what drives each change | Engine |
+| `diagnose` | The Investigator. Rules propose suspects and the engine tests each fix on a copy; Nemotron judges whether each one is an error or a deliberate choice, and when none is, it reviews the model's logic line by line, three times, keeping what a majority finds | Nemotron 3.5 Super |
+| `test` | Applies the fix to a sandbox copy and recalculates | Engine |
+| `verify` | Engine checks, then the Verifier tries to break the fix; the engine re-checks every objection. A rejected fix goes back to `diagnose` | Nemotron 3.5 Super |
+| `explain` | Writes the report in plain language, checked by code before it is shown | Nemotron 3.5 Lightning |
+| `human_review` | Shows the cell, the cause, the evidence and the numbers before and after, and waits for you | You |
+| `apply_fix` | Writes the corrected copy; the original workbook never changes | Engine |
 
 ## Built on Nebius × NVIDIA
 
 All LLM calls run on **Nebius Token Factory** (OpenAI-compatible) through LangChain's `ChatOpenAI`, using NVIDIA open-source **Nemotron** models:
 
-| Role | Model |
-|---|---|
-| Investigator, Verifier | `nvidia/Nemotron-3.5-Super-VL` (1M context, $0.30 / $0.90 per 1M tokens) |
-| Model mapper, locate | `nvidia/nemotron-3-super-120b-a12b` (256K context, $0.30 / $0.90) |
-| Report writer (`explain`) | `nvidia/Nemotron-3_5-Lightning` (1M context, $0.06 / $0.24) |
-| Benchmark comparison set-up `super-3` | `nvidia/nemotron-3-super-120b-a12b` |
-| Benchmark small-model set-up | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` ($0.06 / $0.24) |
-| Benchmark hardest-verification set-up | `nvidia/Nemotron-3-Ultra-550b-a55b` (1M context, $1.00 / $3.00) |
+| Model | Used for | Context | Price per 1M tokens (in / out) |
+|---|---|---|---|
+| `nvidia/Nemotron-3.5-Super-VL` | Investigator, Verifier | 1M | $0.30 / $0.90 |
+| `nvidia/nemotron-3-super-120b-a12b` | Mapper, locate; benchmark comparison | 256K | $0.30 / $0.90 |
+| `nvidia/Nemotron-3_5-Lightning` | Report writer | 1M | $0.06 / $0.24 |
+| `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | Benchmark only: does a small model suffice? | 256K | $0.06 / $0.24 |
+| `nvidia/Nemotron-3-Ultra-550b-a55b` | Benchmark only: the largest model | 1M | $1.00 / $3.00 |
 
 ## Supported Excel functions
 
@@ -75,8 +85,9 @@ All LLM calls run on **Nebius Token Factory** (OpenAI-compatible) through LangCh
 | Lookups and references | `INDEX` `MATCH` `VLOOKUP` `HLOOKUP` `XLOOKUP` `OFFSET` |
 | Dates | `EOMONTH` `EDATE` `YEAR` `MONTH` `DAY` `DATE` |
 | Valuation, debt, statistics | `NPV` `XNPV` `IRR` `XIRR` `PMT` `PPMT` `NORMSDIST` |
-| Also | Cross-sheet references, ranges, whole rows and columns, defined names; circular references solved iteratively, like Excel, when the file has iteration on |
-| Not supported | Links to other workbooks, Data Tables, VBA |
+| Other | Cross-sheet references, ranges, whole rows and columns, defined names, circular references (solved iteratively) |
+
+**Not supported:** links to other workbooks, Data Tables and VBA. Each is reported by name on the cell that uses it, never guessed.
 
 Full spec: [`docs/spreadsheet-core.md`](docs/spreadsheet-core.md).
 
@@ -103,49 +114,49 @@ Measured on the synthetic deal models (12 variants per error type plus 24 contro
 | Formula pointing to the wrong period | 8 of 12 | **12 of 12** |
 | Blended error (the symptom is not the cause) | 11 of 12 | **11 of 12** |
 | **Planted errors fixed** | 72 of 84 (86%) | **82 of 84 (98%)** |
-| False alarms on deliberate values | 12 of 12 | **0 of 12** |
-| False alarms on clean models | 0 of 12 | **0 of 12** |
+| False alarms on deliberate values | 12 of 12 ❌ | **0 of 12** ✅ |
+| False alarms on clean models | 0 of 12 ✅ | **0 of 12** ✅ |
 
-## Why these Nemotron models
+## How Nemotron and Token Factory Power It
 
-The agent never asks a model to calculate: the Excel engine produces every number. What the model must do is judge a formula the way an expert analyst would and drive tools over several steps. So we chose by the benchmarks that measure those two skills, then checked the choice on our own task.
+- **Nemotron 3.5 Super** is the Investigator and the Verifier: it judges every formula, reviews the model's logic and tries to break every fix.
+- **Nemotron 3 Super** labels every line and period of the workbook.
+- **Nemotron 3.5 Lightning** writes the final report.
+- One Token Factory endpoint gave us all five models, so moving the reasoning steps to 3.5 Super was a one-line change, measured the same day.
 
-| Skill the agent needs | Benchmark (NVIDIA model cards) | Nemotron 3 Super | Nemotron 3.5 Super |
-|---|---|---|---|
-| Expert reasoning: is this formula right? | GPQA Diamond | 79.2 | **89.5** |
-| Hard expert questions | HLE, text only, no tools | 18.3 | **31.8** |
-| Multi-step tool use | τ²-bench retail / airline / telecom | 62.8 / 56.3 / 64.4 | **69.2 / 76.5 / 73.2** |
-| Following instructions and formats | IFBench | **72.6** | 70.9 |
-
-Both cost the same on Token Factory ($0.30 / $0.90 per 1M tokens), and 3.5 Super reads four times more context (1M tokens). The decisive test was ours: a five-year SaaS subscription forecast the agent had never seen, with five planted logic errors (churned customers added instead of subtracted, a contribution margin that skips support costs, revenue on 10 months a year, a margin divided by costs instead of revenue, a price typed 100 times too large) and a clean copy.
-
-| On the unseen SaaS forecast | Nemotron 3 Super | Nemotron 3.5 Super |
+| | Nemotron 3 Super | Nemotron 3.5 Super |
 |---|---|---|
-| Errors fixed and verified | 0 of 5 | **4 of 5** |
-| Errors seen | 1 of 5 | **5 of 5** (the price typo is flagged for a person, never fixed with an invented value) |
-| False alarms on the clean copy | 0 | 0 |
-| Tokens for the whole set | 307,000 | 442,000 |
-
-Nemotron 3 Super read "Closing customers = Opening customers + New customers + Churned customers" and answered that every line matched its label; 3.5 Super caught it in all three votes and fixed the whole line. It spends more tokens only because it goes on to test, verify and correct what it finds; on a clean file both spend about the same. The Investigator and the Verifier run on 3.5 Super; 3 Super stays available as the `super-3` benchmark set-up.
-
-The mapper (the one call that labels every line and period of a sheet) and `locate` stay on 3 Super, for a measured reason. 3.5 Super passes every tool-calling check (40 of 40, with a faster slowest call than 3 Super), but as the mapper of a real 436-line Damodaran DCF it spent its whole 8,192-token output reasoning and never returned the map, the failure Lightning showed before: on a real 63-line project-finance model Lightning wrote its reasoning as text and hit the same limit without calling the tool, while Nemotron 3 Super returned all 63 lines and 24 periods in 7 seconds (about 1,900 output tokens, 0.3 cents), cached per file revision (PR #97). A failed map never stops an investigation.
-
-The report writer is the exception. `explain` is the last step, has no tools and no structured output, and Super spent about 9 s and 2,000 output tokens on a three-to-six-sentence report, the largest wait left after the Investigator; it runs on Lightning with a 1,400-token cap. The narrative is checked against the brief before it is shown (plain prose, the patched cell named, only evidence ids that exist), and the deterministic report is used when that check fails, so a faster writer can never lose a citation.
+| GPQA Diamond, expert reasoning (NVIDIA) | 79.2 | **89.5** |
+| τ²-bench airline, tool use (NVIDIA) | 56.3 | **76.5** |
+| Unseen SaaS model, errors fixed (ours) | 0 of 5 | **4 of 5** |
+| Price per 1M tokens (in / out) | $0.30 / $0.90 | $0.30 / $0.90 |
 
 ## How we evaluate it
 
-The proof of value is planted errors: the generated models carry 75 known mistakes (hardcoded numbers where the row uses formulas, broken references, sign flips, range errors, period slips), and the Enron Errors Corpus adds real spreadsheets with known corrections. Every diagnosis is scored against the known answer (cell, cause and fix) per step, through four set-ups that differ only in configuration: rules alone, Nano with the tools, Super with the tools (what the app runs), and Super with the whole sheet pasted as text and no tools.
+## How We Evaluate It
 
-174 variants, 696 investigations, run on 21 Oct 2026 with Nemotron 3 Super, before the Investigator and the Verifier moved to Nemotron 3.5 Super and before the logic review of #181; 31 failed with errors and are excluded:
+- **Known answers.** Every test model carries errors we planted ourselves, so each diagnosis is scored against the truth: the right cell, the right cause, and a fix that restores the original value.
+- **Controls count as much as errors.** Clean models and values a modeller typed on purpose must be left alone; "fixing" one is a false alarm.
+- **Three test sets.** 174 synthetic deal models (one planted error each, plus clean and deliberate copies), Damodaran's public valuation models with planted errors, and two logic test models in [`demo/`](demo).
+- **Held-out models.** Part of the Damodaran models is kept aside and used only for the final score, so the agent is never tuned on the models that grade it.
+- **Rules alone vs rules + Nemotron.** The same models are checked with the language model switched off and on; the results are in [What Nemotron Adds](#what-nemotron-adds).
+- **Reproducible.** `scripts/benchmark.sh` reruns the benchmark; metrics and scoring rules are in [`docs/evaluation.md`](docs/evaluation.md).
 
-| Set-up | Root cause top-1 | Fix accuracy | False alarms | Latency p50 | Cost / investigation |
-|---|---|---|---|---|---|
-| rules only | 22% | 0% | 100% | 0.0 s | $0.0000 |
-| Nano + tools | 82% | 81% | 7% | 97 s | $0.0072 |
-| Super + tools (the app) | 75% | 74% | 4% | 20 s | $0.0123 |
-| Super, sheet in the prompt, no tools | 92% | 92% | 25% | 15 s | $0.0068 |
+## Feedback on Token Factory and the NVIDIA models
 
-The tools are not what finds the cell on a 63-line model: a strong model with the whole sheet in its prompt does better on planted errors. It is also wrong about models that are fine: it invents a root cause in one of four healthy or deliberately hardcoded models, where the tool loop leaves them alone. The tools are also the only thing that scales to a workbook the context window cannot hold, and what produces the clickable evidence. The gap is measured and open in #179, not smoothed over. The per-type table, the per-step metrics (locate, trace, verdict) and the confusion matrix are in the generated report, `docs/benchmark.md`, which `scripts/benchmark.sh` writes together with the raw `docs/benchmark-results.json` and the chart (`--render-only` re-renders; none of the three is committed). Metrics and scoring rules: [`docs/evaluation.md`](docs/evaluation.md). The held-out splits are frozen in `docs/damodaran-split.json` and `docs/enron-split.json`.
+**What worked well**
+
+- One OpenAI-compatible endpoint and one key gave us five Nemotron models, so each step of the agent uses the model that fits it.
+- Switching the reasoning steps from Nemotron 3 Super to 3.5 Super was a one-line change: fixed errors on an unseen model went from 0 of 5 to 4 of 5, at the same price.
+- With Nemotron, the agent fixed 98% of planted errors against 86% for rules alone, with no false alarm on deliberate values (rules alone broke 12 of 12).
+- A full check of a model costs one to three cents.
+
+**What would help**
+
+- **Errors returned as answers:** long calls sometimes came back as HTTP 200 with `[ERROR: Agent failed ... timed out after 90 seconds]` as the reply. A non-200 status would let clients retry safely.
+- **Reasoning that never reaches the tool call:** Nemotron 3.5 Super sometimes used its whole output budget reasoning and returned no tool call. A per-request way to cap reasoning would help.
+- **Model metadata in the API:** prices, context windows and output limits are only in the web catalogue, not in `GET /v1/models`.
+- **New models announced in the API:** a changelog or deprecation field would help teams notice new models like Nemotron 3.5 Super.
 
 ## Links
 
