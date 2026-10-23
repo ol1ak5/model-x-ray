@@ -1,5 +1,13 @@
 # Model X-Ray
 
+<p align="center">
+  <img alt="License" src="https://img.shields.io/badge/License-Apache%202.0-blue">
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white">
+  <img alt="NVIDIA Nemotron" src="https://img.shields.io/badge/NVIDIA-Nemotron%203.5%20Super-76B900?logo=nvidia&logoColor=white">
+  <img alt="Nebius" src="https://img.shields.io/badge/Runs%20on-Nebius%20Token%20Factory-0055FF">
+  <img alt="LangGraph" src="https://img.shields.io/badge/Built%20with-LangGraph-1C3C3C">
+</p>
+
 An AI agent built for financial model auditing, powered by NVIDIA Nemotron, that uncovers hidden errors, reasons through financial logic, and verifies every proposed fix through independent workbook recalculation. Every correction is evidence-based, and no changes are made without the user’s approval.
 
 ## Try it Live
