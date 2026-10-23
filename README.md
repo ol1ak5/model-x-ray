@@ -1,5 +1,11 @@
 # Model X-Ray
 
+![License](https://img.shields.io/badge/License-Apache%202.0-blue)
+![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
+![NVIDIA Nemotron](https://img.shields.io/badge/NVIDIA-Nemotron%203.5%20Super-76B900?logo=nvidia&logoColor=white)
+![Nebius](https://img.shields.io/badge/Runs%20on-Nebius%20Token%20Factory-0055FF)
+![LangGraph](https://img.shields.io/badge/Built%20with-LangGraph-1C3C3C)
+
 An AI agent built for financial model auditing, powered by NVIDIA Nemotron, that uncovers hidden errors, reasons through financial logic, and verifies every proposed fix through independent workbook recalculation. Every correction is evidence-based, and no changes are made without the user’s approval.
 
 ## Try it Live
@@ -14,6 +20,9 @@ Even if AI looks like the obvious reviewer for errors that escape from the human
 ## The Solution
 Model X-Ray that pairs NVIDIA Nemotron with a deterministic calculation engine, just as an experienced financial analyst combines expertise with reliable tools. Nemotron reasons through the model, interpreting formulas, distinguishing real errors from deliberate choices, and proposing fixes. The engine independently maps formula dependencies and recalculates values, grounding every conclusion in verifiable calculations rather than AI-generated numbers.
 
+> [!IMPORTANT]
+> Nemotron never does arithmetic. Every number in a report comes from the calculation engine, and nothing changes in your workbook until you approve it.
+
 ## Setup
 
 ```bash
@@ -21,6 +30,9 @@ uv sync                       # Python 3.13, installs the package
 cp .env.example .env          # then fill in NEBIUS_API_KEY
 uv run model-x-ray            # smoke check: prints the banner
 ```
+
+> [!TIP]
+> Want to see it work in a minute? Upload any file from [`demo/simple-errors`](demo/simple-errors) or [`demo/saas-errors`](demo/saas-errors): each one has a single planted error, and `00-clean.xlsx` has none.
 
 ## Tests
 
@@ -116,6 +128,9 @@ Measured on the synthetic deal models (12 variants per error type plus 24 contro
 | **Planted errors fixed** | 72 of 84 (86%) | **82 of 84 (98%)** |
 | False alarms on deliberate values | 12 of 12 ❌ | **0 of 12** ✅ |
 | False alarms on clean models | 0 of 12 ✅ | **0 of 12** ✅ |
+
+> [!NOTE]
+> Single runs on small test models (12 per error type). They show the difference between rules and Nemotron, not a final accuracy on real-world workbooks.
 
 ## How Nemotron and Token Factory Power It
 
