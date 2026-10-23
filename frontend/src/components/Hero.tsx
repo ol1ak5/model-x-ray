@@ -48,8 +48,10 @@ export default function Hero({ demos, error, onStart, onError }: { demos: Spread
       <section className={!GLOW ? `${styles.hero} ${styles.demo}` : styles.hero} style={shiftStyle}>
         <div className={styles.lead}>
           <h1 className={styles.headline}>
-            <span className={styles.hl1}>Every formula, checked.{"\u00A0"}</span>
-            <span className={styles.accent}>Under the X-Ray.</span>
+            <span className={styles.hl1}>Your Excel models.{"\u00A0"}</span>
+            <span className={styles.hl2}>
+              Under the <span className={styles.accent}>X-Ray.</span>
+            </span>
           </h1>
           <p className={styles.sub}>An AI agent that reads your model the way a financial analyst checks it.</p>
           <p className={styles.try}>
@@ -65,6 +67,16 @@ export default function Hero({ demos, error, onStart, onError }: { demos: Spread
         <div className={styles.stage}>
           <div className={styles.framepos}>
             <div className={styles.frame}>
+              <div className={styles.titlebar} aria-hidden="true">
+                <span className={styles.excel}>X</span>
+                <span className={styles.file}>Deal model.xlsx</span>
+                <span className={styles.saved}>Saved</span>
+                <span className={styles.controls}>
+                  <i />
+                  <i />
+                  <i />
+                </span>
+              </div>
               <span className={styles.scan} aria-hidden="true" />
               <span className={styles.chip} aria-hidden="true">
                 EBITDA 44.7 ✓
@@ -78,7 +90,32 @@ export default function Hero({ demos, error, onStart, onError }: { demos: Spread
                   <span className={styles.circuitRight} />
                 </>
               )}
-              <SheetGrid sheet={GLOW ? WIDE_SAMPLE : SAMPLE} title="Example sheet" light marks={{ suspicious: new Set(), confirmed: new Set(GLOW ? ["P&L!G6"] : []), traced: new Set<string>(), target: null, after: {}, patch: null }} />
+              <SheetGrid
+                sheet={GLOW ? WIDE_SAMPLE : SAMPLE}
+                title="Example sheet"
+                light
+                formula={
+                  <>
+                    <span className={styles.nameBox}>H6</span>
+                    <span className={styles.fx}>fx</span>
+                    <span className={styles.fxValue}>
+                      <span className={styles.fxTyped}>-25.0</span>
+                      <span className={styles.fxFixed}>=H4+H5</span>
+                    </span>
+                  </>
+                }
+                marks={{ suspicious: new Set(), confirmed: new Set(GLOW ? ["P&L!G6"] : []), traced: new Set<string>(), target: null, after: {}, patch: null }}
+              />
+              <div className={styles.tabs} aria-hidden="true">
+                <span className={styles.activeTab}>P&amp;L</span>
+                <span>Assumptions</span>
+                <span>Summary</span>
+                <span className={styles.plus}>+</span>
+              </div>
+              <div className={styles.status} aria-hidden="true">
+                <span>Ready</span>
+                <span>100%</span>
+              </div>
             </div>
           </div>
         </div>

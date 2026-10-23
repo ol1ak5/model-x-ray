@@ -23,10 +23,10 @@
 }
 
 .headline {
-  font-weight: 750;
-  font-size: clamp(1.9rem, 3vw, 2.875rem);
-  line-height: 1.06;
-  letter-spacing: -0.03em;
+  font-weight: 800;
+  font-size: clamp(2.25rem, 4vw, 3.5rem);
+  line-height: 1.04;
+  letter-spacing: -0.04em;
 }
 
 .sub {
@@ -40,13 +40,19 @@
 
 .hl1 {
   display: block;
+  white-space: nowrap;
   animation: rise var(--dur-slow, 0.6s) var(--ease) both;
 }
 
-.accent {
+.hl2 {
   display: block;
-  color: var(--accent);
+  white-space: nowrap;
   animation: rise var(--dur-slow, 0.6s) var(--ease) 0.08s both;
+}
+
+.accent {
+  color: var(--accent);
+  background: linear-gradient(transparent 68%, color-mix(in srgb, var(--accent) 16%, transparent) 68%);
 }
 
 @keyframes rise {
@@ -190,6 +196,152 @@
   box-shadow: 0 1.25rem 3rem rgba(17, 21, 18, 0.09);
 }
 
+.titlebar {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.875rem;
+  background: #107c41;
+  color: #ffffff;
+  font-size: 0.8125rem;
+}
+
+.excel {
+  display: grid;
+  place-items: center;
+  width: 1.375rem;
+  height: 1.375rem;
+  border-radius: 0.25rem;
+  background: #ffffff;
+  color: #107c41;
+  font-weight: 800;
+  font-size: 0.8125rem;
+}
+
+.file {
+  font-weight: 600;
+}
+
+.saved {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.75rem;
+}
+
+.controls {
+  display: flex;
+  gap: 0.375rem;
+  margin-left: auto;
+}
+
+.controls i {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.nameBox {
+  min-width: 3.25rem;
+  padding: 0.125rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 0.1875rem;
+  background: var(--bg);
+  font-family: var(--mono);
+  font-size: 0.78rem;
+}
+
+.fx {
+  padding: 0 0.5rem;
+  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  color: var(--muted);
+  font-style: italic;
+  font-weight: 600;
+}
+
+.fxValue {
+  position: relative;
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+}
+
+.fxFixed {
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: var(--accent-deep);
+  font-weight: 600;
+  opacity: 0;
+  animation: demo-swap var(--cycle) var(--ease) var(--demo-shift, 0s) infinite;
+}
+
+.fxTyped {
+  animation: fx-typed var(--cycle) var(--ease) var(--demo-shift, 0s) infinite;
+}
+
+@keyframes fx-typed {
+  0%,
+  15% {
+    opacity: 1;
+    color: inherit;
+  }
+  18%,
+  65% {
+    opacity: 1;
+    color: var(--danger);
+  }
+  68%,
+  90% {
+    opacity: 0;
+  }
+  93%,
+  100% {
+    opacity: 1;
+    color: inherit;
+  }
+}
+
+.tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  padding: 0 0.5rem;
+  border-top: 1px solid var(--line);
+  background: var(--chrome);
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.tabs span {
+  padding: 0.375rem 0.875rem;
+  border-right: 1px solid var(--line);
+}
+
+.tabs .activeTab {
+  background: var(--bg);
+  color: #107c41;
+  font-weight: 700;
+  box-shadow: inset 0 -2px 0 #107c41;
+}
+
+.tabs .plus {
+  border-right: 0;
+}
+
+.status {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.25rem 0.875rem;
+  background: #f3f3f3;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.6875rem;
+}
+
+.frame :global([aria-label="Example sheet"]) > :first-child > :last-child {
+  display: none;
+}
+
 .frame :global([aria-label="Example sheet"]) {
   border: 0;
   border-radius: 0;
@@ -212,7 +364,7 @@
 
 .chip {
   position: absolute;
-  top: 0.875rem;
+  top: 6rem;
   right: 0.875rem;
   z-index: 3;
   display: inline-flex;

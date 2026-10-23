@@ -31,5 +31,5 @@ test("shows a way out instead of a blank page when a view blows up", async () =>
   expect(screen.getByRole("button", { name: "Start another check" })).toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "Start another check" }));
-  expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent("Every formula, checked. Under the X-Ray.");
+  expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent("Your Excel models. Under the X-Ray.");
 });

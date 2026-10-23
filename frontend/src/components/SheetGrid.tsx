@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import type { SheetWindow } from "../api";
 import { money } from "../format";
@@ -8,7 +8,7 @@ export type Marks = { suspicious: Set<string>; confirmed: Set<string>; traced: S
 
 const MENU = ["File", "Home", "Insert", "Formulas", "Data", "Review", "View"];
 
-export default function SheetGrid({ sheet, marks, title, showFormulaBar = true, light = false }: { sheet: SheetWindow; marks: Marks; title: string; showFormulaBar?: boolean; light?: boolean }) {
+export default function SheetGrid({ sheet, marks, title, showFormulaBar = true, light = false, formula }: { sheet: SheetWindow; marks: Marks; title: string; showFormulaBar?: boolean; light?: boolean; formula?: ReactNode }) {
   const firstMarked = marks.patch?.cell ?? [...marks.confirmed][0] ?? [...marks.suspicious][0] ?? marks.target;
   const [selected, setSelected] = useState<string | null>(firstMarked);
   const cell = sheet.rows.flatMap((row) => row.cells).find((item) => item.ref === selected);
@@ -22,7 +22,8 @@ export default function SheetGrid({ sheet, marks, title, showFormulaBar = true, 
         ))}
         <span className={styles.tab}>{sheet.sheet}</span>
       </div>
-      {showFormulaBar && (
+      {formula && <div className={styles.formulaBar}>{formula}</div>}
+      {showFormulaBar && !formula && (
         <div className={styles.formulaBar}>
           <span className={styles.fx}>fx</span>
           <span className={`mono ${styles.ref}`}>{selected ?? ""}</span>

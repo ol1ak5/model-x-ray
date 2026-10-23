@@ -58,7 +58,7 @@ describe("an investigation in the browser", () => {
     vi.stubGlobal("fetch", api.fetch);
     const user = userEvent.setup();
     render(<App />);
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Every formula, checked. Under the X-Ray.");
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Your Excel models. Under the X-Ray.");
     await user.upload(screen.getByLabelText(/Upload your model/), new File(["xlsx bytes"], "My model.xlsx"));
     expect(await screen.findByText("My model.xlsx")).toBeInTheDocument();
     expect(api.sent.find((request) => request.url.endsWith("/investigations/stream"))?.body).toEqual({ spreadsheet_id: "upload-1", question: "" });
