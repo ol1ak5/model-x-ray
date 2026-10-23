@@ -208,6 +208,20 @@ def test_when_every_rule_candidate_is_judged_deliberate_the_logic_review_still_r
 
     assert "Engine-tested candidate fixes" in model.briefs[0]
     assert len(model.briefs) == 4 and all("Lines in words:" in brief for brief in model.briefs[1:])
+    assert all("looks wrong" not in brief and "set aside" in brief for brief in model.briefs[1:])
     assert (final["patch"]["cell"], final["patch"]["new_formula"]) == ("Budget!B9", "=B4-B8")
     assert len(final["patch"]["also"]) == 3
+    assert final["verifications"][-1]["verdict"] == "confirmed"
+
+
+
+def test_a_sign_error_named_on_a_line_that_shares_one_formula_is_treated_as_a_logic_error_and_fixed_on_the_whole_line(tmp_path: Path) -> None:
+    path = write_budget(tmp_path / "budget.xlsx", {f"{c}6": f"={c}4+{c}5" for c in YEARS})
+    model = ScriptedDiagnosis(briefs=[], turns=[(["Budget!F6"], "Budget!F6", "=F4-F5", "sign_inconsistency")])
+
+    final = investigate(tmp_path, path, model)
+
+    assert final["decisions"][0]["votes"] == {"Budget!F6": 3}
+    assert [(h["cell"], h["error_type"]) for h in final["hypotheses"]] == [("Budget!F6", "logic_error")]
+    assert len(final["patch"]["also"]) == 4
     assert final["verifications"][-1]["verdict"] == "confirmed"

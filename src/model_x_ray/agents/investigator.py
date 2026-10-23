@@ -461,6 +461,21 @@ def logic_review_brief(book: Workbook, state: InvestigationState) -> str:
     return "\n".join(lines)
 
 
+PATTERN_TYPES = ("wrong_reference", "range_inconsistency", "sign_inconsistency", "period_inconsistency")
+
+
+def kind_on_its_line(book: Workbook, cell: str, error_type: str) -> str:
+    if error_type not in PATTERN_TYPES or book.formula(cell) is None:
+        return error_type
+    try:
+        pattern = book.formula_pattern(cell)
+        sheet, address = split_ref(cell)
+        shares = any(ref != cell and split_ref(ref)[0] == sheet and split_ref(ref)[1].row == address.row and book.formula(ref) is not None and book.formula_pattern(ref) == pattern for ref in book.cells())
+    except FormulaError:
+        return error_type
+    return "logic_error" if shares and not breaks_row_pattern(book, cell) else error_type
+
+
 def along_the_line(book: Workbook, patch: dict | None) -> dict | None:
     if patch is None or not isinstance(patch["new_formula"], str) or not patch["new_formula"].startswith("="):
         return patch
@@ -536,7 +551,7 @@ def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_t
         judged = [j for j in diagnosis.judgements if j.number in numbers]
         if candidates and state["target"].get("checked") and not diagnosis.hypotheses and diagnosis.patch is None and len(judged) == len(candidates) and all(j.verdict == "intentional" for j in judged):
             set_aside = "; ".join(f"{c['cell']} ({j.reason})" for c in candidates for j in judged if j.number == c["number"])
-            followup = "\n".join([investigation_brief(state), f"Every rule candidate was judged deliberate: {set_aside}. Look past them.", "", logic_review_brief(book, state)])
+            followup = "\n".join([f"Question: Check the whole model. The cells the rules flagged were judged deliberate and are set aside: {set_aside}. Do not judge them again; review every other line.", "", logic_review_brief(book, state)])
             more = [investigator.invoke({"messages": [HumanMessage(content=followup)]}) for _ in range(LOGIC_VOTES)]
             result = {"messages": [*result["messages"], *[m for run in more for m in run["messages"]]], "run_log": [*result["run_log"], *[e for run in more for e in run.get("run_log", [])]], "tool_calls_used": result["tool_calls_used"] + sum(run.get("tool_calls_used", 0) for run in more)}
             reviewed, votes = majority_diagnosis([run["diagnosis"] for run in more], sheet)
@@ -556,7 +571,7 @@ def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_t
             hypotheses.append({
                 "id": f"hyp-{first_number + i}",
                 "cell": cell,
-                "error_type": h.error_type,
+                "error_type": kind_on_its_line(book, cell, h.error_type) if votes is not None else h.error_type,
                 "claim": h.claim,
                 "evidence_ids": [e["id"] for e in all_evidence if e["cell"] == cell],
                 "confidence": h.confidence,
