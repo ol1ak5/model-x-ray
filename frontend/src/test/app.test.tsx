@@ -22,6 +22,32 @@ async function checkDemo() {
   return user;
 }
 
+describe("the home page", () => {
+  test("tells the story section by section and leaves it for the workspace once a check starts", async () => {
+    vi.stubGlobal("fetch", fakeApi([...steps(...STEPS.map(([name]) => name)), ["view", REVIEW]]).fetch);
+    const user = userEvent.setup();
+    render(<App />);
+    const sections = screen.getByRole("navigation", { name: "Sections" });
+    for (const [link, heading] of [
+      ["Why", "One broken formula can move a valuation."],
+      ["Strengths", "Built the way an analyst checks a model."],
+      ["How it works", "Ten steps, one state machine."],
+      ["Stack", "Built on Nebius × NVIDIA."],
+    ]) {
+      const target = within(sections).getByRole("link", { name: link }).getAttribute("href") as string;
+      expect(document.querySelector(target)).toContainElement(screen.getByRole("heading", { level: 2, name: heading }));
+    }
+    const results = screen.getByRole("table", { name: "Results" });
+    expect(within(results).getByText("98%")).toBeInTheDocument();
+    expect(within(results).getByText(/against 86% with rules alone/)).toBeInTheDocument();
+
+    await user.click(await screen.findByRole("button", { name: "See it in action" }));
+    expect(await screen.findByText("Review needed")).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Sections" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 2, name: "Ten steps, one state machine." })).not.toBeInTheDocument();
+  });
+});
+
 describe("an investigation in the browser", () => {
   test("checks an uploaded model, draws the traced dependencies on the sheet, and offers the corrected file after approval", async () => {
     const api = fakeApi(

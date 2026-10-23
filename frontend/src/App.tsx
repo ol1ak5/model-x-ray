@@ -18,6 +18,7 @@ import Button from "./components/Button";
 import Chip from "./components/Chip";
 import FactsBar from "./components/FactsBar";
 import Hero from "./components/Hero";
+import Landing from "./components/Landing";
 import Logo from "./components/Logo";
 import type { Marks } from "./components/SheetGrid";
 import SheetSkeleton from "./components/SheetSkeleton";
@@ -203,16 +204,30 @@ export default function App() {
           : { label: "Stopped", tone: "neutral" as const };
 
   return (
-    <div className={styles.page}>
+    <div id="top" className={started ? styles.page : `${styles.page} ${styles.landing}`}>
       <header className={styles.nav}>
         <button type="button" className={styles.brand} onClick={reset}>
           <Logo />
           Model X-Ray
         </button>
-        <p className={styles.powered}>Powered by NVIDIA Nemotron on Nebius Token Factory</p>
+        {started ? (
+          <p className={styles.powered}>Powered by NVIDIA Nemotron on Nebius Token Factory</p>
+        ) : (
+          <nav className={styles.links} aria-label="Sections">
+            <a href="#why">Why</a>
+            <a href="#strengths">Strengths</a>
+            <a href="#how">How it works</a>
+            <a href="#stack">Stack</a>
+          </nav>
+        )}
       </header>
 
-      {!started && <Hero demos={demos} error={error} onStart={start} onError={setError} />}
+      {!started && (
+        <main>
+          <Hero demos={demos} error={error} onStart={start} onError={setError} />
+          <Landing />
+        </main>
+      )}
 
       {started && (
         <main className={styles.case}>
