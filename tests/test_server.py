@@ -113,3 +113,21 @@ def test_the_vercel_entrypoint_writes_only_to_the_temp_folder_and_serves_the_bui
     written = {path.name for path in (scratch / "model-x-ray").rglob("*")}
     assert {"checkpoints.db", "memory.db", "uploads"} <= written
     assert f"{uploaded.json()['id']}.xlsx" in written
+
+
+def test_vercel_sends_every_api_route_to_the_api_service_and_everything_else_to_the_page(demo_workbook_path: Path, scripted_verdict) -> None:
+    import json
+    import re
+
+    config = json.loads((Path(__file__).parents[1] / "vercel.json").read_text())
+    api_rule, page_rule = config["rewrites"]
+    assert api_rule["destination"] == {"service": "api"}
+    assert page_rule == {"source": "/(.*)", "destination": {"service": "web"}}
+    routed = set(re.fullmatch(r"/:prefix\((.+)\)/:path\*", api_rule["source"]).group(1).split("|"))
+
+    source = XlsxSource({"demo": demo_workbook_path})
+    app = create_app(source, XlsxSandbox(source, demo_workbook_path.parent / "corrected"), AgentModels(llm=scripted_verdict), InMemorySaver(), UsageCap(per_visitor=1, total=1))
+    prefixes = {route.path.strip("/").split("/")[0] for route in app.routes if route.path.strip("/")}
+
+    assert prefixes - {"redoc"} <= routed, "a route Vercel does not send to the API would be answered by the page"
+    assert {"health", "spreadsheets", "investigations"} <= routed

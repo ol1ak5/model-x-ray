@@ -1,10 +1,33 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm --prefix frontend ci && npm --prefix frontend run build",
-  "functions": {
-    "app.py": {
-      "maxDuration": 300,
-      "excludeFiles": "{frontend/node_modules/**,frontend/src/**,tests/**,docs/**,demo/**,tools/**,scripts/**,archive/**,prototypes/**}"
+  "services": {
+    "web": {
+      "root": "frontend/",
+      "framework": "vite"
+    },
+    "api": {
+      "root": "./",
+      "entrypoint": "app:app",
+      "functions": {
+        "app.py": {
+          "maxDuration": 300,
+          "excludeFiles": "{frontend/**,tests/**,docs/**,demo/**,tools/**,scripts/**,archive/**,prototypes/**}"
+        }
+      }
     }
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/:prefix(health|spreadsheets|investigations|docs|openapi.json)/:path*",
+      "destination": {
+        "service": "api"
+      }
+    },
+    {
+      "source": "/(.*)",
+      "destination": {
+        "service": "web"
+      }
+    }
+  ]
 }

@@ -4,13 +4,18 @@ Decision, 26 Oct 2026: Model X-Ray runs as one project on Vercel's free (Hobby) 
 
 ## How the project is put together
 
+The repository holds two programs, so `vercel.json` declares them as two [Vercel Services](https://vercel.com/docs/services) in one project; without that file Vercel refuses to deploy a repository with a JavaScript app and a Python app side by side.
+
 | Piece | Where it comes from |
 |---|---|
-| API | `app.py` at the repository root, one of the entrypoint names Vercel looks for. It builds the app with `app_from_env()` and becomes a single Vercel Function (Fluid compute) |
+| `web` service | `frontend/`, built by Vercel as a Vite app and served from its CDN |
+| `api` service | The repository root, entrypoint `app:app` (`app.py` builds the app with `app_from_env()`). It runs as one Vercel Function on Fluid compute, with `maxDuration` 300 s |
+| Routing | The top-level rewrites send `/health`, `/spreadsheets`, `/investigations`, `/docs` and `/openapi.json` (with any path below them) to `api`, and every other path to `web`. A service sees the original path, so the API keeps its routes as they are. `tests/test_server.py` fails if a new API route is not in that list, because the page would answer it |
 | Python and dependencies | `.python-version` (3.13) and `pyproject.toml` with `uv.lock`; Vercel installs them with uv |
-| Frontend | `vercel.json` sets the build command to `npm --prefix frontend ci && npm --prefix frontend run build`. `app.py` serves `frontend/dist` with `app.frontend("/")`, which Vercel promotes to its CDN. API routes win over frontend files, so `/health`, `/spreadsheets` and `/investigations/...` reach the function and every other path gets the page |
 | Same origin | A production build calls the API on its own origin (`API_URL` is `""` unless `VITE_API_URL` is set), so there is no CORS setup to keep in sync |
-| Function size | `vercel.json` leaves `frontend/node_modules`, the frontend sources, tests, docs, tools and the demo logic sets out of the function bundle; the demo model the API serves is `demo_models/demo.xlsx` |
+| Function size | The `api` service leaves `frontend/`, tests, docs, tools and the demo logic sets out of its bundle; the demo model it serves is `demo_models/demo.xlsx` |
+
+`app.py` also serves `frontend/dist` when that folder exists. Vercel's `api` service never has it, so this only matters for the local run at the end of this page.
 
 ## What changes on Vercel
 
