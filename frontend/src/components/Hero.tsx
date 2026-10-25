@@ -47,7 +47,7 @@ const STEPS = [
   { name: "Fix & verify", text: "=H4+H5 applied · EBITDA recalculates to 44.7" },
 ];
 
-export default function Hero({ demos, error, onStart, onError }: { demos: Spreadsheet[]; error: string | null; onStart: (id: string, question: string, name: string) => void; onError: (message: string) => void }) {
+export default function Hero({ demos, error, onStart, onError }: { demos: Spreadsheet[]; error: string | null; onStart: (id: string, question: string, name: string, file?: File) => void; onError: (message: string) => void }) {
   const demoShift = import.meta.env.DEV ? new URLSearchParams(window.location.search).get("demo-t") : null;
   const shiftStyle = demoShift ? ({ "--demo-shift": `-${demoShift}s` } as CSSProperties) : undefined;
   return (

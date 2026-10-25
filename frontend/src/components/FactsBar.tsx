@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { type Decision, correctedFileUrl, type InvestigationView } from "../api";
+import { type Decision, correctedFileHref, type InvestigationView } from "../api";
 import { figure, kindOf } from "../format";
 import Button from "./Button";
 import WireKey from "./WireKey";
@@ -228,7 +228,7 @@ export default function FactsBar({
             ) : (
               <>
                 Fix applied to a new copy.{" "}
-                <a href={correctedFileUrl(view.id)} onClick={() => setDownloaded(true)}>
+                <a {...correctedFileHref(view)} onClick={() => setDownloaded(true)}>
                   Download corrected model
                 </a>
               </>

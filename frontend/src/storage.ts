@@ -121,7 +121,8 @@ export function currentRun(): StoredRun | null {
 export function saveRun(run: StoredRun): void {
   const state = read();
   const others = state.runs.filter((held) => held.id !== run.id);
-  const runs = [run, ...others].sort((left, right) => right.updatedAt - left.updatedAt);
+  const kept = run.view ? { ...run, view: { ...run.view, sheet: undefined, corrected_file: undefined } } : run;
+  const runs = [kept, ...others].sort((left, right) => right.updatedAt - left.updatedAt);
   write({ version: VERSION, current: run.id, runs });
 }
 

@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   ApiError,
@@ -74,6 +74,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(params?.get("error") ?? null);
   const [sheetError, setSheetError] = useState<string | null>(null);
   const [highlight, setHighlight] = useState<string | null>(null);
+  const upload = useRef<File | null>(null);
 
   const showEvidence = useCallback(
     (id: string) => {
@@ -111,6 +112,10 @@ export default function App() {
   const targetKey = view?.target ? `${view.id}:${view.target.sheet}` : null;
   useEffect(() => {
     if (!view || !targetKey || story) return;
+    if (view.sheet) {
+      setSheet(view.sheet);
+      return;
+    }
     getSheet(view.id)
       .then(setSheet)
       .catch((reason: unknown) => {
@@ -143,7 +148,8 @@ export default function App() {
     }
   }
 
-  const start = useCallback((spreadsheetId: string, question: string, name: string) => {
+  const start = useCallback((spreadsheetId: string, question: string, name: string, file?: File) => {
+    upload.current = file ?? null;
     setSteps([]);
     setView(null);
     setSheet(null);
@@ -152,7 +158,7 @@ export default function App() {
     setModelName(name);
     setPhase("running");
     setCheck({ id: newRunId(), spreadsheetId, question, name, startedAt: Date.now() });
-    void run(startInvestigation(spreadsheetId, question, onEvent));
+    void run(startInvestigation(spreadsheetId, question, onEvent, upload.current));
   }, []);
 
   const resume = useCallback(
@@ -160,7 +166,7 @@ export default function App() {
       if (!view) return;
       setError(null);
       setPhase("running");
-      void run(resumeInvestigation(view.id, answer, onEvent, view));
+      void run(resumeInvestigation(view.id, answer, onEvent, view, upload.current));
     },
     [view],
   );

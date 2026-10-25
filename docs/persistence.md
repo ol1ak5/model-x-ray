@@ -22,7 +22,7 @@ Measured size for the demo model: `view` 11 KB and `sheet` 6 KB, so about 17 KB 
 - Keep the newest 25 runs and at most `STORAGE_BYTES` (2 MB) of JSON, leaving room in the ~5 MB quota for the rest of the app. Pruning drops the oldest run that is not the one on screen, one at a time until the payload fits.
 - Keep the run on screen whatever happens: when it alone exceeds the budget, its `sheet` goes first (the `view` and the report survive and the reload still restores the facts, refetching the window from the API), then its `view`. A run that fits nothing is dropped from storage rather than losing the write silently.
 - A write that still fails with `QuotaExceededError` (another tab, a smaller quota than assumed) prunes further in the same order before giving up, and only removes the key when nothing is left to give up.
-- `localStorage` holds strings only: the corrected `.xlsx` is **downloaded** when the visitor approves, never stored. A real model can be 10 MB, base64 would not fit, and keeping it would be a second copy of deal data.
+- `localStorage` holds strings only: the corrected `.xlsx` is **downloaded** when the visitor approves, never stored. The final view now carries it (`corrected_file`) and the sheet window (`sheet`), and `saveRun` drops both from the stored view; the window is kept once, in the run's own `sheet`. A real model can be 10 MB, base64 would not fit, and keeping it would be a second copy of deal data.
 - Write whenever the picture changes (each streamed step, each view, each decision). A run emits a handful of events and the payload grows to a couple of KB, so a synchronous write is cheaper than the bookkeeping a debounce would need.
 - A restored run asks the API for a fresh sheet window and keeps the stored one when the API cannot answer, so the grid survives both a reload and a server restart.
 - A value with another version, or that is not our shape, is ignored: the app falls back to the home page. A stored run missing `view` or `sheet` is normalized to `null` on read, so a stale entry can never leave the app half-restored. Storage that refuses to work (private mode) leaves the app running without history.
@@ -39,7 +39,7 @@ The continuation is small and fully determined by the decision: `approve` runs o
 
 The API treats that state as untrusted input: `carried_state` keeps only the fields an investigation carries, requires the spreadsheet id and the question, refuses a list or an object of the wrong shape with `400`, and loads the workbook from the spreadsheet id instead of trusting anything in the state.
 
-Two things a carried state cannot do. The cell-choice pause carries no decision, so it still needs the process that asked the question (#138 removes that pause). An uploaded model is only on the server while its file is, so a continuation needs the upload to still be there (or the file re-sent); a demo model is read from the models folder every time.
+Two things a carried state cannot do. The cell-choice pause carries no decision, so it still needs the process that asked the question (#138 removes that pause). An uploaded model is only on the server while its file is, so the browser re-sends the file with every stream request (`docs/api.md`, "Requests that carry the model"); the file lives in the page's memory only, so after a reload an uploaded model has to be chosen again to continue. A demo model is read from the models folder every time.
 
 Why not the other two obvious carriers:
 

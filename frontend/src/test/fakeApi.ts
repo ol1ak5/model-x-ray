@@ -106,7 +106,13 @@ export function fakeApi(start: Event[], resumes: Event[][] = [], failures: strin
   const queue = [...resumes];
   const refusals = [...failures];
   const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
-    const body = init?.body && typeof init.body === "string" ? JSON.parse(init.body) : init?.body;
+    const raw = init?.body;
+    const body =
+      raw instanceof FormData
+        ? { ...JSON.parse(String(raw.get("request"))), file: (raw.get("file") as File | null)?.name }
+        : raw && typeof raw === "string"
+          ? JSON.parse(raw)
+          : raw;
     sent.push({ url, body });
     if (url.endsWith("/spreadsheets")) return Response.json([{ id: "demo", sheets: ["P&L", "Assumptions", "Summary"] }]);
     if (url.includes("/spreadsheets?name=")) return Response.json({ id: "upload-1", name: decodeURIComponent(url.split("name=")[1]), sheets: ["P&L"] }, { status: 201 });

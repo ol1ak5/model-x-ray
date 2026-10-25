@@ -4,7 +4,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 
 import App from "../App";
 import type { InvestigationView } from "../api";
-import { APPROVED, REJECTED, REVIEW, RUNNING, STEPS, TESTED, fakeApi, steps } from "./fakeApi";
+import { APPROVED, REJECTED, REVIEW, RUNNING, SHEET, STEPS, TESTED, fakeApi, steps } from "./fakeApi";
 
 afterEach(() => {
   window.history.replaceState(null, "", "/");
@@ -34,7 +34,7 @@ describe("an investigation in the browser", () => {
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Every formula, checked. Under the X-Ray.");
     await user.upload(screen.getByLabelText(/Upload your model/), new File(["xlsx bytes"], "My model.xlsx"));
     expect(await screen.findByText("My model.xlsx")).toBeInTheDocument();
-    expect(api.sent.find((request) => request.url.endsWith("/investigations/stream"))?.body).toEqual({ spreadsheet_id: "upload-1", question: "" });
+    expect(api.sent.find((request) => request.url.endsWith("/investigations/stream"))?.body).toEqual({ spreadsheet_id: "upload-1", question: "", file: "My model.xlsx" });
 
     const grid = await screen.findByRole("region", { name: "Sheet" });
     expect(within(grid).getByRole("button", { name: "P&L!G5, confirmed" })).toHaveTextContent("97.8");
@@ -72,8 +72,35 @@ describe("an investigation in the browser", () => {
     expect(within(facts).getByText(/the copy is no longer on the server/)).toBeInTheDocument();
     expect(lastResume(api)).toMatchObject({
       url: `http://localhost:8000/investigations/${REVIEW.id}/resume/stream`,
-      body: { action: "approve", reason: "sign slip on COGS", state: { id: REVIEW.id, status: "needs_review" } },
+      body: { action: "approve", reason: "sign slip on COGS", state: { id: REVIEW.id, status: "needs_review" }, file: "My model.xlsx" },
     });
+  });
+
+  test("on a server that keeps nothing between requests, the sheet and the corrected file arrive inside the answer", async () => {
+    const corrected = { name: "My model-corrected.xlsx", base64: "UEsDBAo=" };
+    const api = fakeApi(
+      [...steps(...STEPS.map(([name]) => name)), ["view", { ...REVIEW, sheet: SHEET }]],
+      [[...steps("human_review", "apply_fix"), ["view", { ...APPROVED, sheet: SHEET, corrected_file: corrected }]]],
+    );
+    vi.stubGlobal("fetch", api.fetch);
+    const user = userEvent.setup();
+    render(<App />);
+    await user.upload(screen.getByLabelText(/Upload your model/), new File(["xlsx bytes"], "My model.xlsx"));
+
+    const grid = await screen.findByRole("region", { name: "Sheet" });
+    expect(within(grid).getByRole("button", { name: "P&L!G5, confirmed" })).toHaveTextContent("97.8");
+    expect(api.sent.some((request) => request.url.endsWith("/sheet"))).toBe(false);
+
+    const facts = await screen.findByRole("region", { name: "Investigation facts" });
+    await user.click(within(facts).getByRole("button", { name: "Approve fix" }));
+    const download = await screen.findByRole("link", { name: "Download corrected model" });
+    expect(download).toHaveAttribute("download", corrected.name);
+    expect(download.getAttribute("href")).toBe(`data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${corrected.base64}`);
+    const resumed = lastResume(api)?.body as { state: Record<string, unknown>; file: string };
+    expect(resumed.file).toBe("My model.xlsx");
+    expect(resumed.state.sheet).toBeUndefined();
+    const stored = window.localStorage.getItem("model-x-ray:runs:v1") ?? "";
+    expect(stored).not.toContain(corrected.base64);
   });
 
   test("goes straight to the review, then remembers a rejection marked intentional", async () => {
