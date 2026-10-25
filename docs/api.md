@@ -44,7 +44,7 @@ Models come from the role registry: Super for the Investigator, Verifier and loc
 | `POST /investigations` | `{"spreadsheet_id", "question"}`; `question` is optional | `201` and the investigation view. Without a question the agent checks the whole model (see below) |
 | `GET /health` | | `{"status": "ok"}` for the host's health check |
 | `GET /spreadsheets` | | The demo models: `[{"id", "sheets"}]`. Uploads are never listed, so one visitor never sees another's file, and each call first sweeps uploads older than the TTL |
-| `POST /spreadsheets?name=My%20model.xlsx` | The raw `.xlsx` bytes | `201` and `{"id", "name", "sheets"}`; `.xlsx` only, up to 10 MB, checked by opening it; the saved name is generated, so a name like `../x.xlsx` cannot escape the folder. The file is deleted when the run finishes (approve or reject) or after `MODEL_X_RAY_UPLOAD_TTL` seconds, whichever comes first, and its id stops resolving |
+| `POST /spreadsheets?name=My%20model.xlsx` | The raw `.xlsx` bytes | `201` and `{"id", "name", "sheets"}`; `.xlsx` only, up to 10 MB, checked by opening it; the id is `upload-` plus the first 16 hex digits of the file's SHA-256, so the same bytes get the same id on every server instance, and a name like `../x.xlsx` cannot escape the folder. The file is deleted when the run finishes (approve or reject) or after `MODEL_X_RAY_UPLOAD_TTL` seconds, whichever comes first, and its id stops resolving |
 | `GET /investigations/{id}` | | The investigation view |
 | `GET /investigations/{id}/sheet` | | The sheet window around the target: header row, rows, before/after values, so the page can draw the model (404 once the workbook is gone) |
 | `GET /investigations/{id}/corrected` | | The corrected `.xlsx` after approval, served once: the file is removed from the server when the download finishes, so a second call answers 404. A copy nobody downloads is deleted after `MODEL_X_RAY_COPY_TTL` (1800 s), swept on `GET /spreadsheets` |
@@ -93,9 +93,29 @@ Every endpoint answers with the same JSON, built by `investigation_view` from th
 
 ## Continuing without a thread
 
-`resume` looks the id up in the process that started the investigation. When the request also carries the `state` the browser kept, that lookup is not needed: the server builds a small continuation graph over the carried state and the decision, with the same nodes and the same checks, and runs only the nodes after the review. `approve` runs `apply_fix` alone, `reject` runs no model at all, `edit` runs `test → verify → explain` and pauses for review again. `/{id}/sheet` and `/{id}/corrected` still resolve through the process, which is why the browser keeps its own sheet window (`docs/persistence.md`).
+`resume` looks the id up in the process that started the investigation. When the request also carries the `state` the browser kept, that lookup is not needed: the server builds a small continuation graph over the carried state and the decision, with the same nodes and the same checks, and runs only the nodes after the review. `approve` runs `apply_fix` alone, `reject` runs no model at all, `edit` runs `test → verify → explain` and pauses for review again. `/{id}/sheet` and `/{id}/corrected` still resolve through the process, which is why the final `view` event of every stream also carries what they would answer (see "Requests that carry the model" below).
 
 The state is untrusted input. `carried_state` keeps only the fields an investigation carries, requires the spreadsheet id and the question, and answers `400` for a list or an object of the wrong shape. The workbook is never taken from the state but loaded from the spreadsheet id, so an uploaded model has to still be on the server. A cell choice is no longer part of the API: `locate` picks the cell itself and records the choice in `target_choice`.
+
+## Requests that carry the model
+
+On Vercel (`docs/deployment.md`) two requests from one visitor can reach two instances that share nothing, so an uploaded model and the corrected copy cannot wait on the server between requests. The two stream endpoints therefore also accept `multipart/form-data` with two fields:
+
+| Field | Content |
+|---|---|
+| `request` | The JSON body the endpoint takes as JSON (`{"question"}` to start, the decision plus `state` to resume) |
+| `file` | The visitor's `.xlsx` |
+
+The server stores the file under its content id (the same `upload-<sha256>` as `POST /spreadsheets`) for the length of the request, so `spreadsheet_id` can be left out when starting. A resume whose file has another content id than the carried state's `spreadsheet_id` is refused with `400` ("This is not the file the review started on"), so a state cannot be replayed against a different workbook. A demo model needs no file: JSON requests work as before.
+
+The final `view` event of both streams adds two fields, so the browser needs no follow-up request:
+
+| Field | Content |
+|---|---|
+| `sheet` | The sheet window `GET /investigations/{id}/sheet` would answer, or `null` before the target is known |
+| `corrected_file` | After an approval, `{"name", "base64"}`: the corrected workbook itself; otherwise `null` |
+
+The daily cap counts visitors by the first address in `x-forwarded-for` when the platform sets it, and by the connection's address otherwise.
 
 ## Errors
 

@@ -1,3 +1,5 @@
+import base64
+import hashlib
 import json
 import logging
 import time
@@ -156,7 +158,7 @@ class Copies:
 
 
 class StartRequest(BaseModel):
-    spreadsheet_id: str
+    spreadsheet_id: str = ""
     question: str = ""
 
 
@@ -279,6 +281,32 @@ def sheet_window(book: Workbook, sheet: str, focus_row: int) -> dict:
     return {"sheet": sheet, "header_row": header_row, "columns": [{"letter": column_letters(c), "header": header_of(c)} for c in columns], "rows": grid_rows}
 
 
+def upload_id_of(content: bytes) -> str:
+    return f"upload-{hashlib.sha256(content).hexdigest()[:16]}"
+
+
+def visitor_of(http: Request) -> str:
+    forwarded = http.headers.get("x-forwarded-for", "").split(",")[0].strip()
+    return forwarded or (http.client.host if http.client else "unknown")
+
+
+async def read_request[T: BaseModel](http: Request, model: type[T]) -> tuple[T, bytes | None, str]:
+    if not http.headers.get("content-type", "").startswith("multipart/form-data"):
+        try:
+            return model.model_validate(await http.json()), None, ""
+        except (ValueError, pydantic.ValidationError) as error:
+            raise HTTPException(400, "The request is not valid JSON for this endpoint") from error
+    form = await http.form()
+    try:
+        request = model.model_validate_json(str(form.get("request") or "{}"))
+    except pydantic.ValidationError as error:
+        raise HTTPException(400, "The request field is not valid JSON for this endpoint") from error
+    upload = form.get("file")
+    if upload is None or isinstance(upload, str):
+        return request, None, ""
+    return request, await upload.read(), upload.filename or ""
+
+
 def sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
@@ -312,6 +340,47 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
         status, detail = friendly_error(error)
         return JSONResponse({"detail": detail}, status_code=status)
 
+    def hold(content: bytes, name: str) -> str:
+        if not held.enabled:
+            raise HTTPException(404, "Uploading models is not enabled on this server")
+        filename = Path(name).name
+        if not filename.lower().endswith(".xlsx"):
+            raise HTTPException(400, "Upload an Excel .xlsx file")
+        if len(content) > MAX_UPLOAD_BYTES:
+            raise HTTPException(413, "The file is larger than 10 MB")
+        upload_id = upload_id_of(content)
+        path = upload_dir / f"{upload_id}.xlsx"
+        if held.holds(upload_id) and path.is_file():
+            return upload_id
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+        try:
+            load_xlsx(path)
+        except Exception as error:
+            path.unlink(missing_ok=True)
+            raise HTTPException(400, f"{filename} is not a readable .xlsx file") from error
+        source.add(upload_id, path)
+        held.add(upload_id, path)
+        return upload_id
+
+    def delivered(graph: CompiledStateGraph, investigation_id: str) -> dict:
+        view = investigation_view(graph, investigation_id)
+        view["sheet"] = None
+        target = view.get("target")
+        if target:
+            try:
+                book = source.load(view["spreadsheet_id"])
+                view["sheet"] = sheet_window(book, target["sheet"], split_ref(f"{target['sheet']}!{target['cell']}")[1].row)
+            except ValueError:
+                view["sheet"] = None
+        view["corrected_file"] = None
+        name = view.get("corrected_copy_id")
+        locate_file = getattr(sandbox, "corrected_path", None)
+        path = locate_file(name) if name and locate_file else None
+        if path is not None:
+            view["corrected_file"] = {"name": path.name, "base64": base64.b64encode(path.read_bytes()).decode("ascii")}
+        return view
+
     def release(graph: CompiledStateGraph, investigation_id: str, failed: bool) -> None:
         try:
             state = graph.get_state({"configurable": {"thread_id": investigation_id}}).values
@@ -329,7 +398,7 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
                 for step in update:
                     if step in STEP_LABELS:
                         yield sse("step", {"step": step, "label": STEP_LABELS[step]})
-            yield sse("view", investigation_view(graph, investigation_id))
+            yield sse("view", delivered(graph, investigation_id))
         except Exception as error:
             failed = True
             status, detail = friendly_error(error)
@@ -349,7 +418,9 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
         return graphs[investigation_id]
 
     def open_investigation(request: StartRequest, http: Request) -> tuple[CompiledStateGraph, str]:
-        visitor = http.client.host if http.client else "unknown"
+        if not request.spreadsheet_id:
+            raise HTTPException(400, "Choose a model or send the .xlsx file to check")
+        visitor = visitor_of(http)
         cap.check(visitor)
         graph = build(request.spreadsheet_id)
         investigation_id = uuid4().hex
@@ -369,7 +440,9 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
         except ValueError as error:
             raise HTTPException(400, str(error)) from error
 
-    def resumable(investigation_id: str, request: ResumeRequest) -> tuple[CompiledStateGraph, Any]:
+    def resumable(investigation_id: str, request: ResumeRequest, upload_id: str | None = None) -> tuple[CompiledStateGraph, Any]:
+        if upload_id is not None and request.state is not None and request.state.get("spreadsheet_id") != upload_id:
+            raise HTTPException(400, "This is not the file the review started on; send the same .xlsx to continue it")
         if investigation_id in graphs:
             graph = paused_graph(investigation_id)
             return graph, Command(resume=resume_payload(graph, investigation_id, request))
@@ -404,24 +477,8 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
     async def upload(request: Request, name: str) -> dict:
         if not held.enabled:
             raise HTTPException(404, "Uploading models is not enabled on this server")
-        filename = Path(name).name
-        if not filename.lower().endswith(".xlsx"):
-            raise HTTPException(400, "Upload an Excel .xlsx file")
-        content = await request.body()
-        if len(content) > MAX_UPLOAD_BYTES:
-            raise HTTPException(413, "The file is larger than 10 MB")
-        upload_id = f"upload-{uuid4().hex[:12]}"
-        upload_dir.mkdir(parents=True, exist_ok=True)
-        path = upload_dir / f"{upload_id}.xlsx"
-        path.write_bytes(content)
-        try:
-            sheets = load_xlsx(path).sheets
-        except Exception as error:
-            path.unlink(missing_ok=True)
-            raise HTTPException(400, f"{filename} is not a readable .xlsx file") from error
-        source.add(upload_id, path)
-        held.add(upload_id, path)
-        return {"id": upload_id, "name": filename, "sheets": sheets}
+        upload_id = hold(await request.body(), name)
+        return {"id": upload_id, "name": Path(name).name, "sheets": source.list_sheets(upload_id)}
 
     @app.get("/investigations/{investigation_id}/sheet")
     def sheet(investigation_id: str) -> dict:
@@ -452,7 +509,10 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
         return investigation_view(graph, investigation_id)
 
     @app.post("/investigations/stream")
-    def start_stream(request: StartRequest, http: Request) -> StreamingResponse:
+    async def start_stream(http: Request) -> StreamingResponse:
+        request, content, name = await read_request(http, StartRequest)
+        if content is not None:
+            request = request.model_copy(update={"spreadsheet_id": hold(content, name)})
         graph, investigation_id = open_investigation(request, http)
         graph_input = {"spreadsheet_id": request.spreadsheet_id, "question": request.question}
         return StreamingResponse(progress(graph, graph_input, investigation_id), media_type="text/event-stream")
@@ -465,12 +525,15 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
     def resume(investigation_id: str, request: ResumeRequest) -> dict:
         graph, graph_input = resumable(investigation_id, request)
         graph.invoke(graph_input, {"configurable": {"thread_id": investigation_id}})
+        view = investigation_view(graph, investigation_id)
         release(graph, investigation_id, False)
-        return investigation_view(graph, investigation_id)
+        return view
 
     @app.post("/investigations/{investigation_id}/resume/stream")
-    def resume_stream(investigation_id: str, request: ResumeRequest) -> StreamingResponse:
-        graph, graph_input = resumable(investigation_id, request)
+    async def resume_stream(investigation_id: str, http: Request) -> StreamingResponse:
+        request, content, name = await read_request(http, ResumeRequest)
+        upload_id = hold(content, name) if content is not None else None
+        graph, graph_input = resumable(investigation_id, request, upload_id)
         return StreamingResponse(progress(graph, graph_input, investigation_id), media_type="text/event-stream")
 
     return app

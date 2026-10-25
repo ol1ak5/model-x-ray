@@ -5,7 +5,7 @@ import Button from "./Button";
 import Spinner from "./Spinner";
 import styles from "./QuestionForm.module.css";
 
-export default function QuestionForm({ demos, onStart, onError }: { demos: Spreadsheet[]; onStart: (spreadsheetId: string, question: string, name: string) => void; onError: (message: string) => void }) {
+export default function QuestionForm({ demos, onStart, onError }: { demos: Spreadsheet[]; onStart: (spreadsheetId: string, question: string, name: string, file?: File) => void; onError: (message: string) => void }) {
   const [uploading, setUploading] = useState(false);
 
   async function upload(event: ChangeEvent<HTMLInputElement>) {
@@ -14,7 +14,7 @@ export default function QuestionForm({ demos, onStart, onError }: { demos: Sprea
     setUploading(true);
     try {
       const uploaded = await uploadSpreadsheet(file);
-      onStart(uploaded.id, "", uploaded.name);
+      onStart(uploaded.id, "", uploaded.name, file);
     } catch (reason) {
       onError(reason instanceof ApiError ? reason.message : "The upload failed. Please try again.");
     } finally {

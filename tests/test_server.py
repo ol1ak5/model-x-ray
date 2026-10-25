@@ -78,3 +78,38 @@ def test_the_sheet_around_the_target_is_returned_for_the_grid_view(demo_workbook
     assert opex["cells"][2] == {"ref": "P&L!H7", "value": -45.2, "formula": None}
     assert opex["cells"][1]["formula"] == "=F7*(1+Assumptions!$C$7)"
     assert client.get("/investigations/nope/sheet").status_code == 404
+
+
+def test_the_vercel_entrypoint_writes_only_to_the_temp_folder_and_serves_the_built_frontend(demo_workbook_path: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import runpy
+    import tempfile
+
+    project = tmp_path / "project"
+    (project / "demo_models").mkdir(parents=True)
+    shutil.copy(demo_workbook_path, project / "demo_models" / "demo.xlsx")
+    (project / "frontend" / "dist").mkdir(parents=True)
+    (project / "frontend" / "dist" / "index.html").write_text("<!doctype html><title>Model X-Ray</title>")
+    scratch = tmp_path / "tmp"
+    scratch.mkdir()
+    for name in ("MODEL_X_RAY_MODELS_DIR", "MODEL_X_RAY_OUTPUT_DIR", "MODEL_X_RAY_UPLOAD_DIR", "MODEL_X_RAY_CHECKPOINTS", "MODEL_X_RAY_MEMORY"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("VERCEL", "1")
+    monkeypatch.setenv("NEBIUS_API_KEY", "test-key")
+    monkeypatch.setattr(tempfile, "tempdir", str(scratch))
+    monkeypatch.chdir(project)
+    project.chmod(0o555)
+    try:
+        client = TestClient(runpy.run_path(str(Path(__file__).parents[1] / "app.py"))["app"])
+
+        assert client.get("/spreadsheets").json() == [{"id": "demo", "sheets": ["P&L", "Assumptions"]}]
+        uploaded = client.post("/spreadsheets", params={"name": "My model.xlsx"}, content=demo_workbook_path.read_bytes())
+        assert uploaded.status_code == 201, uploaded.text
+        page = client.get("/", headers={"Accept": "text/html"})
+        assert page.status_code == 200
+        assert "<title>Model X-Ray</title>" in page.text
+    finally:
+        project.chmod(0o755)
+
+    written = {path.name for path in (scratch / "model-x-ray").rglob("*")}
+    assert {"checkpoints.db", "memory.db", "uploads"} <= written
+    assert f"{uploaded.json()['id']}.xlsx" in written

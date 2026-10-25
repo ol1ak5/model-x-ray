@@ -1,4 +1,4 @@
-export const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:8000";
+export const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? (import.meta.env.PROD ? "" : "http://localhost:8000");
 
 export type Spreadsheet = { id: string; sheets: string[] };
 
@@ -84,7 +84,11 @@ export type InvestigationView = {
   attempts: number | null;
   check_labels?: Record<string, string>;
   run_log: { role: string; model: string | null; input_tokens: number | null; output_tokens: number | null; latency_ms: number }[] | null;
+  sheet?: SheetWindow | null;
+  corrected_file?: CorrectedFile | null;
 };
+
+export type CorrectedFile = { name: string; base64: string };
 
 export type Decision = {
   action: "approve" | "edit" | "reject";
@@ -143,12 +147,16 @@ export function parseEvents(text: string): { events: ProgressEvent[]; rest: stri
   return { events, rest };
 }
 
-async function stream(path: string, body: unknown, onEvent: (event: ProgressEvent) => void): Promise<void> {
-  const response = await fetch(`${API_URL}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+function requestBody(body: unknown, file?: File | null): RequestInit {
+  if (!file) return { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
+  const form = new FormData();
+  form.append("request", JSON.stringify(body));
+  form.append("file", file, file.name);
+  return { method: "POST", body: form };
+}
+
+async function stream(path: string, body: unknown, onEvent: (event: ProgressEvent) => void, file?: File | null): Promise<void> {
+  const response = await fetch(`${API_URL}${path}`, requestBody(body, file));
   if (!response.ok || !response.body) throw await failure(response);
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -163,12 +171,13 @@ async function stream(path: string, body: unknown, onEvent: (event: ProgressEven
   parseEvents(buffer + "\n\n").events.forEach(onEvent);
 }
 
-export function startInvestigation(spreadsheetId: string, question: string, onEvent: (event: ProgressEvent) => void): Promise<void> {
-  return stream("/investigations/stream", { spreadsheet_id: spreadsheetId, question }, onEvent);
+export function startInvestigation(spreadsheetId: string, question: string, onEvent: (event: ProgressEvent) => void, file?: File | null): Promise<void> {
+  return stream("/investigations/stream", { spreadsheet_id: spreadsheetId, question }, onEvent, file);
 }
 
-export function resumeInvestigation(id: string, answer: Decision, onEvent: (event: ProgressEvent) => void, state?: InvestigationView | null): Promise<void> {
-  return stream(`/investigations/${id}/resume/stream`, state ? { ...answer, state } : answer, onEvent);
+export function resumeInvestigation(id: string, answer: Decision, onEvent: (event: ProgressEvent) => void, state?: InvestigationView | null, file?: File | null): Promise<void> {
+  const carried = state ? { ...state, sheet: undefined, corrected_file: undefined } : null;
+  return stream(`/investigations/${id}/resume/stream`, carried ? { ...answer, state: carried } : answer, onEvent, file);
 }
 
 export type SheetCell = { ref: string; value: number | null; formula: string | null };
@@ -182,4 +191,9 @@ export async function getSheet(id: string): Promise<SheetWindow> {
 
 export function correctedFileUrl(id: string): string {
   return `${API_URL}/investigations/${id}/corrected`;
+}
+
+export function correctedFileHref(view: InvestigationView): { href: string; download?: string } {
+  if (!view.corrected_file) return { href: correctedFileUrl(view.id) };
+  return { href: `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${view.corrected_file.base64}`, download: view.corrected_file.name };
 }
