@@ -126,6 +126,5 @@ Measured locally with `load_xlsx` and `Workbook.value` on every formula, no LLM 
 | Corpus | Files | Fully computed | Formula cells computed |
 |---|---|---|---|
 | Aswath Damodaran's public valuation spreadsheets (NYU Stern) | 73 | 47 | 85.4% |
-| Enron Errors Corpus (Schmitz and Jannach, 2016) | 57 | 31 | 92.9% |
 
-Each file loads and evaluates in under a second. 35 of the Enron corpus's 36 real error cells evaluate. What still fails: links to other workbooks (the values live in a file Model X-Ray does not have; the report names the cell and says so), `TRANSPOSE`, Data Tables, and VBA functions. Circular references calculate when the file has iterative calculation on, which every Damodaran model with a loop has; with iteration and `OFFSET`, the share of formulas in the Enron and Damodaran files the engine cannot calculate fell from 18% to 13% (20 Oct 2026).
+Each file loads and evaluates in under a second. What still fails: links to other workbooks (the values live in a file Model X-Ray does not have; the report names the cell and says so), `TRANSPOSE`, Data Tables, and VBA functions. Circular references calculate when the file has iterative calculation on, which every Damodaran model with a loop has; with iteration and `OFFSET`, the share of formulas the engine cannot calculate fell from 18% to 13% (20 Oct 2026, measured on the Damodaran files together with a second public corpus that is no longer part of the project).

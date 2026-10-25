@@ -12,6 +12,5 @@ dataset/
 *.db-shm
 *.db-wal
 uploads/
-enron_data/
 damodaran_data/
 .trace-work/

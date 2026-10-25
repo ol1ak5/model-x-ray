@@ -108,7 +108,7 @@ When no question is asked and no row breaks its period pattern, `rules.scan_tabl
 | Kind | What it catches | Fix |
 |---|---|---|
 | `incomplete_total` | A SUM over part of the contiguous block of numbers above it (at most two blank rows between) | A SUM over the whole block |
-| `incomplete_total` (section) | A subtotal whose line label contains "total" and whose SUM leaves out numbers in its section: the cells between the subtotal and the header or previous total above it, blank rows included. Enron's hot lists put a single deal under a header, several blank rows, then `=SUM(M21)` | A SUM from the section's first number to the row above the subtotal |
+| `incomplete_total` (section) | A subtotal whose line label contains "total" and whose SUM leaves out numbers in its section: the cells between the subtotal and the header or previous total above it, blank rows included. For example a single deal under a header, several blank rows, then `=SUM(M21)` | A SUM from the section's first number to the row above the subtotal |
 | `double_count` | A total that adds a subtotal and also that subtotal's parts | The parts without the subtotal |
 | `typed_in_column`, `column_pattern` | A typed value or a different reference pattern in a column of copied formulas; only inside table-like blocks (tables, or periods running down) | The column's formula copied into the cell |
 | `aggregate_range` | A SUM, AVERAGE, MIN, MAX, COUNT or COUNTA whose range disagrees with the same function in the cells beside it (along the row or the column, at most two blank cells between) | The range its neighbours use, on the axis where it differs |
