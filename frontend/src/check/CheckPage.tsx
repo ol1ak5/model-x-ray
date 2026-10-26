@@ -48,7 +48,7 @@ function Chat({ cell, onAsk }: { cell: string; onAsk: (question: string, history
         ))}
         {thinking && (
           <p className="msg agent thinking">
-            <b>Model X-Ray:</b> thinking…
+            <b>Model X-Ray:</b> Thinking…
           </p>
         )}
         {failure && (

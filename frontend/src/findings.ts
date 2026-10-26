@@ -47,6 +47,9 @@ export function explanationOf(report: string | null): string[] {
   return report
     .replace(CITATION, "")
     .replace(/`([^`]*)`/g, "$1")
+    .replace(/(\S+)\s*(?:->|→|=>)\s*/g, (_, left: string) => (/^-?[\d.,]+$/.test(left) ? `from ${left} to ` : `${left} to `))
+    .replace(/\s*[—–]\s*/g, ", ")
+    .replace(/;\s+(\w)/g, (_, first: string) => `. ${first.toUpperCase()}`)
     .replace(/\.{2,}(?=\s|$)/g, ".")
     .split(/\n\s*\n/)
     .map((paragraph) => paragraph.trim())

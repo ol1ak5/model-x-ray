@@ -70,7 +70,7 @@ describe("the landing page", () => {
 describe("a model check", () => {
   test("follows the stream, lists the error with its tested fix, and hands over the corrected file after approval", async () => {
     const api = fakeApi(
-      [...steps(...STEPS.map(([name]) => name)), ["view", { ...REVIEW, sheet: SHEET, report: `${REVIEW.report} G5 uses \`=G4*Assumptions!$C$5\` instead of a subtraction..` }]],
+      [...steps(...STEPS.map(([name]) => name)), ["view", { ...REVIEW, sheet: SHEET, report: `${REVIEW.report} G5 uses \`=G4*Assumptions!$C$5\` instead of a subtraction; the other years subtract it..` }]],
       [[...steps("human_review", "apply_fix"), ["view", { ...APPROVED, sheet: SHEET, corrected_file: CORRECTED }]]],
     );
     vi.stubGlobal("fetch", api.fetch);
@@ -95,8 +95,9 @@ describe("a model check", () => {
     expect(within(facts).getByText("Solution").nextElementSibling).toHaveTextContent("=-G4*Assumptions!$C$5");
     const explanation = within(facts).getByText("Explanation").nextElementSibling as HTMLElement;
     expect(explanation).toHaveTextContent(/Gross profit 2025A moved from 84\.72 to 285\.76/);
-    expect(explanation.textContent).not.toMatch(/ev-\d|`|\.\./);
-    expect(explanation).toHaveTextContent("G5 uses =G4*Assumptions!$C$5 instead of a subtraction.");
+    expect(explanation.textContent).not.toMatch(/ev-\d|`|\.\.|;|->|→|—/);
+    expect(explanation).toHaveTextContent("The fix was tested: P&L!G6 from 285.76 to 90.24 in a sandbox copy");
+    expect(explanation).toHaveTextContent("G5 uses =G4*Assumptions!$C$5 instead of a subtraction. The other years subtract it.");
 
     await user.click(within(errors).getByRole("button", { name: "Approve fix" }));
 
