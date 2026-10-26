@@ -162,6 +162,10 @@ class StartRequest(BaseModel):
     question: str = ""
 
 
+class WorkbookRequest(BaseModel):
+    spreadsheet_id: str = ""
+
+
 class ResumeRequest(BaseModel):
     action: Literal["approve", "edit", "reject"] | None = None
     reason: str = ""
@@ -248,6 +252,30 @@ def checked_patch(source: SpreadsheetSource, spreadsheet_id: str, requested: dic
 
 
 MAX_GRID_ROWS = 40
+
+MAX_VIEW_ROWS = 300
+
+MAX_VIEW_COLUMNS = 40
+
+
+def workbook_view(book: Workbook) -> dict:
+    sheets = []
+    for name in book.sheets:
+        refs = [ref for ref in book.cells() if split_ref(ref)[0] == name]
+        addresses = {ref: split_ref(ref)[1] for ref in refs}
+        rows = min(max((address.row for address in addresses.values()), default=0), MAX_VIEW_ROWS)
+        columns = min(max((address.column for address in addresses.values()), default=0), MAX_VIEW_COLUMNS)
+        cells = []
+        for ref, address in sorted(addresses.items(), key=lambda item: (item[1].row, item[1].column)):
+            if address.row > rows or address.column > columns:
+                continue
+            try:
+                value = book.value(ref)
+            except FormulaError:
+                value = "#ERROR"
+            cells.append({"ref": f"{column_letters(address.column)}{address.row}", "value": value, "formula": book.formula(ref)})
+        sheets.append({"name": name, "rows": rows, "columns": columns, "cells": cells})
+    return {"sheets": sheets}
 
 
 def sheet_window(book: Workbook, sheet: str, focus_row: int) -> dict:
@@ -479,6 +507,15 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
             raise HTTPException(404, "Uploading models is not enabled on this server")
         upload_id = hold(await request.body(), name)
         return {"id": upload_id, "name": Path(name).name, "sheets": source.list_sheets(upload_id)}
+
+    @app.post("/workbook")
+    async def workbook(http: Request) -> dict:
+        request, content, name = await read_request(http, WorkbookRequest)
+        spreadsheet_id = hold(content, name) if content is not None else request.spreadsheet_id
+        try:
+            return workbook_view(source.load(spreadsheet_id))
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from error
 
     @app.get("/investigations/{investigation_id}/sheet")
     def sheet(investigation_id: str) -> dict:

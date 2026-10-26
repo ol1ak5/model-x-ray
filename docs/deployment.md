@@ -10,7 +10,7 @@ The repository holds two programs, so `vercel.json` declares them as two [Vercel
 |---|---|
 | `web` service | `frontend/`, built by Vercel as a Vite app and served from its CDN |
 | `api` service | The repository root, entrypoint `app:app` (`app.py` builds the app with `app_from_env()`). It runs as one Vercel Function on Fluid compute, with `maxDuration` 300 s |
-| Routing | The top-level rewrites send `/health`, `/spreadsheets`, `/investigations`, `/docs` and `/openapi.json` (with any path below them) to `api`, and every other path to `web`. A service sees the original path, so the API keeps its routes as they are. `tests/test_server.py` fails if a new API route is not in that list, because the page would answer it |
+| Routing | The top-level rewrites send `/health`, `/spreadsheets`, `/investigations`, `/workbook`, `/docs` and `/openapi.json` (with any path below them) to `api`, and every other path to `web`. A service sees the original path, so the API keeps its routes as they are. `tests/test_server.py` fails if a new API route is not in that list, because the page would answer it |
 | Python and dependencies | `.python-version` (3.13) and `pyproject.toml` with `uv.lock`; Vercel installs them with uv |
 | Same origin | A production build calls the API on its own origin (`API_URL` is `""` unless `VITE_API_URL` is set), so there is no CORS setup to keep in sync |
 | Function size | The `api` service leaves `frontend/`, tests, docs, tools and the demo logic sets out of its bundle; the demo model it serves is `demo_models/demo.xlsx` |
