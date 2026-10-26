@@ -23,6 +23,7 @@ from langgraph.store.base import BaseStore
 from langgraph.types import Command
 from pydantic import BaseModel
 
+from model_x_ray.agents.ask import answer_question
 from model_x_ray.agents.verifier import CHECK_LABELS
 from model_x_ray.graph import run_continuation, run_investigation
 from model_x_ray.llm import ProviderFailure
@@ -75,6 +76,7 @@ class AgentModels:
 class UsageCap:
     per_visitor: int
     total: int
+    noun: str = "investigations"
     day: date = field(default_factory=date.today)
     counts: dict[str, int] = field(default_factory=dict)
 
@@ -82,9 +84,9 @@ class UsageCap:
         if self.day != date.today():
             self.day, self.counts = date.today(), {}
         if self.counts.get(visitor, 0) >= self.per_visitor:
-            raise HTTPException(429, f"Daily limit of {self.per_visitor} investigations per visitor reached; try again tomorrow")
+            raise HTTPException(429, f"Daily limit of {self.per_visitor} {self.noun} per visitor reached; try again tomorrow")
         if sum(self.counts.values()) >= self.total:
-            raise HTTPException(429, f"The demo's daily limit of {self.total} investigations is reached; try again tomorrow")
+            raise HTTPException(429, f"The demo's daily limit of {self.total} {self.noun} is reached; try again tomorrow")
 
     def record(self, visitor: str) -> None:
         self.counts[visitor] = self.counts.get(visitor, 0) + 1
@@ -160,6 +162,17 @@ class Copies:
 class StartRequest(BaseModel):
     spreadsheet_id: str = ""
     question: str = ""
+
+
+class AskRequest(BaseModel):
+    question: str = ""
+    state: dict[str, Any] | None = None
+    history: list[dict[str, str]] = []
+
+
+MAX_QUESTION_CHARS = 500
+
+MAX_HISTORY_TURNS = 8
 
 
 class WorkbookRequest(BaseModel):
@@ -356,12 +369,13 @@ def investigation_view(graph: CompiledStateGraph, investigation_id: str) -> dict
     }
 
 
-def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: AgentModels, checkpointer: BaseCheckpointSaver, cap: UsageCap, allowed_origins: list[str] | None = None, store: BaseStore | None = None, upload_dir: Path | None = None, upload_ttl: float = UPLOAD_TTL, clock: Callable[[], float] = time.monotonic, copy_dir: Path | None = None, copy_ttl: float = COPY_TTL) -> FastAPI:
+def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: AgentModels, checkpointer: BaseCheckpointSaver, cap: UsageCap, allowed_origins: list[str] | None = None, store: BaseStore | None = None, upload_dir: Path | None = None, upload_ttl: float = UPLOAD_TTL, clock: Callable[[], float] = time.monotonic, copy_dir: Path | None = None, copy_ttl: float = COPY_TTL, ask_cap: UsageCap | None = None) -> FastAPI:
     app = FastAPI(title="Model X-Ray")
     app.add_middleware(CORSMiddleware, allow_origins=allowed_origins or [], allow_origin_regex=LOCAL_DEV_ORIGIN, allow_methods=["GET", "POST"], allow_headers=["Content-Type"])
     graphs: dict[str, CompiledStateGraph] = {}
     held = Uploads(source, upload_dir, upload_ttl, clock)
     copies = Copies(copy_dir, copy_ttl)
+    questions = ask_cap or UsageCap(per_visitor=30, total=500, noun="questions")
 
     @app.exception_handler(Exception)
     def explain_failure(request: Request, error: Exception) -> JSONResponse:
@@ -507,6 +521,40 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
             raise HTTPException(404, "Uploading models is not enabled on this server")
         upload_id = hold(await request.body(), name)
         return {"id": upload_id, "name": Path(name).name, "sheets": source.list_sheets(upload_id)}
+
+    def cell_labels(state: dict[str, Any]) -> dict[str, str]:
+        try:
+            book = source.load(state["spreadsheet_id"])
+        except ValueError:
+            return {}
+        refs = {ref for verification in state.get("verifications", []) for ref in verification.get("after", {})}
+        if state.get("patch"):
+            refs.add(state["patch"]["cell"])
+        labels = {}
+        for ref in refs:
+            try:
+                name = " ".join(part for part in (book.row_label(ref), book.column_header(ref)) if part)
+            except (ValueError, KeyError):
+                name = ""
+            if name:
+                labels[ref] = name
+        return labels
+
+    @app.post("/investigations/{investigation_id}/ask")
+    def ask(investigation_id: str, request: AskRequest, http: Request) -> dict:
+        question = request.question.strip()
+        if not question:
+            raise HTTPException(400, "Write a question for the agent")
+        if len(question) > MAX_QUESTION_CHARS:
+            raise HTTPException(400, f"Keep the question under {MAX_QUESTION_CHARS} characters")
+        if request.state is None:
+            raise HTTPException(400, "Send the check's state with the question, so the agent knows what it found")
+        state = carried_state(request.state)
+        visitor = visitor_of(http)
+        questions.check(visitor)
+        answer, _ = answer_question(models.explainer or models.llm, state, request.history[-MAX_HISTORY_TURNS:], question, cell_labels(state))
+        questions.record(visitor)
+        return {"answer": answer}
 
     @app.post("/workbook")
     async def workbook(http: Request) -> dict:
