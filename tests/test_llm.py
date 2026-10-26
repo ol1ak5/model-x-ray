@@ -38,6 +38,5 @@ def test_the_role_registry_maps_roles_to_models_and_overrides_from_the_environme
     with pytest.raises(ValueError, match="NEBIUS_API_KEY"):
         build_chat_model(role="verifier")
     monkeypatch.setenv("NEBIUS_API_KEY", "test-key")
-    monkeypatch.delenv("NEBIUS_BASE_URL")
-    with pytest.raises(ValueError, match="NEBIUS_BASE_URL"):
-        build_chat_model(role="verifier")
+    monkeypatch.setenv("NEBIUS_BASE_URL", "")
+    assert str(build_chat_model(role="verifier").openai_api_base) == "https://api.tokenfactory.nebius.com/v1/", "a deployment that only sets the key still reaches Token Factory"

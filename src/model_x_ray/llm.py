@@ -24,6 +24,7 @@ ROLE_MODELS: dict[str, str] = {
 }
 ROLE_MAX_TOKENS: dict[str, int] = {"explain": 1400}
 DEFAULT_TIMEOUT = 120.0
+TOKEN_FACTORY_URL = "https://api.tokenfactory.nebius.com/v1/"
 DEFAULT_MAX_RETRIES = 3
 
 
@@ -48,9 +49,7 @@ def build_chat_model(model: str | None = None, *, role: str | None = None) -> Ch
     api_key = os.environ.get("NEBIUS_API_KEY")
     if not api_key:
         raise ValueError("NEBIUS_API_KEY is not set; copy .env.example to .env and add your Nebius Token Factory key")
-    base_url = os.environ.get("NEBIUS_BASE_URL")
-    if not base_url:
-        raise ValueError("NEBIUS_BASE_URL is not set; copy .env.example to .env and set https://api.tokenfactory.nebius.com/v1/")
+    base_url = os.environ.get("NEBIUS_BASE_URL") or TOKEN_FACTORY_URL
     return ChatOpenAI(
         model=chosen,
         base_url=base_url,
