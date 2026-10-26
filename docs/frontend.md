@@ -38,7 +38,9 @@ Try the demo starts a live check of the first model `GET /spreadsheets` lists. U
 - **Sheets.** "Sheets in this file" and "Open in the sheet" open the real workbook (`POST /workbook`) in a dialog that looks like Excel: values as Excel shows them in General format, the formula of the selected cell in the formula bar, arrow keys to move, tabs to switch sheets. Opened from an error, the error cell is red and every cell whose value the tested fix changes is blue, with a line saying the marks exist only on screen.
 - **Stopped states.** A failed request is one red line under the header; a check cut short by a reload says Interrupted and offers Run again. `components/Boundary.tsx` catches a render error on the check page so the worst case is a sentence and a way back, never a white page.
 
-Today the agent investigates one error per run, so the list has at most one row; the list, the filters and the counts are built for several. The prototype's "Ask the agent" chat is left out until there is an endpoint behind it.
+- **Ask the agent.** Under each open error a one-line field asks the agent about it (`POST /investigations/{id}/ask`). The conversation is a thread of lines, "You:" then "Model X-Ray:" in green, each new question on its own line, with "thinking…" while the answer is on its way; the whole conversation so far is sent with each question. The field goes away once the fix is accepted.
+
+Today the agent investigates one error per run, so the list has at most one row; the list, the filters and the counts are built for several.
 
 ## State in the browser
 

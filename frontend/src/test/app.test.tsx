@@ -184,6 +184,36 @@ describe("a model check", () => {
     expect(api.sent.filter((request) => request.url.endsWith("/workbook"))).toHaveLength(1);
   });
 
+  test("answers the reviewer's questions about the error, one line each, remembering the conversation", async () => {
+    const api = fakeApi([...steps("explain"), ["view", REVIEW]], [], [], ["COGS is a cost, so G5 should subtract it like the other years.", "Yes. In the copy Gross profit 2025A became 90.2."]);
+    vi.stubGlobal("fetch", api.fetch);
+    const user = await checkDemo();
+    const errors = await openTheError(user);
+    const field = within(errors).getByLabelText("Ask the agent about this error");
+
+    await user.type(field, "Why is G5 wrong?");
+    await user.click(within(errors).getByRole("button", { name: "Ask" }));
+
+    expect(await within(errors).findByText("COGS is a cost, so G5 should subtract it like the other years.")).toBeInTheDocument();
+    expect(within(errors).getByText("Why is G5 wrong?").closest("p")).toHaveTextContent("You: Why is G5 wrong?");
+    const first = api.sent.filter((request) => request.url.endsWith("/ask")).at(-1);
+    expect(first?.url).toBe(`http://localhost:8000/investigations/${REVIEW.id}/ask`);
+    expect(first?.body).toMatchObject({ question: "Why is G5 wrong?", history: [], state: { id: REVIEW.id, status: "needs_review" } });
+
+    await user.type(field, "Was the fix tested?");
+    await user.click(within(errors).getByRole("button", { name: "Ask" }));
+
+    expect(await within(errors).findByText("Yes. In the copy Gross profit 2025A became 90.2.")).toBeInTheDocument();
+    expect(api.sent.filter((request) => request.url.endsWith("/ask")).at(-1)?.body).toMatchObject({
+      question: "Was the fix tested?",
+      history: [
+        { role: "user", text: "Why is G5 wrong?" },
+        { role: "agent", text: "COGS is a cost, so G5 should subtract it like the other years." },
+      ],
+    });
+    expect(field).toHaveValue("");
+  });
+
   test("shows a short message when the check fails, and keeps the page", async () => {
     vi.stubGlobal("fetch", fakeApi([...steps("load_sheet"), ["error", 503, "The AI service is busy right now. Please try again in a minute."]]).fetch);
     await checkDemo();

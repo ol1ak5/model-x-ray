@@ -1,6 +1,6 @@
-import { useCallback, useState } from "react";
+import { type FormEvent, useCallback, useState } from "react";
 
-import { type Decision, type InvestigationView, type WorkbookView, correctedFileHref } from "../api";
+import { ApiError, type ChatTurn, type Decision, type InvestigationView, type WorkbookView, correctedFileHref } from "../api";
 import Brand from "../components/Brand";
 import type { Finding } from "../findings";
 import type { Phase } from "../progress";
@@ -12,7 +12,65 @@ type Status = { label: string; tone: "run" | "wait" | "done"; line: string };
 
 const LABELS: Record<Finding["status"], string> = { detected: "Error detected", fixed: "Fixed", dismissed: "Not an error" };
 
-function Item({ finding, open, pending, busy, onToggle, onOpenSheet, onDecide }: { finding: Finding; open: boolean; pending: Pending; busy: boolean; onToggle: () => void; onOpenSheet: () => void; onDecide: (decision: Decision, kind: Pending) => void }) {
+function Chat({ cell, onAsk }: { cell: string; onAsk: (question: string, history: ChatTurn[]) => Promise<string> }) {
+  const [turns, setTurns] = useState<ChatTurn[]>([]);
+  const [draft, setDraft] = useState("");
+  const [thinking, setThinking] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const id = `ask-${cell.replace(/[^A-Za-z0-9]/g, "-")}`;
+
+  async function send(event: FormEvent) {
+    event.preventDefault();
+    const question = draft.trim();
+    if (!question || thinking) return;
+    const history = turns;
+    setTurns([...history, { role: "user", text: question }]);
+    setDraft("");
+    setFailure(null);
+    setThinking(true);
+    try {
+      const answer = await onAsk(question, history);
+      setTurns((current) => [...current, { role: "agent", text: answer }]);
+    } catch (reason) {
+      setFailure(reason instanceof ApiError ? reason.message : "The agent could not be reached. Please try again.");
+    } finally {
+      setThinking(false);
+    }
+  }
+
+  return (
+    <div className="chat">
+      <div className="thread" aria-live="polite">
+        {turns.map((turn, index) => (
+          <p key={index} className={`msg ${turn.role === "user" ? "me" : "agent"}`}>
+            <b>{turn.role === "user" ? "You:" : "Model X-Ray:"}</b> {turn.text}
+          </p>
+        ))}
+        {thinking && (
+          <p className="msg agent thinking">
+            <b>Model X-Ray:</b> thinking…
+          </p>
+        )}
+        {failure && (
+          <p className="alert" role="alert">
+            {failure}
+          </p>
+        )}
+      </div>
+      <form className="ask" onSubmit={send}>
+        <label htmlFor={id} className="visually-hidden">
+          Ask the agent about this error
+        </label>
+        <input id={id} type="text" placeholder="Ask the agent about the error or the fix" autoComplete="off" maxLength={500} value={draft} onChange={(event) => setDraft(event.target.value)} />
+        <button className="btn plain" type="submit" disabled={thinking || !draft.trim()}>
+          Ask
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function Item({ finding, open, pending, busy, onToggle, onOpenSheet, onDecide, onAsk }: { finding: Finding; open: boolean; pending: Pending; busy: boolean; onToggle: () => void; onOpenSheet: () => void; onDecide: (decision: Decision, kind: Pending) => void; onAsk: (question: string, history: ChatTurn[]) => Promise<string> }) {
   const [mode, setMode] = useState<"actions" | "edit" | "reject">("actions");
   const [formula, setFormula] = useState(finding.after);
   const [never, setNever] = useState(false);
@@ -105,6 +163,8 @@ function Item({ finding, open, pending, busy, onToggle, onOpenSheet, onDecide }:
               </label>
             </div>
           )}
+
+          {finding.status !== "fixed" && <Chat cell={finding.cell} onAsk={onAsk} />}
         </div>
       )}
     </li>
@@ -125,6 +185,7 @@ export default function CheckPage({
   onHome,
   onDemo,
   onRetry,
+  onAsk,
 }: {
   name: string;
   sheets: string[];
@@ -139,6 +200,7 @@ export default function CheckPage({
   onHome: () => void;
   onDemo: () => void;
   onRetry: () => void;
+  onAsk: (question: string, history: ChatTurn[]) => Promise<string>;
 }) {
   const [filter, setFilter] = useState("All");
   const [open, setOpen] = useState<Set<string>>(new Set());
@@ -254,6 +316,7 @@ export default function CheckPage({
                       onToggle={() => toggle(finding.cell)}
                       onOpenSheet={() => setViewer({ sheet: finding.sheet, title: `${finding.cell} · ${finding.title}`, marks: { error: finding.cell, dependents: finding.dependents } })}
                       onDecide={decide}
+                      onAsk={onAsk}
                     />
                   ))}
                 </ul>

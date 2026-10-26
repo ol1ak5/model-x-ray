@@ -120,3 +120,12 @@ to { opacity: 1; }
 .check .meta { align-items: flex-start; text-align: left; }
 }
 .check .retry { margin-top: 1rem; }
+.check .chat { margin-top: 1.4rem; padding-top: 1rem; border-top: 1px dashed var(--line); }
+.check .thread .msg { margin: 0 0 0.7rem; font-size: 0.9rem; line-height: 1.55; max-width: 44rem; color: var(--ink); }
+.check .thread .msg b { font-weight: 600; }
+.check .thread .msg.agent b { color: var(--g2); }
+.check .thread .msg.thinking { color: var(--faint); }
+.check .ask { display: flex; gap: 0.6rem; align-items: center; }
+.check .ask input { flex: 1; min-width: 0; height: 2.4rem; border: 0; border-bottom: 1px solid var(--line); background: transparent; font-size: 0.9rem; outline: 0; }
+.check .ask input:focus { border-bottom-color: var(--g3); }
+.check .ask .btn.plain { background: transparent; }

@@ -4,9 +4,11 @@ import {
   ApiError,
   type Decision,
   type InvestigationView,
+  type ChatTurn,
   type ProgressEvent,
   type SheetWindow,
   type Spreadsheet,
+  askAgent,
   getSheet,
   getWorkbook,
   listSpreadsheets,
@@ -153,6 +155,14 @@ export default function App() {
     if (check) start(check.spreadsheetId, check.name, check.sheets, upload.current);
   }, [check, start]);
 
+  const ask = useCallback(
+    (question: string, history: ChatTurn[]) => {
+      if (!view) return Promise.reject(new ApiError("The check has not finished yet."));
+      return askAgent(view.id, question, view, history);
+    },
+    [view],
+  );
+
   const reset = useCallback(() => {
     setSteps([]);
     setView(null);
@@ -194,6 +204,7 @@ export default function App() {
             onHome={reset}
             onDemo={startDemo}
             onRetry={retry}
+            onAsk={ask}
           />
         </Boundary>
       ) : (

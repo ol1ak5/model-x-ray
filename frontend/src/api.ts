@@ -189,6 +189,18 @@ export async function getSheet(id: string): Promise<SheetWindow> {
   return response.json();
 }
 
+export type ChatTurn = { role: "user" | "agent"; text: string };
+
+export async function askAgent(id: string, question: string, state: InvestigationView, history: ChatTurn[]): Promise<string> {
+  const response = await fetch(`${API_URL}/investigations/${id}/ask`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question, history, state: { ...state, sheet: undefined, corrected_file: undefined } }),
+  });
+  if (!response.ok) throw await failure(response);
+  return (await response.json()).answer;
+}
+
 export type WorkbookCell = { ref: string; value: number | string | boolean | null; formula: string | null };
 export type WorkbookSheet = { name: string; rows: number; columns: number; cells: WorkbookCell[] };
 export type WorkbookView = { sheets: WorkbookSheet[] };
