@@ -212,7 +212,7 @@ export default function Landing({ onDemo, onUpload, busy, demoReady, error }: { 
             </div>
             <div className="faq reveal">
               {[
-                ["What kind of errors does it find?", "It recalculates 50 common Excel functions and finds five types of error: typed numbers, wrong links, incomplete totals, flipped signs and formulas that contradict their label."],
+                ["What kind of errors does it find?", "It recalculates 50 common Excel functions and finds seven types of error: typed values, wrong references, flipped signs, incomplete ranges, wrong periods, logic errors and unusual inputs."],
                 ["Will it change my file?", "No. Every fix is tested in a copy. You see the cause, the evidence and the numbers before and after, and only an approved fix is written, to a new copy."],
                 ["Which files can I upload?", "Excel .xlsx files up to 4.5 MB on this demo. Your file stays private and is not kept after the check."],
                 ["How much does a check cost?", "Usually one to four US cents, depending on the size of the model. In 117 runs on real workbooks, from about 50 to 6,000 formulas, the median was under one cent."],

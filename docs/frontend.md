@@ -34,6 +34,18 @@ Try the demo starts a live check of the first model `GET /spreadsheets` lists. U
 - **Header.** The file name, its sheets as links, and on the right the state ("Checking the model", "1 error detected", "No errors found", "Review complete") over one line that says what is happening ("Tracing the formulas", "Waiting for your decision", "1 fix saved to a new copy").
 - **Progress.** Five phases (`src/progress.ts`): Read, Investigate, Prove, Approve, Review complete. They follow the streamed steps: Read is done after `map_model`, Investigate after `diagnose`, Prove after `explain`. A phase in progress spins blue, Approve pulses blue while the review waits for the reviewer, and done phases are green with a check.
 - **Errors detected.** Built from the view by `src/findings.ts`, and shown once Prove is done. Each error is a row (cell, a sentence such as "COGS 2025A has the wrong sign" made from the sheet window's row label, column header and the error type, and its status: Error detected, Fixed, Not an error) that opens into Where (with Open in the sheet), Error (the formula as it is), Solution (the tested formula), Explanation (the report without its `ev-N` citations, with semicolons turned into full stops and arrows into "from ... to ...", the house style the prompts and the engine's own evidence text also follow), and the actions. Rows open independently; type filters appear above the list.
+
+  The agent's seven error types have one name each on the page, used by the filters, the FAQ and the sentence of each error (`TYPES` in `src/findings.ts`); `tests/test_view_contract.py` fails when the agent gains a type the page cannot name or the FAQ drifts:
+
+  | Agent (`error_type`) | Page | Sentence |
+  |---|---|---|
+  | `typed_value` | Typed value | is a typed number |
+  | `wrong_reference` | Wrong reference | points to the wrong cell |
+  | `sign_inconsistency` | Flipped sign | has the wrong sign |
+  | `range_inconsistency` | Incomplete range | adds up the wrong range |
+  | `period_inconsistency` | Wrong period | uses the wrong period |
+  | `logic_error` | Logic error | breaks the logic of its line |
+  | `input_outlier` | Unusual input | is out of line with the rest |
 - **Decisions.** Approve fix (the button says "Testing in a copy…" while the server writes the copy), Edit fix (the reviewer's formula, sent as an `edit` decision and tested again before it can be approved), Reject (then "It's not an error", with "Never flag this cell again" sent as `intentional`). Once every error is settled the page offers the corrected workbook from the view's `corrected_file`.
 - **Sheets.** "Sheets in this file" and "Open in the sheet" open the real workbook (`POST /workbook`) in a dialog that looks like Excel: values as Excel shows them in General format, the formula of the selected cell in the formula bar, arrow keys to move, tabs to switch sheets. Opened from an error, the error cell is red and every cell whose value the tested fix changes is blue, with a line saying the marks exist only on screen.
 - **Stopped states.** A failed request is one red line under the header; a check cut short by a reload says Interrupted and offers Run again. `components/Boundary.tsx` catches a render error on the check page so the worst case is a sentence and a way back, never a white page.
