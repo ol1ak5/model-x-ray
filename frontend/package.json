@@ -7,9 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test": "vitest run",
-    "dev:dark": "VITE_THEME=glow VITE_VARIANT=dark vite --port 5174 --strictPort",
-    "dev:light": "VITE_THEME=glow VITE_VARIANT=light vite --port 5175 --strictPort"
+    "test": "vitest run"
   },
   "dependencies": {
     "react": "^19.3.0",

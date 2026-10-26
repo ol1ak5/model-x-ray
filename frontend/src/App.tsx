@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   ApiError,
@@ -8,98 +8,62 @@ import {
   type SheetWindow,
   type Spreadsheet,
   getSheet,
+  getWorkbook,
   listSpreadsheets,
   resumeInvestigation,
   startInvestigation,
+  uploadSpreadsheet,
 } from "./api";
-import Alert from "./components/Alert";
+import CheckPage from "./check/CheckPage";
 import Boundary from "./components/Boundary";
-import Button from "./components/Button";
-import Chip from "./components/Chip";
-import FactsBar from "./components/FactsBar";
-import Hero from "./components/Hero";
-import Logo from "./components/Logo";
-import type { Marks } from "./components/SheetGrid";
-import SheetSkeleton from "./components/SheetSkeleton";
-import Stage from "./components/Stage";
-import StepRail from "./components/StepRail";
-import { clearCurrent, currentRun, newRunId, saveRun } from "./storage";
-import { type Step, railOf } from "./steps";
-import { APPROVED, CLEAR, RUNNING, REVIEW, SHEET, fakeSteps } from "./test/fakeApi";
-import styles from "./App.module.css";
+import Wave from "./components/Wave";
+import { findingsOf } from "./findings";
+import Landing from "./landing/Landing";
+import { phasesOf, statusOf } from "./progress";
+import { type StoredStep, clearCurrent, currentRun, newRunId, saveRun } from "./storage";
+import { APPROVED, REVIEW, RUNNING, SHEET, fakeSteps } from "./test/fakeApi";
 
 type Phase = "idle" | "running" | "paused" | "done" | "interrupted";
 
-type Run = { id: string; spreadsheetId: string; name: string; question: string; startedAt: number };
+type Run = { id: string; spreadsheetId: string; name: string; question: string; startedAt: number; sheets: string[] };
 
 const UNREACHABLE = "The Model X-Ray service could not be reached. Please try again.";
 
-function marksOf(view: InvestigationView): Marks {
-  const hypotheses = view.hypotheses ?? [];
-  const suspicious = new Set(hypotheses.filter((h) => h.status === "open").map((h) => h.cell));
-  const traced = new Set<string>();
-  const walk = (node: InvestigationView["causal_tree"]) => {
-    if (!node) return;
-    traced.add(node.cell);
-    if (node.suspicious) suspicious.add(node.cell);
-    node.children.forEach(walk);
-  };
-  walk(view.causal_tree);
-  return {
-    suspicious,
-    confirmed: new Set(hypotheses.filter((h) => h.status === "confirmed").map((h) => h.cell)),
-    traced,
-    target: view.target ? `${view.target.sheet}!${view.target.cell}` : null,
-    after: view.verifications?.at(-1)?.after ?? {},
-    patch: view.patch,
-  };
+const DEMO_NAME = "Demo model.xlsx";
+
+function storyRun(story: string | null): { run: Run; view: InvestigationView | null; phase: Phase } | null {
+  const view = story === "workspace" ? REVIEW : story === "done" ? APPROVED : story === "running" ? RUNNING : null;
+  if (!story || (!view && story !== "starting")) return null;
+  const run = { id: `story-${story}`, spreadsheetId: "demo", name: DEMO_NAME, question: "", startedAt: 0, sheets: ["P&L", "Assumptions", "Summary"] };
+  return { run, view: story === "running" ? null : view, phase: story === "done" ? "done" : story === "workspace" ? "paused" : "running" };
 }
 
-const MemoStage = memo(Stage);
-const MemoFacts = memo(FactsBar);
-const MemoRail = memo(StepRail);
-
 export default function App() {
-  const params = import.meta.env.DEV ? new URLSearchParams(window.location.search) : null;
-  const story = params?.get("story") ?? null;
+  const story = import.meta.env.DEV ? new URLSearchParams(window.location.search).get("story") : null;
+  const initial = storyRun(story);
   const [demos, setDemos] = useState<Spreadsheet[]>([]);
-  const [phase, setPhase] = useState<Phase>(story === "starting" || story === "running" ? "running" : story === "done" ? "done" : story ? "paused" : "idle");
-  const [steps, setSteps] = useState<Step[]>(story ? fakeSteps(story) : []);
-  const [view, setView] = useState<InvestigationView | null>(
-    story === "workspace" ? REVIEW : story === "running" ? RUNNING : story === "done" ? APPROVED : story === "clear" ? CLEAR : null,
-  );
-  const [sheet, setSheet] = useState<SheetWindow | null>(story === "workspace" || story === "running" || story === "done" || story === "clear" ? SHEET : null);
-  const [check, setCheck] = useState<Run | null>(null);
-  const [modelName, setModelName] = useState(story ? "My model.xlsx" : "");
-  const [error, setError] = useState<string | null>(params?.get("error") ?? null);
-  const [sheetError, setSheetError] = useState<string | null>(null);
-  const [highlight, setHighlight] = useState<string | null>(null);
+  const [check, setCheck] = useState<Run | null>(initial?.run ?? null);
+  const [phase, setPhase] = useState<Phase>(initial?.phase ?? "idle");
+  const [steps, setSteps] = useState<StoredStep[]>(story ? fakeSteps(story) : []);
+  const [view, setView] = useState<InvestigationView | null>(initial?.view ?? null);
+  const [sheet, setSheet] = useState<SheetWindow | null>(initial ? SHEET : null);
+  const [error, setError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const upload = useRef<File | null>(null);
-
-  const showEvidence = useCallback(
-    (id: string) => {
-      const record = view?.evidence?.find((item) => item.id === id);
-      if (!record) return;
-      setHighlight(record.cell);
-      window.setTimeout(() => setHighlight(null), 3800);
-    },
-    [view],
-  );
 
   useEffect(() => {
     if (story) return;
     const saved = currentRun();
-    if (!saved) return;
-    setCheck({ id: saved.id, spreadsheetId: saved.spreadsheetId, name: saved.name, question: saved.question, startedAt: saved.startedAt });
+    if (!saved?.view) return;
+    setCheck({ id: saved.id, spreadsheetId: saved.spreadsheetId, name: saved.name, question: saved.question, startedAt: saved.startedAt, sheets: saved.sheets ?? [] });
     setSteps(saved.steps);
     setView(saved.view);
     setSheet(saved.sheet);
-    setModelName(saved.name);
-    setPhase(saved.view ? (saved.view.status === "done" ? "done" : saved.view.status === "running" ? "interrupted" : "paused") : "idle");
+    setPhase(saved.view.status === "done" ? "done" : saved.view.status === "running" ? "interrupted" : "paused");
   }, []);
 
   useEffect(() => {
-    if (!check) return;
+    if (!check || story) return;
     saveRun({ ...check, updatedAt: Date.now(), steps, view, sheet });
   }, [check, steps, view, sheet]);
 
@@ -109,23 +73,17 @@ export default function App() {
       .catch((reason: unknown) => setError(reason instanceof ApiError ? reason.message : UNREACHABLE));
   }, []);
 
-  const targetKey = view?.target ? `${view.id}:${view.target.sheet}` : null;
   useEffect(() => {
-    if (!view || !targetKey || story) return;
+    if (!view?.target || story) return;
     if (view.sheet) {
       setSheet(view.sheet);
       return;
     }
+    if (sheet) return;
     getSheet(view.id)
       .then(setSheet)
-      .catch((reason: unknown) => {
-        setSheetError(reason instanceof ApiError ? reason.message : UNREACHABLE);
-      });
-  }, [targetKey]);
-
-  function stopped(current: InvestigationView | null): Phase {
-    return current && current.status === "needs_review" ? "paused" : "idle";
-  }
+      .catch(() => undefined);
+  }, [view]);
 
   function onEvent(event: ProgressEvent) {
     if (event.kind === "step") setSteps((current) => [...current, { step: event.step, label: event.label }]);
@@ -135,147 +93,112 @@ export default function App() {
     }
     if (event.kind === "error") {
       setError(event.detail);
-      setPhase(stopped(view));
+      setPhase((current) => (current === "running" ? "paused" : current));
     }
   }
 
-  async function run(work: Promise<void>) {
+  async function run(work: Promise<void>, fallback: Phase) {
     try {
       await work;
     } catch (reason) {
       setError(reason instanceof ApiError ? reason.message : UNREACHABLE);
-      setPhase(stopped(view));
+      setPhase(fallback);
     }
   }
 
-  const start = useCallback((spreadsheetId: string, question: string, name: string, file?: File) => {
-    upload.current = file ?? null;
+  const start = useCallback((spreadsheetId: string, name: string, sheets: string[], file: File | null) => {
+    upload.current = file;
     setSteps([]);
     setView(null);
     setSheet(null);
     setError(null);
-    setSheetError(null);
-    setModelName(name);
     setPhase("running");
-    setCheck({ id: newRunId(), spreadsheetId, question, name, startedAt: Date.now() });
-    void run(startInvestigation(spreadsheetId, question, onEvent, upload.current));
+    setCheck({ id: newRunId(), spreadsheetId, name, question: "", startedAt: Date.now(), sheets });
+    window.scrollTo?.({ top: 0 });
+    void run(startInvestigation(spreadsheetId, "", onEvent, file), "interrupted");
   }, []);
 
-  const resume = useCallback(
+  const startDemo = useCallback(() => {
+    const demo = demos[0];
+    if (demo) start(demo.id, DEMO_NAME, demo.sheets, null);
+  }, [demos, start]);
+
+  const startUpload = useCallback(
+    async (file: File) => {
+      setError(null);
+      setUploading(true);
+      try {
+        const uploaded = await uploadSpreadsheet(file);
+        start(uploaded.id, uploaded.name, uploaded.sheets, file);
+      } catch (reason) {
+        setError(reason instanceof ApiError ? reason.message : "The upload failed. Please try again.");
+      } finally {
+        setUploading(false);
+      }
+    },
+    [start],
+  );
+
+  const decide = useCallback(
     (answer: Decision) => {
       if (!view) return;
       setError(null);
       setPhase("running");
-      void run(resumeInvestigation(view.id, answer, onEvent, view, upload.current));
+      void run(resumeInvestigation(view.id, answer, onEvent, view, upload.current), "paused");
     },
     [view],
   );
+
+  const retry = useCallback(() => {
+    if (check) start(check.spreadsheetId, check.name, check.sheets, upload.current);
+  }, [check, start]);
 
   const reset = useCallback(() => {
     setSteps([]);
     setView(null);
     setSheet(null);
     setError(null);
-    setSheetError(null);
     setPhase("idle");
     setCheck(null);
+    upload.current = null;
     clearCurrent();
     const url = new URL(window.location.href);
-    ["story", "static", "error"].forEach((key) => url.searchParams.delete(key));
+    url.searchParams.delete("story");
     window.history.replaceState(null, "", url);
+    window.scrollTo?.({ top: 0 });
   }, []);
 
-  const marks = useMemo(() => (view ? marksOf(view) : null), [view]);
-  const rail = useMemo(() => railOf(view, steps, phase === "running"), [view, steps, phase]);
-
-  const stageNote =
-    sheetError !== null
-      ? "The model could not be shown"
-      : phase === "running"
-          ? "Scanning the model — every formula, read in a copy"
-          : "Loading the model";
-  const started = phase === "running" || steps.length > 0 || view !== null;
-  const status =
-    phase === "running"
-      ? { label: "Checking…", tone: "blue" as const }
-      : phase === "paused"
-        ? view && !view.patch
-          ? { label: "No fix to approve", tone: "neutral" as const }
-          : { label: "Review needed", tone: "amber" as const }
-        : phase === "interrupted"
-          ? { label: "Interrupted", tone: "neutral" as const }
-          : phase === "done"
-          ? { label: "Done", tone: "green" as const }
-          : { label: "Stopped", tone: "neutral" as const };
+  const spreadsheetId = check?.spreadsheetId ?? "";
+  const loadWorkbook = useCallback(() => getWorkbook(spreadsheetId, upload.current), [spreadsheetId]);
+  const running = phase === "running";
+  const phases = useMemo(() => phasesOf(steps, view, running), [steps, view, running]);
+  const findings = useMemo(() => findingsOf(view, sheet), [view, sheet]);
+  const status = statusOf(view, running, steps.at(-1)?.label ?? null);
 
   return (
-    <div className={styles.page}>
-      <header className={styles.nav}>
-        <button type="button" className={styles.brand} onClick={reset}>
-          <Logo />
-          Model X-Ray
-        </button>
-        <p className={styles.powered}>Powered by NVIDIA Nemotron on Nebius Token Factory</p>
-      </header>
-
-      {!started && <Hero demos={demos} error={error} onStart={start} onError={setError} />}
-
-      {started && (
-        <main className={styles.case}>
-          <div className={styles.topbar}>
-            <div>
-              <p className={styles.eyebrow}>Model check</p>
-              <h1 className={styles.title}>
-                {modelName}
-                <Chip tone={status.tone} pulse={phase === "running"}>
-                  {status.label}
-                </Chip>
-              </h1>
-            </div>
-            <div className={styles.topbarActions}>
-              {phase === "interrupted" && check && (
-                <Button variant="primary" onClick={() => start(check.spreadsheetId, check.question, check.name)}>
-                  Run again
-                </Button>
-              )}
-              <Button variant="ghost" disabled={phase === "running"} onClick={reset}>
-                Check another model
-              </Button>
-            </div>
-          </div>
-          <Boundary onReset={reset}>
-            {(error || sheetError) && (
-              <div className={styles.alertRow}>
-                <Alert>{error ?? sheetError}</Alert>
-              </div>
-            )}
-            <div className={styles.body}>
-              <MemoRail steps={rail} />
-              <div className={styles.stageArea}>
-                {sheet && view && marks ? (
-                  <MemoStage view={view} sheet={sheet} marks={marks} highlight={highlight} running={phase === "running"} />
-                ) : (
-                  <SheetSkeleton note={stageNote} />
-                )}
-              </div>
-            </div>
-            {view && <MemoFacts view={view} onDecide={resume} onEvidence={showEvidence} />}
-          </Boundary>
-        </main>
+    <>
+      <Wave />
+      {check ? (
+        <Boundary onReset={reset}>
+          <CheckPage
+            name={check.name}
+            sheets={check.sheets}
+            phases={phases}
+            status={status}
+            findings={findings}
+            view={view}
+            running={running}
+            error={error}
+            loadWorkbook={loadWorkbook}
+            onDecide={decide}
+            onHome={reset}
+            onDemo={startDemo}
+            onRetry={retry}
+          />
+        </Boundary>
+      ) : (
+        <Landing onDemo={startDemo} onUpload={startUpload} busy={uploading} demoReady={demos.length > 0} error={error} />
       )}
-
-      <footer className={styles.footer}>
-        <span className={styles.footerBrand}>
-          Model X-Ray
-          {view && view.run_log && view.run_log.length > 0 && (
-            <span className={styles.footerMeta}>
-              {" "}
-              · {view.run_log.length} Nemotron calls · {Math.round(view.run_log.reduce((sum, row) => sum + (row.input_tokens ?? 0) + (row.output_tokens ?? 0), 0) / 1000)}k tokens
-            </span>
-          )}
-        </span>
-        <span className={styles.footerNote}>Runs in your session. Fixes are always written to a copy.</span>
-      </footer>
-    </div>
+    </>
   );
 }

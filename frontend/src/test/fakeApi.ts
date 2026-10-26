@@ -1,4 +1,4 @@
-import type { InvestigationView, SheetWindow } from "../api";
+import type { InvestigationView, SheetWindow, WorkbookView } from "../api";
 import done from "./recorded/done.json";
 import review from "./recorded/review.json";
 import sheet from "./recorded/sheet.json";
@@ -17,6 +17,27 @@ export const STEPS: [string, string][] = [
 export const REVIEW = review as unknown as InvestigationView;
 export const APPROVED = done as unknown as InvestigationView;
 export const SHEET = sheet as unknown as SheetWindow;
+
+export const WORKBOOK: WorkbookView = {
+  sheets: [
+    {
+      name: "P&L",
+      rows: 6,
+      columns: 7,
+      cells: [
+        { ref: "A1", value: "Deal model P&L", formula: null },
+        { ref: "A4", value: "Revenue", formula: null },
+        { ref: "G4", value: 188, formula: null },
+        { ref: "A5", value: "COGS", formula: null },
+        { ref: "G5", value: 97.76, formula: "=G4*Assumptions!$C$5" },
+        { ref: "A6", value: "Gross profit", formula: null },
+        { ref: "G6", value: 285.76, formula: "=G4+G5" },
+      ],
+    },
+    { name: "Assumptions", rows: 5, columns: 3, cells: [{ ref: "C5", value: 0.52, formula: null }] },
+    { name: "Summary", rows: 6, columns: 8, cells: [{ ref: "G5", value: 225.6, formula: "='P&L'!G10" }, { ref: "H6", value: -0.8586666666666667, formula: "=H5/G5-1" }] },
+  ],
+};
 
 export const REJECTED: InvestigationView = { ...REVIEW, status: "done", pause: null, corrected_copy_id: null };
 
@@ -117,6 +138,7 @@ export function fakeApi(start: Event[], resumes: Event[][] = [], failures: strin
     if (url.endsWith("/spreadsheets")) return Response.json([{ id: "demo", sheets: ["P&L", "Assumptions", "Summary"] }]);
     if (url.includes("/spreadsheets?name=")) return Response.json({ id: "upload-1", name: decodeURIComponent(url.split("name=")[1]), sheets: ["P&L"] }, { status: 201 });
     if (url.endsWith("/sheet")) return Response.json(SHEET);
+    if (url.endsWith("/workbook")) return Response.json(WORKBOOK);
     if (url.endsWith("/investigations/stream")) return streamed(sse(start));
     if (url.includes("/resume/stream")) {
       const refusal = refusals.shift();

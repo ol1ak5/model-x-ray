@@ -2,9 +2,9 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
 
-vi.mock("../components/Stage", () => ({
+vi.mock("../check/CheckPage", () => ({
   default: () => {
-    throw new Error("the sheet view blew up");
+    throw new Error("the check page blew up");
   },
 }));
 
@@ -24,12 +24,11 @@ test("shows a way out instead of a blank page when a view blows up", async () =>
   const user = userEvent.setup();
   render(<App />);
 
-  await user.click(await screen.findByRole("button", { name: "See it in action" }));
+  await user.click((await screen.findAllByRole("button", { name: "Try the demo →" }))[0]);
 
-  expect(await screen.findByRole("alert")).toHaveTextContent("Part of this view could not be drawn");
-  expect(screen.getByText("Demo model")).toBeInTheDocument();
+  expect(await screen.findByRole("alert")).toHaveTextContent("Part of this page could not be drawn");
   expect(screen.getByRole("button", { name: "Start another check" })).toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "Start another check" }));
-  expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent("Every formula, checked. Under the X-Ray.");
+  expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent("Your AI agent for financial model analysis.");
 });

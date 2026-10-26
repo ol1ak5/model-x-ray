@@ -189,6 +189,16 @@ export async function getSheet(id: string): Promise<SheetWindow> {
   return response.json();
 }
 
+export type WorkbookCell = { ref: string; value: number | string | boolean | null; formula: string | null };
+export type WorkbookSheet = { name: string; rows: number; columns: number; cells: WorkbookCell[] };
+export type WorkbookView = { sheets: WorkbookSheet[] };
+
+export async function getWorkbook(spreadsheetId: string, file?: File | null): Promise<WorkbookView> {
+  const response = await fetch(`${API_URL}/workbook`, requestBody({ spreadsheet_id: spreadsheetId }, file));
+  if (!response.ok) throw await failure(response);
+  return response.json();
+}
+
 export function correctedFileUrl(id: string): string {
   return `${API_URL}/investigations/${id}/corrected`;
 }
