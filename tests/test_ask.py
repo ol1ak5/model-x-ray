@@ -46,7 +46,7 @@ def paused_view(client: TestClient) -> dict:
 
 
 def test_the_reviewer_asks_about_the_fix_and_the_agent_answers_from_the_run_it_made(demo_workbook_path: Path, engine_sandbox, scripted_verdict) -> None:
-    chat = ScriptedReply(replies=["H7 is typed as -45.2 while every other Opex year grows the year before by 5%.", "**Yes.** The copy recalculated EBITDA 2027 to 44.7."])
+    chat = ScriptedReply(replies=["H7 is typed as -45.2 while every other Opex year grows the year before by 5%.", "**Yes.** The copy tested it; EBITDA 2027 went 52.01 -> 44.73 — in line with 2026."])
     started = app_with(demo_workbook_path, engine_sandbox, scripted_verdict, ScriptedReply(replies=["unused"]))
     view = paused_view(started)
     elsewhere = app_with(demo_workbook_path, engine_sandbox, scripted_verdict, chat)
@@ -59,12 +59,13 @@ def test_the_reviewer_asks_about_the_fix_and_the_agent_answers_from_the_run_it_m
     assert "P&L!H7" in brief and "-45.2" in brief and "=G7*(1+Assumptions!$C$7)" in brief, "the agent answers from the cell, its content and the tested fix"
     assert view["report"].split(" (")[0] in brief, "the report the reviewer read is part of what the agent knows"
     assert brief.rstrip().endswith("Why is H7 wrong?")
-    assert "P&L!H8 (EBITDA 2027E)" in brief, "the cells the fix changes are named by their line and period, so the agent can talk about EBITDA"
+    assert "->" not in brief
+    assert "P&L!H8 (EBITDA 2027E) from" in brief, "the cells the fix changes are named by their line and period, so the agent can talk about EBITDA"
 
     history = [{"role": "user", "text": "Why is H7 wrong?"}, {"role": "agent", "text": first.json()["answer"]}]
     second = elsewhere.post(f"/investigations/{view['id']}/ask", json={"question": "Was the fix tested?", "state": view, "history": history})
 
-    assert second.json()["answer"] == "Yes. The copy recalculated EBITDA 2027 to 44.7.", "markdown is stripped, the page shows plain text"
+    assert second.json()["answer"] == "Yes. The copy tested it. EBITDA 2027 went 52.01 to 44.73, in line with 2026.", "the page shows plain sentences: no markdown, semicolons, dashes or arrows"
     follow_up = chat.seen[1][-1].content
     assert follow_up.index("Why is H7 wrong?") < follow_up.index("every other Opex year") < follow_up.index("Was the fix tested?")
 

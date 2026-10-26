@@ -35,7 +35,7 @@ def ask_brief(state: dict[str, Any], history: list[dict[str, str]], question: st
     verifications = state.get("verifications", [])
     if verifications:
         latest = verifications[-1]
-        changes = [f"{cell(ref)} {latest['before'].get(ref)} -> {value}" for ref, value in latest.get("after", {}).items() if latest["before"].get(ref) != value]
+        changes = [f"{cell(ref)} from {latest['before'].get(ref)} to {value}" for ref, value in latest.get("after", {}).items() if latest["before"].get(ref) != value]
         if changes:
             lines.append(f"Numbers in the copy after the fix: {', '.join(changes)}.")
         if latest.get("verdict"):
@@ -56,6 +56,9 @@ def ask_brief(state: dict[str, Any], history: list[dict[str, str]], question: st
 
 def plain(text: str) -> str:
     text = re.sub(r"\*\*|__|`", "", text)
+    text = re.sub(r"\s*(?:->|→|=>)\s*", " to ", text)
+    text = re.sub(r"\s*[—–]\s*", ", ", text)
+    text = re.sub(r";\s+(\w)", lambda match: ". " + match.group(1).upper(), text)
     text = re.sub(r"^\s*(?:[-*]|\d+\.)\s+", "", text, flags=re.MULTILINE)
     text = re.sub(r"\s*\((?:evidence:\s*)?ev-\d+(?:,\s*ev-\d+)*\)", "", text)
     return " ".join(text.split())
