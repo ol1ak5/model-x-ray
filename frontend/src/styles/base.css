@@ -4,35 +4,43 @@
   box-sizing: border-box;
 }
 
-html,
-body {
-  height: 100%;
+html {
+  background: #fff;
+  scroll-behavior: smooth;
+  overflow-x: clip;
 }
 
 body {
   margin: 0;
-  height: 100dvh;
-  overflow: hidden;
-  background: var(--bg-image);
-  background-attachment: fixed;
+  min-height: 100vh;
   color: var(--ink);
   font-family: var(--sans);
-  font-size: 1rem;
-  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
 }
 
-h1,
-h2,
-h3,
-p {
-  margin: 0;
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+[hidden] {
+  display: none !important;
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent-bright);
-  outline-offset: 0.125rem;
+  outline: 2px solid var(--g3);
+  outline-offset: 2px;
 }
 
 .visually-hidden {
@@ -44,132 +52,6 @@ p {
   white-space: nowrap;
 }
 
-.mono {
-  font-family: var(--mono);
-  font-size: 0.86em;
-  font-variant-numeric: tabular-nums;
-}
-
-@keyframes fade-up {
-  from {
-    opacity: 0;
-    transform: translateY(1.25rem);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes grow-x {
-  from {
-    transform: scaleX(0);
-  }
-  to {
-    transform: scaleX(1);
-  }
-}
-
-@keyframes scan {
-  from {
-    top: -12%;
-    opacity: 0;
-  }
-  12% {
-    opacity: 1;
-  }
-  88% {
-    opacity: 1;
-  }
-  to {
-    top: 106%;
-    opacity: 0;
-  }
-}
-
-@keyframes ring-pulse {
-  from {
-    box-shadow: inset 0 0 0 0.25rem color-mix(in srgb, var(--danger) 55%, transparent);
-  }
-  to {
-    box-shadow: inset 0 0 0 0.125rem var(--danger);
-  }
-}
-
-@keyframes breathe {
-  0%,
-  100% {
-    opacity: 0.45;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
-@keyframes pulse-dot {
-  0% {
-    transform: scale(0.8);
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent);
-  }
-  70% {
-    transform: scale(1);
-    box-shadow: 0 0 0 0.5rem color-mix(in srgb, var(--accent) 0%, transparent);
-  }
-  100% {
-    transform: scale(0.8);
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent);
-  }
-}
-
-@keyframes sweep {
-  from {
-    background-position: -160% 0;
-  }
-  to {
-    background-position: 260% 0;
-  }
-}
-
-@keyframes tick-pop {
-  0% {
-    transform: scale(0.4);
-    opacity: 0;
-  }
-  60% {
-    transform: scale(1.18);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-@keyframes ticker {
-  0% {
-    transform: translateY(0.25rem);
-    opacity: 0;
-  }
-  12%,
-  86% {
-    transform: none;
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(-0.25rem);
-    opacity: 0;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -177,6 +59,5 @@ p {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
   }
 }

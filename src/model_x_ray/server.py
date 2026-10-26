@@ -45,4 +45,5 @@ def app_from_env() -> FastAPI:
     store = sqlite_store(setting("MODEL_X_RAY_MEMORY", writable("memory.db")))
     uploads = Path(setting("MODEL_X_RAY_UPLOAD_DIR", writable("uploads")))
     upload_ttl = float(setting("MODEL_X_RAY_UPLOAD_TTL", "1800"))
-    return create_app(source, sandbox, models, checkpointer, cap, origins, store, uploads, upload_ttl, copy_dir=Path(setting("MODEL_X_RAY_OUTPUT_DIR", writable("corrected"))), copy_ttl=float(setting("MODEL_X_RAY_COPY_TTL", "1800")))
+    ask_cap = UsageCap(per_visitor=int(setting("DEMO_MAX_QUESTIONS_PER_VISITOR", "30")), total=int(setting("DEMO_MAX_QUESTIONS_PER_DAY", "500")), noun="questions")
+    return create_app(source, sandbox, models, checkpointer, cap, origins, store, uploads, upload_ttl, copy_dir=Path(setting("MODEL_X_RAY_OUTPUT_DIR", writable("corrected"))), copy_ttl=float(setting("MODEL_X_RAY_COPY_TTL", "1800")), ask_cap=ask_cap)

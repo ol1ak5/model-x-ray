@@ -40,8 +40,14 @@ afterEach(() => {
 async function startDemo() {
   const user = userEvent.setup();
   const view = render(<App />);
-  await user.click(await screen.findByRole("button", { name: "See it in action" }));
+  await user.click((await screen.findAllByRole("button", { name: "Try the demo →" }))[0]);
   return { user, unmount: view.unmount };
+}
+
+async function errorRow(user: ReturnType<typeof userEvent.setup>) {
+  const errors = await screen.findByRole("region", { name: "Errors detected" });
+  await user.click(await within(errors).findByRole("button", { name: /has the wrong sign/ }));
+  return errors;
 }
 
 function sentTo(api: ReturnType<typeof fakeApi>, path: string) {
@@ -61,50 +67,44 @@ describe("a run kept in the browser", () => {
       [[...steps("human_review", "apply_fix"), ["view", APPROVED]]],
     );
     vi.stubGlobal("fetch", api.fetch);
-    const { user, unmount } = await startDemo();
-    await screen.findByRole("region", { name: "Investigation facts" });
+    const { unmount } = await startDemo();
+    await screen.findByText("Errors detected: 1");
     expect(listRuns()).toHaveLength(1);
     unmount();
 
     render(<App />);
-    const facts = await screen.findByRole("region", { name: "Investigation facts" });
-    const report = within(facts).getByRole("region", { name: "Report" });
-    expect(within(report).getByText(/Gross profit 2025A moved from 84\.72 to 285\.76/)).toBeInTheDocument();
-    const rail = screen.getByRole("region", { name: "Investigation steps" });
-    expect(within(rail).getAllByRole("listitem")).toHaveLength(8);
-    expect(within(rail).getByText("Found the root cause")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent("Demo model.xlsx");
+    expect(screen.getByText("1 error detected")).toBeInTheDocument();
+    const user = userEvent.setup();
+    const errors = await errorRow(user);
+    expect(within(errors).getByText(/Gross profit 2025A moved from 84\.72 to 285\.76/)).toBeInTheDocument();
 
-    await user.type(within(facts).getByLabelText("Reason"), "typed opex");
-    await user.click(within(facts).getByRole("button", { name: "Approve fix" }));
+    await user.click(within(errors).getByRole("button", { name: "Approve fix" }));
 
-    expect(await screen.findByRole("link", { name: "Download corrected model" })).toBeInTheDocument();
+    expect(await within(errors).findByText("✓ Fix accepted")).toBeInTheDocument();
     expect(sentTo(api, "/resume/stream")).toMatchObject({
       url: `http://localhost:8000/investigations/${REVIEW.id}/resume/stream`,
-      body: { action: "approve", reason: "typed opex", state: { id: REVIEW.id, status: "needs_review" } },
+      body: { action: "approve", state: { id: REVIEW.id, status: "needs_review" } },
     });
   });
 
-  test("the finished check, its sheet and its corrected file come back even when the service is gone", async () => {
+  test("the finished check and its decision come back even when the service is gone", async () => {
     const api = fakeApi([...steps("explain"), ["view", REVIEW]], [[...steps("human_review", "apply_fix"), ["view", APPROVED]]]);
     vi.stubGlobal("fetch", api.fetch);
     const { user, unmount } = await startDemo();
-    const facts = await screen.findByRole("region", { name: "Investigation facts" });
-    await user.click(within(facts).getByRole("button", { name: "Approve fix" }));
-    await screen.findByRole("link", { name: "Download corrected model" });
+    const errors = await errorRow(user);
+    await user.click(within(errors).getByRole("button", { name: "Approve fix" }));
+    await within(errors).findByText("✓ Fix accepted");
     unmount();
 
     vi.unstubAllGlobals();
     offline();
     render(<App />);
 
-    const restored = await screen.findByRole("region", { name: "Investigation facts" });
-    expect(within(restored).getByRole("region", { name: "Report" })).toHaveTextContent(/Gross profit 2025A moved from 84\.72 to 285\.76/);
-    expect(within(restored).getByRole("link", { name: "Download corrected model" })).toHaveAttribute(
-      "href",
-      `http://localhost:8000/investigations/${APPROVED.id}/corrected`,
-    );
-    const grid = await screen.findByRole("region", { name: "Sheet" });
-    expect(within(grid).getByRole("button", { name: "P&L!G5, confirmed" })).toBeInTheDocument();
+    expect(await screen.findByText("Review complete", { selector: ".state" })).toBeInTheDocument();
+    const restored = await errorRow(userEvent.setup());
+    expect(within(restored).getByText("Fixed")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Download Demo model (corrected).xlsx" })).toHaveAttribute("href", `http://localhost:8000/investigations/${APPROVED.id}/corrected`);
   });
 
   test("a corrupt or foreign value is ignored: the home page shows and a new check runs", async () => {
@@ -112,7 +112,7 @@ describe("a run kept in the browser", () => {
     vi.stubGlobal("fetch", api.fetch);
     window.localStorage.setItem(STORAGE_KEY, '{"version":1,"current":"gone","runs":[');
     const broken = render(<App />);
-    expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent("Every formula, checked. Under the X-Ray.");
+    expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent("Your AI agent for financial model analysis.");
     broken.unmount();
 
     window.localStorage.setItem(
@@ -120,14 +120,14 @@ describe("a run kept in the browser", () => {
       JSON.stringify({ version: 1, current: "run-1", runs: [{ id: 7, steps: "no" }, { id: "run-1", spreadsheetId: "demo", steps: [] }] }),
     );
     const drifted = render(<App />);
-    expect(await screen.findByRole("button", { name: "See it in action" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1 })).toBeInTheDocument();
     drifted.unmount();
 
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 99, current: null, runs: [{ id: "run-1", spreadsheetId: "demo", steps: [] }] }));
     const future = render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "See it in action" }));
-    expect(await screen.findByRole("region", { name: "Investigation facts" })).toBeInTheDocument();
+    await user.click((await screen.findAllByRole("button", { name: "Try the demo →" }))[0]);
+    expect(await screen.findByText("Errors detected: 1")).toBeInTheDocument();
     future.unmount();
   });
 
@@ -140,7 +140,7 @@ describe("a run kept in the browser", () => {
 
     await startDemo();
 
-    expect(await screen.findByRole("region", { name: "Investigation facts" })).toBeInTheDocument();
+    expect(await screen.findByText("Errors detected: 1")).toBeInTheDocument();
     expect(listRuns()).toEqual([]);
   });
 
@@ -172,7 +172,7 @@ describe("a run kept in the browser", () => {
     const run = {
       id: RUNNING.id,
       spreadsheetId: "demo",
-      name: "Demo model",
+      name: "Demo model.xlsx",
       question: "",
       startedAt: 1,
       updatedAt: 1,
@@ -188,28 +188,25 @@ describe("a run kept in the browser", () => {
     render(<App />);
 
     expect(await screen.findByText("Interrupted")).toBeInTheDocument();
-    expect(screen.queryByText("Review needed")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Approve fix" })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Run again" }));
 
-    await screen.findByRole("region", { name: "Investigation facts" });
+    expect(await screen.findByText("Errors detected: 1")).toBeInTheDocument();
     expect(sentTo(api, "/investigations/stream")).toMatchObject({ body: { spreadsheet_id: "demo", question: "" } });
-    expect(currentRun()?.view?.id).toBe(REVIEW.id);
+    await waitFor(() => expect(currentRun()?.view?.id).toBe(REVIEW.id));
   });
 
-  test("a check stored without its sheet still restores its facts and its report", async () => {
-    const run = { id: REVIEW.id, spreadsheetId: "demo", name: "Demo model", question: "", startedAt: 1, updatedAt: 1, steps: [], view: REVIEW, sheet: null };
+  test("a check stored without its sheet still restores its error and its explanation", async () => {
+    const run = { id: REVIEW.id, spreadsheetId: "demo", name: "Demo model.xlsx", question: "", startedAt: 1, updatedAt: 1, steps: [], view: REVIEW, sheet: null };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, current: REVIEW.id, runs: [run] }));
-    vi.stubGlobal("fetch", async () => {
-      throw new Error("the service is unreachable");
-    });
+    offline();
 
     render(<App />);
 
-    const facts = await screen.findByRole("region", { name: "Investigation facts" });
-    const user = userEvent.setup();
-    expect(within(facts).getByRole("region", { name: "Report" })).toHaveTextContent(/Gross profit 2025A moved from 84\.72 to 285\.76/);
+    const errors = await errorRow(userEvent.setup());
+    expect(within(errors).getByText("P&L!G5 has the wrong sign")).toBeInTheDocument();
+    expect(within(errors).getByText(/Gross profit 2025A moved from 84\.72 to 285\.76/)).toBeInTheDocument();
   });
 
   test("the browser keeps the newest 25 checks", async () => {
@@ -229,7 +226,7 @@ describe("a run kept in the browser", () => {
     vi.stubGlobal("fetch", api.fetch);
 
     await startDemo();
-    await screen.findByRole("region", { name: "Investigation facts" });
+    await screen.findByText("Errors detected: 1");
 
     await waitFor(() => expect(listRuns()).toHaveLength(25));
     const runs = listRuns();

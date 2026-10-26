@@ -131,7 +131,7 @@ def test_a_gross_profit_that_adds_its_costs_in_every_year_is_fixed_on_the_whole_
 
     package = json.loads(verdict.human[0])
     assert package["anomaly"]["kind"] == "line logic error"
-    assert "Gross profit: Revenue + Cost of goods sold -> Revenue - Cost of goods sold in 5 periods" in package["anomaly"]["finding"]
+    assert "Gross profit: from Revenue + Cost of goods sold to Revenue - Cost of goods sold in 5 periods" in package["anomaly"]["finding"]
     assert "standard: revenue - cost_of_goods_sold" in package["anomaly"]["finding"]
 
     patch = final["patch"]

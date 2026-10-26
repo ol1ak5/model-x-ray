@@ -207,7 +207,7 @@ def anomaly_of(book: Workbook, state: InvestigationState) -> dict:
     if patch.get("also"):
         patched = patched_book(book, patch)
         label = label_of(book, patch["cell"])
-        finding = f"{label}: {formula_in_words(book, patch['cell'])} -> {formula_in_words(patched, patch['cell'])} in {len(patch['also']) + 1} periods"
+        finding = f"{label}: from {formula_in_words(book, patch['cell'])} to {formula_in_words(patched, patch['cell'])} in {len(patch['also']) + 1} periods"
         return {"kind": "line logic error", "finding": finding + standard_definition(label)}
     if target.get("mode") in ("table", "review"):
         return {"kind": "table finding", "finding": target.get("finding", "")}

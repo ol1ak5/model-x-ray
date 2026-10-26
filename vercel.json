@@ -18,7 +18,7 @@
   },
   "rewrites": [
     {
-      "source": "/:prefix(health|spreadsheets|investigations|docs|openapi.json)/:path*",
+      "source": "/:prefix(health|spreadsheets|investigations|workbook|docs|openapi.json)/:path*",
       "destination": {
         "service": "api"
       }

@@ -206,7 +206,7 @@ def sandbox_proof(state: InvestigationState, verification: Verification) -> Evid
     shown = target_ref if target_ref in verification["before"] else patched
     before = verification["before"].get(shown)
     after = verification["after"].get(shown)
-    change = f"{before:.2f} -> {after:.2f}" if isinstance(before, (int, float)) and isinstance(after, (int, float)) else f"{before} -> {after}"
+    change = f"from {before:.2f} to {after:.2f}" if isinstance(before, (int, float)) and isinstance(after, (int, float)) else f"from {before} to {after}"
     return {
         "id": f"ev-{len(state.get('evidence', [])) + 1}",
         "cell": patched,
@@ -400,7 +400,7 @@ def narrative_brief(state: InvestigationState, hypothesis: Hypothesis | None, ve
         lines.append(f"Hypothesis: {hypothesis['cell']} ({hypothesis['error_type']}): {hypothesis['claim']}")
     patch = state.get("patch")
     if patch:
-        lines.append(f"Patch: {patch['cell']}: {patch['old_formula']} -> {patch['new_formula']}")
+        lines.append(f"Patch: {patch['cell']} from {patch['old_formula']} to {patch['new_formula']}")
     checks = verification.get("checks", {})
     check_text = ", ".join(f"{name}={str(value).lower()}" for name, value in checks.items())
     line = f"Verification: {verification['verdict']}"

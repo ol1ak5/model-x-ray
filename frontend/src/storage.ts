@@ -18,6 +18,7 @@ export type StoredRun = {
   steps: StoredStep[];
   view: InvestigationView | null;
   sheet: SheetWindow | null;
+  sheets?: string[];
 };
 
 type Stored = { version: number; current: string | null; runs: StoredRun[] };

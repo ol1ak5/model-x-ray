@@ -59,7 +59,7 @@ def test_explain_cites_only_ids_that_resolve_in_state(
     assert "ev-1" in cited, "the target anomaly backs the movement claim"
     assert "ev-3" in cited, "the H7 evidence backs the root cause claim"
     assert "ev-4" in cited, "the sandbox proof backs the fix"
-    assert state["evidence"][3]["text"] == "P&L!H8 52.01 -> 44.73 in a sandbox copy after patching P&L!H7"
+    assert state["evidence"][3]["text"] == "P&L!H8 from 52.01 to 44.73 in a sandbox copy after patching P&L!H7"
     assert report.endswith(".")
 
 
