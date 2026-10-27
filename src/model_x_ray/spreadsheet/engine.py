@@ -435,6 +435,8 @@ class Workbook:
         self._dependents: dict[str, list[str]] | None = None
         self._rows: dict[str, dict[int, list[int]]] = {}
         self._label_counts: dict[str, dict[tuple[int, str], int]] = {}
+        self._qualified: dict[tuple[str, int, int], str] = {}
+        self._numbers_right: dict[tuple[str, int, int], bool] = {}
         self._timelines: dict[str, list[tuple[int, dict[int, str]]]] = {}
         self._names = {name.upper(): text.lstrip("=") for name, text in (names or {}).items()}
         self._bounds: dict[str, tuple[int, int]] | None = None
@@ -847,13 +849,21 @@ class Workbook:
             self._label_counts[sheet] = counts
         if self._label_counts[sheet].get((column, label), 0) < 2:
             return label
+        key = (sheet, column, row)
+        if key not in self._qualified:
+            self._qualified[key] = self._section_title(sheet, column, row, label)
+        return self._qualified[key]
+
+    def _section_title(self, sheet: str, column: int, row: int, label: str) -> str:
         rows = self._sheet_rows(sheet)
         for above in range(row - 1, 0, -1):
             title = self._cells.get(make_ref(sheet, CellAddress(column, above)))
             if not is_label_text(title):
                 continue
-            numbers_right = [c for c in rows.get(above, []) if c > column and self._number_at(make_ref(sheet, CellAddress(c, above))) is not None]
-            if not numbers_right:
+            key = (sheet, column, above)
+            if key not in self._numbers_right:
+                self._numbers_right[key] = any(c > column and self._number_at(make_ref(sheet, CellAddress(c, above))) is not None for c in rows.get(above, []))
+            if not self._numbers_right[key]:
                 return f"{title} – {label}"
         return label
 
