@@ -28,7 +28,7 @@ from model_x_ray.agents.verifier import CHECK_LABELS
 from model_x_ray.graph import run_continuation, run_investigation
 from model_x_ray.llm import ProviderFailure
 from model_x_ray.rules import is_period_cell
-from model_x_ray.spreadsheet.engine import FormulaError, UnsupportedFormulaError, Workbook, column_letters, is_number, split_ref
+from model_x_ray.spreadsheet.engine import FormulaError, UnsupportedFormulaError, Workbook, column_letters, is_number, normalize_ref, split_ref
 from model_x_ray.spreadsheet.sandbox import SandboxWithWrite, check_patch, normalized_formula
 from model_x_ray.spreadsheet.source import SpreadsheetSource
 from model_x_ray.spreadsheet.xlsx import load_xlsx
@@ -162,6 +162,10 @@ class Copies:
 class StartRequest(BaseModel):
     spreadsheet_id: str = ""
     question: str = ""
+    set_aside: list[str] = []
+
+
+SET_ASIDE_REASON = "The reviewer said it is not an error"
 
 
 class AskRequest(BaseModel):
@@ -589,10 +593,24 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
         copies.holding(path)
         return FileResponse(path, media_type=XLSX_MEDIA_TYPE, filename=path.name, background=BackgroundTask(copies.release, path))
 
+    def start_input(request: StartRequest) -> dict[str, Any]:
+        graph_input: dict[str, Any] = {"spreadsheet_id": request.spreadsheet_id, "question": request.question}
+        if request.set_aside:
+            book = source.load(request.spreadsheet_id)
+            overrides = []
+            for cell in request.set_aside:
+                try:
+                    ref = normalize_ref(cell)
+                except FormulaError:
+                    continue
+                overrides.append({"cell": ref, "content": str(book.raw(ref)), "reason": SET_ASIDE_REASON})
+            graph_input["known_overrides"] = overrides
+        return graph_input
+
     @app.post("/investigations", status_code=201)
     def start(request: StartRequest, http: Request) -> dict:
         graph, investigation_id = open_investigation(request, http)
-        graph.invoke({"spreadsheet_id": request.spreadsheet_id, "question": request.question}, {"configurable": {"thread_id": investigation_id}})
+        graph.invoke(start_input(request), {"configurable": {"thread_id": investigation_id}})
         return investigation_view(graph, investigation_id)
 
     @app.post("/investigations/stream")
@@ -601,8 +619,7 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
         if content is not None:
             request = request.model_copy(update={"spreadsheet_id": hold(content, name)})
         graph, investigation_id = open_investigation(request, http)
-        graph_input = {"spreadsheet_id": request.spreadsheet_id, "question": request.question}
-        return StreamingResponse(progress(graph, graph_input, investigation_id), media_type="text/event-stream")
+        return StreamingResponse(progress(graph, start_input(request), investigation_id), media_type="text/event-stream")
 
     @app.get("/investigations/{investigation_id}")
     def read(investigation_id: str) -> dict:

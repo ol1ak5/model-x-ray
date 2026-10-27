@@ -188,6 +188,7 @@ class InvestigationState(TypedDict):
 class InputState(TypedDict):
     spreadsheet_id: str
     question: str
+    known_overrides: NotRequired[list[Override]]
 
 
 class OutputState(TypedDict):
