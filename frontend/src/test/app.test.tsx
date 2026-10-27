@@ -35,6 +35,22 @@ async function checkDemo() {
 }
 
 describe("the landing page", () => {
+  test("Try the demo checks the PPA model when the service offers it", async () => {
+    const api = fakeApi([...steps("explain"), ["view", REVIEW]]);
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) =>
+      url.endsWith("/spreadsheets") ? Response.json([{ id: "demo", sheets: ["P&L"] }, { id: "ppa-model-europe", sheets: ["Cover", "Inputs", "Calc", "Results", "Project View"] }]) : api.fetch(url, init),
+    );
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click((await screen.findAllByRole("button", { name: "Try the demo →" }))[0]);
+
+    expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent("PPA Model Europe.xlsx");
+    expect(api.sent.find((request) => request.url.endsWith("/investigations/stream"))?.body).toEqual({ spreadsheet_id: "ppa-model-europe", question: "" });
+    const sheets = screen.getByText("Sheets in this file:").parentElement as HTMLElement;
+    expect(within(sheets).getAllByRole("button").map((button) => button.textContent)).toEqual(["Cover", "Inputs", "Calc", "Results", "Project View"]);
+  });
+
   test("presents the agent and starts a live check of the demo model", async () => {
     const api = fakeApi([...steps(...STEPS.map(([name]) => name)), ["view", REVIEW]]);
     vi.stubGlobal("fetch", api.fetch);

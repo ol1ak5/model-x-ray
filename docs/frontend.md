@@ -27,7 +27,7 @@ The rules from the owner: no rounded boxes or cards around blocks; content is se
 
 Hero ("Your AI agent for financial model analysis.") with Try the demo and Upload your model, and an animated spreadsheet (`HeroSheet`): rows are scanned, D4 turns red as a typed value, its inputs and EBITDA are traced, the fix `=D2+D3` recalculates D4 and then D6, with "Error detected, Checks run, Fixed" lighting up underneath. Below, in order: "Did you know that?" (four real cases whose amounts roll in like a slot machine), Our answer (Nemotron reasons, the engine calculates, three numbers), How it works (four phases that light up in turn), Strengths, Stack (chips that cycle and explain each piece), FAQ, and the closing green band. Blocks fade in as they reach the screen; without `IntersectionObserver` (tests) they are simply shown.
 
-Try the demo starts a live check of the first model `GET /spreadsheets` lists. Upload your model validates the file with `POST /spreadsheets` and starts the check with the file in hand; a refused file is one red line under the buttons.
+Try the demo starts a live check of `ppa-model-europe` (the PPA evaluation model with three planted errors), or of the first model `GET /spreadsheets` lists when that one is not served. Upload your model validates the file with `POST /spreadsheets` and starts the check with the file in hand; a refused file is one red line under the buttons.
 
 ## The model check page (`src/check/`)
 
