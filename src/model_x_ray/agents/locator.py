@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from model_x_ray.llm import invoke_with_usage, model_name_of
 from model_x_ray.prompts import load_prompt
-from model_x_ray.rules import is_period_cell, rank_outliers, row_fix, scan_model, scan_tables
+from model_x_ray.rules import edge_breaks, is_period_cell, rank_outliers, row_fix, scan_model, scan_tables
 from model_x_ray.spreadsheet.engine import CellAddress, FormulaError, Workbook, make_ref, normalize_ref, split_ref
 from model_x_ray.state import InvestigationState, ModelMap, TargetCell
 from model_x_ray.tools import find_cells
@@ -117,8 +117,8 @@ def relative_move(book: Workbook, ref: str) -> float:
     return abs(now - before) / abs(before) if before else abs(now - before)
 
 
-def check_target(book: Workbook) -> tuple[str, str]:
-    outliers = rank_outliers(book, scan_model(book))
+def check_target(book: Workbook, extra: list[dict] | None = None) -> tuple[str, str]:
+    outliers = [*rank_outliers(book, scan_model(book)), *(extra or [])]
     for outlier in outliers:
         for ref in [*book.all_dependents(outlier["cell"]), outlier["cell"]]:
             if is_target(book, ref):
@@ -158,12 +158,15 @@ def make_locate_node(llm: BaseChatModel | None, book: Workbook) -> Callable[[Inv
 
     def check_model(state: InvestigationState) -> dict:
         outliers = scan_model(book)
-        if outliers:
+        flagged = {o["cell"] for o in outliers}
+        edges = [{**e, "fix": row_fix(book, e["cell"])} for e in edge_breaks(book) if e["cell"] not in flagged and computable(book, e["cell"])]
+        if outliers or edges:
             try:
-                ref, question = check_target(book)
+                ref, question = check_target(book, edges)
                 target = target_cell(book, ref)
                 ranked = rank_outliers(book, outliers)
-                target["other_findings"] = [{"cell": o["cell"], "reason": o["reason"], "fix": row_fix(book, o["cell"])} for o in ranked[:6]]
+                findings = [{"cell": o["cell"], "reason": o["reason"], "fix": row_fix(book, o["cell"])} for o in ranked[:6]]
+                target["other_findings"] = [*findings, *edges][: max(6, len(findings))]
                 return {"target": target, "question": question, "target_choice": None}
             except ValueError:
                 pass

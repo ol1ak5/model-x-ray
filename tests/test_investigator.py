@@ -407,6 +407,18 @@ def test_a_verifier_that_answers_without_a_verdict_does_not_stop_the_investigati
     assert state["report"].startswith("EBITDA 2027E moved from")
 
 
+def test_a_verifier_that_confirms_without_giving_a_reason_does_not_crash_the_investigation(demo_workbook_path: Path, engine_sandbox) -> None:
+    model = ScriptedDiagnosis(turns=[(["P&L!H7"], "P&L!H7")])
+    graph = run_investigation(model, "demo", XlsxSource({"demo": demo_workbook_path}), engine_sandbox, verifier=ScriptedAnswer(tool="Verdict", answer={"verdict": "confirmed"}))
+    config = {"configurable": {"thread_id": "reasonless-verifier"}}
+
+    graph.invoke({"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump on the P&L sheet?"}, config)
+    state = graph.get_state(config).values
+
+    assert state["verifications"][-1]["verdict"] == "confirmed"
+    assert state["report"].startswith("EBITDA 2027E moved from")
+
+
 def test_a_patch_on_a_row_breaking_cell_is_repaired_to_the_row_formula(scripted_verdict) -> None:
     served = Path(__file__).resolve().parents[1] / "demo_models" / "demo.xlsx"
     source = XlsxSource({"demo": served})

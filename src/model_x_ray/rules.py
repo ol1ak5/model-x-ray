@@ -61,6 +61,25 @@ def model_outliers(book: Workbook, cells: list[str]) -> list[dict[str, str]]:
     return found
 
 
+def edge_breaks(book: Workbook) -> list[dict[str, str]]:
+    rows: dict[tuple[str, int], list[str]] = {}
+    for ref in book.cells():
+        if is_period_cell(book, ref) and PERIOD_LIKE.search(book.column_header(ref) or ""):
+            sheet, address = split_ref(ref)
+            rows.setdefault((sheet, address.row), []).append(ref)
+    found = []
+    for cells in rows.values():
+        ordered = sorted(cells, key=lambda ref: split_ref(ref)[1].column)
+        if len(ordered) < 3:
+            continue
+        last, before = ordered[-1], ordered[-3:-1]
+        patterns = [safe_pattern(book, ref) if book.formula(ref) is not None else None for ref in [*before, last]]
+        if patterns[0] is None or patterns[0] != patterns[1] or patterns[2] is None or patterns[2] == patterns[0] or patterns[2].startswith("unreadable"):
+            continue
+        found.append({"cell": last, "reason": f"the last period breaks the pattern of the periods before it, which use {book.formula(before[-1])}; a terminal year can differ on purpose", "needs_judgement": True})
+    return found
+
+
 def breaks_row_pattern(book: Workbook, ref: str) -> bool:
     return normalize_ref(ref) in {outlier["cell"] for outlier in model_outliers(book, row_cells(book, ref))}
 

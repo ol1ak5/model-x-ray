@@ -101,6 +101,10 @@ Implementation: `src/model_x_ray/agents/locator.py`, prompt `prompts/locate.md`,
 
 Nemotron never writes a cell address: it can only pick names that exist, and code turns them into cells.
 
+### Edge candidates (last period)
+
+The period rules skip the first and last period, because a base or terminal year often differs on purpose. In check mode a last period that breaks the pattern its two previous periods share is still offered to the Investigator as a candidate (`rules.edge_breaks`), with the row's formula as the fix and a reason that says a terminal year can differ on purpose. It carries `needs_judgement`: it is applied only when the Investigator judges it an error, never by the rule fallback, so rules-only results are unchanged. The Verifier counts the edge break as the anomaly a fix resolves. On a 12-variant sample with Nemotron 3.5 Super this raised wrong references from 8 to 11 and wrong periods from 8 to 12, with no false alarm on deliberate cells.
+
 ### Table rules (check mode without a timeline)
 
 When no question is asked and no row breaks its period pattern, `rules.scan_tables` looks for table-shaped errors. Each finding carries a `kind`, a plain-English `reason` and the `fix` formula the engine tests on a copy:
@@ -140,6 +144,8 @@ Pattern rules cannot see a formula that is wrong in every period (a gross profit
 The system prompt (`prompts/investigator.md`) makes the Investigator a senior analyst who always starts from the formula, compares it with the label and the standard definition, respects the model's sign convention and only then checks consistency. Two error types join the five pattern types: `logic_error` and `input_outlier`.
 
 In check mode (no question) the logic review runs three times and keeps what a majority finds: a cell survives when at least two answers name it, with the most voted error type and the fix a majority proposes. Nemotron Super at temperature 0 still varies between runs, and the vote removes one-off findings and one-off misses. The decision records the counts (`votes`) and every answer (`ballots`). Runs with a question, and runs where rules gave candidates, make one call.
+
+When every rule candidate is judged deliberate in check mode, the logic review still runs, with the vote, under a brief that sets those cells aside and asks for a review of every other line instead of repeating the flagged target; otherwise a false candidate (a spending total said to leave out net income) would end the run before the real error is read. In the logic review a pattern type (`sign_inconsistency`, `wrong_reference`, `range_inconsistency`, `period_inconsistency`) named on a cell that shares its formula with its line and breaks no pattern is recorded as a `logic_error`, because those types mean a cell that breaks its row; outside the logic review the named type is kept, so a wrong fix on a correct line cannot become a line fix.
 
 A `logic_error` whose cell shares its formula with the rest of its line is fixed on the whole line: `Patch.also` lists the other cells with the same fix shifted to each column. The sandbox, the corrected copy and the Google copy apply all of them, and the deterministic checks become: the cell's value changes, every dependent still calculates, the line ends with one pattern. The Verifier receives the anomaly kind `line logic error` with the line's formula in words before and after and its standard definition, and judges the new formula against them instead of the move against the prior period. Other error types keep single-cell fixes, so a wrong fix on a correct line cannot pass by making the line uniform. An `input_outlier` or a `logic_error` without a fix closes as a finding for a person (the report quotes the claim) instead of being retried.
 
