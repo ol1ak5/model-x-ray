@@ -529,3 +529,27 @@ def test_the_plain_text_investigator_investigates_a_whole_model_without_tools(de
     assert [(h["id"], h["cell"], h["status"]) for h in state["hypotheses"]] == [("hyp-1", "P&L!H7", "confirmed")]
     assert state["patch"]["new_formula"] == "=G7*(1+Assumptions!$C$7)"
     assert graph.get_state(config).next == ("human_review",)
+
+
+def test_tool_answers_that_are_not_cells_never_become_evidence_or_break_the_run() -> None:
+    from langchain_core.messages import AIMessage, ToolMessage
+
+    from model_x_ray.agents.investigator import collect_evidence
+
+    calls = [
+        {"name": "find_cells", "args": {"label": "Revenue", "period": "2027"}, "id": "found"},
+        {"name": "find_cells", "args": {"label": "EBITDA", "period": "2027"}, "id": "over-budget"},
+        {"name": "get_cell", "args": {"ref": "Tool budget exhausted."}, "id": "bad-ref"},
+        {"name": "get_cell", "args": {"ref": "'Historical Numbers'!C12"}, "id": "quoted"},
+    ]
+    messages = [
+        AIMessage(content="", tool_calls=calls),
+        ToolMessage(content="Historical Numbers!C4, Historical Numbers!D4", tool_call_id="found"),
+        ToolMessage(content="Tool budget exhausted.", tool_call_id="over-budget"),
+        ToolMessage(content="Error: invalid reference", tool_call_id="bad-ref"),
+        ToolMessage(content="Historical Numbers!C12 = 412.0", tool_call_id="quoted"),
+    ]
+
+    records = collect_evidence(messages, "Historical Numbers", [], 0)
+
+    assert [record["cell"] for record in records] == ["Historical Numbers!C4", "Historical Numbers!D4", "Historical Numbers!C12"]

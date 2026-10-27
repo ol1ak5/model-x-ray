@@ -233,9 +233,9 @@ def evidence_cells(name: str, args: dict, content: str, sheet: str) -> list[str]
                 cells.append(normalize_ref(cell))
         return cells
     if name == "find_cells":
-        return [full_ref(cell.strip(), sheet) for cell in content.split(",") if cell.strip()]
+        return [full_ref(cell.strip(), sheet) for cell in content.split(",") if cell.strip() and readable_ref(cell.strip(), sheet)]
     ref = args.get("ref")
-    return [full_ref(ref, sheet)] if isinstance(ref, str) else []
+    return [full_ref(ref, sheet)] if isinstance(ref, str) and readable_ref(ref, sheet) else []
 
 
 def collect_evidence(messages: list[BaseMessage], sheet: str, existing: list[Evidence], start: int) -> list[Evidence]:

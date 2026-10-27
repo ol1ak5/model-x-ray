@@ -2,6 +2,7 @@ import os
 import time
 from typing import Any
 
+import openai
 from dotenv import load_dotenv
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.messages import AIMessage, AnyMessage
@@ -112,6 +113,29 @@ def _as_int(value: Any) -> int | None:
 
 PROVIDER_ERROR_PREFIX = "[ERROR:"
 PROVIDER_ATTEMPTS = 3
+OVERLOAD_WAITS = (5.0, 15.0, 30.0)
+OVERLOADED_STATUSES = {429, 500, 502, 503, 504, 529}
+
+
+def pause(seconds: float) -> None:
+    time.sleep(seconds)
+
+
+def overloaded(error: Exception) -> bool:
+    if isinstance(error, (openai.APIConnectionError, openai.APITimeoutError)):
+        return True
+    return isinstance(error, openai.APIStatusError) and error.status_code in OVERLOADED_STATUSES
+
+
+def invoke_patiently(runnable: Runnable, messages: list[AnyMessage], config: dict) -> Any:
+    for wait in OVERLOAD_WAITS:
+        try:
+            return runnable.invoke(messages, config=config)
+        except openai.APIError as error:
+            if not overloaded(error):
+                raise
+            pause(wait)
+    return runnable.invoke(messages, config=config)
 
 
 class ProviderFailure(RuntimeError):
@@ -136,7 +160,7 @@ def invoke_with_usage(
     recorder = UsageRecorder()
     failure = None
     for _ in range(PROVIDER_ATTEMPTS):
-        result = runnable.invoke(messages, config={"callbacks": [recorder]})
+        result = invoke_patiently(runnable, messages, {"callbacks": [recorder]})
         failure = provider_error(result)
         if failure is None and not (retry_empty and result is None):
             break

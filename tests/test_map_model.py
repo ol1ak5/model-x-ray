@@ -109,3 +109,18 @@ def test_the_mapper_model_maps_the_demo_model(demo_workbook_path: Path) -> None:
     columns = {c["period"]: c["kind"] for c in state["model_map"]["columns"]}
     assert (rows["Revenue"], rows["COGS"], rows["EBITDA"], rows["EBITDA growth"]) == ("revenue", "cost", "subtotal", "ratio")
     assert columns == {"2025A": "actual", "2026E": "forecast", "2027E": "forecast"}
+
+
+def test_the_ppa_demo_model_is_mapped_fast_enough_for_one_request_on_vercel() -> None:
+    import time
+
+    from model_x_ray.agents.mapper import mapper_brief, series_catalogue
+    from model_x_ray.spreadsheet.xlsx import load_xlsx
+
+    book = load_xlsx(Path(__file__).resolve().parents[1] / "demo_models" / "PPA_Model_Europe.xlsx")
+    started = time.perf_counter()
+    brief = mapper_brief(book, series_catalogue(book))
+    elapsed = time.perf_counter() - started
+
+    assert "Inputs" in brief or "Calc" in brief
+    assert elapsed < 10, f"labelling the lines took {elapsed:.1f}s; the whole check must fit in one 300 s request"

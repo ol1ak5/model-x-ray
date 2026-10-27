@@ -53,7 +53,7 @@ Labels and period headers come from the layout, the way an analyst reads a model
 Deliberately small, matching standard financial models:
 
 - Numbers, percentages (`50%`), text in quotes, `TRUE` / `FALSE`
-- References: `A1`, `$C$7`, ranges `A1:A3`, other sheets `Assumptions!C7` and quoted names `'P&L'!H8`
+- References: `A1`, `$C$7`, ranges `A1:A3`, other sheets `Assumptions!C7` and quoted names `'P&L'!H8`. A cell named by the agent is read the same way with or without quotes, including the whole reference wrapped in them (`'Inputs & Property valuation!D17'`)
 - Whole rows and columns: `70:70`, `$8:$8`, `B:B`, clipped to the cells the sheet uses; their formula pattern keeps the row (or column) and is stable across a row of copies
 - Defined names: a workbook name such as `growth` (`Inputs!$B$2`) or `dates_row` (`Acc!$8:$8`) reads its range; an unknown name is `#NAME?`
 - Error literals written in a formula (`=#REF!`, `Sheet!#REF!`) raise that error, so `IFERROR` can catch them

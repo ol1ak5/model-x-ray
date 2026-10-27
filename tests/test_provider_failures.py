@@ -120,3 +120,48 @@ def test_a_review_that_keeps_asking_for_tools_concludes_once_its_time_is_up(demo
     assert response.status_code == 201, response.text
     assert investigator.thoughts[0] <= 3, f"the review kept consulting {investigator.thoughts[0]} times after its time was up"
     assert response.json()["patch"]["cell"] == "P&L!H7", "the conclusion still comes, from what the review saw"
+
+
+class OverloadedInvestigator(ScriptedDiagnosis):
+    overloads_left: list[int] = [0]
+
+    def bind_tools(self, tools: Any, **kwargs: Any) -> "OverloadedInvestigator":
+        return self.model_copy(update={"bound": [getattr(t, "name", None) or getattr(t, "__name__", "") for t in tools], "briefs": self.briefs, "overloads_left": self.overloads_left})
+
+    def _generate(self, messages: list[BaseMessage], stop: list[str] | None = None, **kwargs: Any) -> ChatResult:
+        if self.overloads_left[0] > 0:
+            self.overloads_left[0] -= 1
+            import httpx
+            import openai
+
+            request = httpx.Request("POST", "https://api.tokenfactory.nebius.com/v1/chat/completions")
+            raise openai.InternalServerError("System is overloaded", response=httpx.Response(529, request=request), body={"detail": "System is overloaded"})
+        return super()._generate(messages, stop, **kwargs)
+
+
+def test_an_overloaded_service_is_waited_out_and_the_check_still_finds_the_error(demo_workbook_path: Path, engine_sandbox, scripted_verdict, monkeypatch) -> None:
+    import model_x_ray.llm as llm
+
+    waits: list[float] = []
+    monkeypatch.setattr(llm, "pause", waits.append)
+    investigator = OverloadedInvestigator(briefs=[], overloads_left=[2], turns=[(["P&L!H7"], "P&L!H7")])
+    client = client_with(investigator, demo_workbook_path, engine_sandbox, scripted_verdict)
+
+    response = client.post("/investigations", json={"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump?"})
+
+    assert response.status_code == 201, response.text
+    assert response.json()["patch"]["cell"] == "P&L!H7"
+    assert len(waits) == 2 and waits[0] < waits[1], "each retry waits longer, giving the service time to recover"
+
+
+def test_a_service_that_stays_overloaded_says_it_is_busy(demo_workbook_path: Path, engine_sandbox, scripted_verdict, monkeypatch) -> None:
+    import model_x_ray.llm as llm
+
+    monkeypatch.setattr(llm, "pause", lambda seconds: None)
+    investigator = OverloadedInvestigator(briefs=[], overloads_left=[99], turns=[(["P&L!H7"], "P&L!H7")])
+    client = client_with(investigator, demo_workbook_path, engine_sandbox, scripted_verdict)
+
+    response = client.post("/investigations", json={"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump?"})
+
+    assert response.status_code == 503
+    assert "busy" in response.json()["detail"]
