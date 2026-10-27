@@ -8,7 +8,7 @@
   <img alt="LangGraph" src="https://img.shields.io/badge/Built%20with-LangGraph-1C3C3C">
 </p>
 
-The debugger for financial models: an AI agent powered by NVIDIA Nemotron that hunts down the errors hiding in Excel workbooks and proves every fix before a single cell changes.
+The debugger for financial models. An AI agent powered by NVIDIA Nemotron that hunts down the errors hiding in Excel workbooks and proves every fix before a single cell changes.
 
 - 🌐 Live demo: <https://model-x-ray.vercel.app>
 - 🏆 Devpost submission:
@@ -64,14 +64,14 @@ flowchart TD
 |---|---|
 | `load_sheet` | Opens the workbook and reads every formula |
 | `map_model` | Labels every line and period (revenue, cost, ratio) |
-| `locate` | Picks the cell to investigate; checks the whole model when there is no question |
+| `locate` | Picks the cell to investigate, checks the whole model when there is no question |
 | `trace` | Follows the dependency graph and measures what drives each change |
-| `diagnose` | The Investigator. Rules propose suspects and the engine tests each fix on a copy; Nemotron judges whether each one is an error or a deliberate choice, and when none is, it reviews the model's logic line by line, three times, keeping what a majority finds |
+| `diagnose` | The Investigator. Rules propose suspects and the engine tests each fix on a copy. Nemotron judges whether each one is an error or a deliberate choice, and when none is, it reviews the model's logic line by line, three times, keeping what a majority finds |
 | `test` | Applies the fix to a sandbox copy and recalculates |
 | `verify` | Engine checks, then the Verifier tries to break the fix; the engine re-checks every objection. A rejected fix goes back to `diagnose` |
 | `explain` | Writes the report in plain language, checked by code before it is shown |
 | `human_review` | Shows the cell, the cause, the evidence and the numbers before and after, and waits for you |
-| `apply_fix` | Writes the corrected copy; the original workbook never changes |
+| `apply_fix` | Writes the corrected copy, the original workbook never changes |
 
 ## Results
 
