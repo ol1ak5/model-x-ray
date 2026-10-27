@@ -8,13 +8,15 @@
   <img alt="LangGraph" src="https://img.shields.io/badge/Built%20with-LangGraph-1C3C3C">
 </p>
 
-An AI agent built for financial model auditing, powered by NVIDIA Nemotron, that uncovers hidden errors, reasons through financial logic, and verifies every proposed fix through independent workbook recalculation. Every correction is evidence-based, and no changes are made without the user’s approval.
+An AI agent powered by NVIDIA Nemotron that hunts down the errors hiding in Excel workbooks and proves every fix before a single cell changes.
 
-**Live demo:** <https://model-x-ray.vercel.app>
+<p align="center">
+  <a href="https://model-x-ray.vercel.app"><b>Live demo</b></a>
+</p>
 
 ## Try it Live
 
-**<https://model-x-ray.vercel.app>**: open the page, press **Try the demo** and watch the agent check a European corporate PPA model (ten renewable offers, 2,400 formulas) with three planted errors, or upload your own `.xlsx` (up to 4.5 MB).
+Open the live demo, press **Try the demo** and watch the agent check a European corporate PPA model (ten renewable offers, 2,400 formulas) with three planted errors, or upload your own `.xlsx` (up to 4.5 MB).
 
 ![The opening screen](docs/screenshot-start.png)
 
