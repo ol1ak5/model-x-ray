@@ -77,3 +77,15 @@ def test_a_diagnosis_the_model_writes_as_text_instead_of_through_the_tool_is_ask
     assert response.status_code == 201
     assert response.json()["patch"]["cell"] == "P&L!H7"
     assert investigator.silences_left == [0]
+
+
+def test_a_model_that_never_returns_its_conclusion_is_asked_only_once_more_so_the_check_stays_short(demo_workbook_path: Path, engine_sandbox, scripted_verdict) -> None:
+    investigator = SilentOnce(briefs=[], silences_left=[99], turns=[(["P&L!H7"], "P&L!H7")])
+    client = client_with(investigator, demo_workbook_path, engine_sandbox, scripted_verdict)
+
+    response = client.post("/investigations", json={"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump?"})
+
+    assert response.status_code == 201
+    asked = 99 - investigator.silences_left[0]
+    assert asked % 2 == 0 and asked <= 2 * 3, f"each review asked for its conclusion {asked} times in total; two per review is the limit"
+    assert response.json()["patch"] is None

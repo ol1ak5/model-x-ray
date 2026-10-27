@@ -9,6 +9,7 @@ from typing import Annotated, Literal, TypedDict
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, AnyMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import BaseTool
+from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.graph.state import CompiledStateGraph
@@ -60,9 +61,18 @@ class InvestigatorState(TypedDict):
     diagnosis: Diagnosis | None
 
 
+def without_thinking(llm: BaseChatModel) -> BaseChatModel:
+    if not isinstance(llm, ChatOpenAI):
+        return llm
+    extra = dict(llm.extra_body or {})
+    extra["chat_template_kwargs"] = {**extra.get("chat_template_kwargs", {}), "enable_thinking": False}
+    return llm.model_copy(update={"extra_body": extra})
+
+
 def build_investigator(llm: BaseChatModel, tools: list[BaseTool], max_tool_calls: int = MAX_TOOL_CALLS) -> CompiledStateGraph:
     model = llm.bind_tools(tools) if tools else llm
     structured = llm.with_structured_output(Diagnosis, method="function_calling")
+    quick = without_thinking(llm).with_structured_output(Diagnosis, method="function_calling")
     tool_node = ToolNode(tools, handle_tool_errors=True)
     system = SystemMessage(content=load_prompt("investigator"))
     model_name = model_name_of(llm)
@@ -94,13 +104,11 @@ def build_investigator(llm: BaseChatModel, tools: list[BaseTool], max_tool_calls
         last = messages[-1]
         if isinstance(last, AIMessage) and last.tool_calls:
             messages += [ToolMessage(content="Tool budget exhausted.", tool_call_id=call["id"]) for call in last.tool_calls]
-        diagnosis, records = invoke_with_usage(
-            structured,
-            [system, *messages, HumanMessage(content=load_prompt("investigator_conclude"))],
-            role="investigator",
-            model=model_name,
-            retry_empty=True,
-        )
+        conclusion = [system, *messages, HumanMessage(content=load_prompt("investigator_conclude"))]
+        diagnosis, records = invoke_with_usage(structured, conclusion, role="investigator", model=model_name)
+        if diagnosis is None:
+            diagnosis, quick_records = invoke_with_usage(quick, conclusion, role="investigator", model=model_name)
+            records = [*records, *quick_records]
         if diagnosis is None:
             diagnosis = Diagnosis(hypotheses=[], patch=None, reason="the model gave no structured answer after several attempts")
         return {"diagnosis": diagnosis, "run_log": records}
