@@ -1,4 +1,5 @@
 import type { InvestigationView, SheetWindow } from "./api";
+import type { Finding } from "./findings";
 
 export const STORAGE_KEY = "model-x-ray:runs:v1";
 export const STORAGE_BYTES = 2_000_000;
@@ -19,6 +20,9 @@ export type StoredRun = {
   view: InvestigationView | null;
   sheet: SheetWindow | null;
   sheets?: string[];
+  earlier?: Finding[];
+  setAside?: string[];
+  fixedIn?: InvestigationView | null;
 };
 
 type Stored = { version: number; current: string | null; runs: StoredRun[] };

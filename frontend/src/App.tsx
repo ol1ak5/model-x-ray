@@ -9,6 +9,7 @@ import {
   type SheetWindow,
   type Spreadsheet,
   askAgent,
+  fileOf,
   getSheet,
   getWorkbook,
   listSpreadsheets,
@@ -19,7 +20,7 @@ import {
 import CheckPage from "./check/CheckPage";
 import Boundary from "./components/Boundary";
 import Wave from "./components/Wave";
-import { findingsOf } from "./findings";
+import { type Finding, findingsOf } from "./findings";
 import Landing from "./landing/Landing";
 import { phasesOf, statusOf } from "./progress";
 import { type StoredStep, clearCurrent, currentRun, newRunId, saveRun } from "./storage";
@@ -32,6 +33,8 @@ type Run = { id: string; spreadsheetId: string; name: string; question: string; 
 const UNREACHABLE = "The Model X-Ray service could not be reached. Please try again.";
 
 const DEMO_NAME = "Demo model.xlsx";
+
+const MAX_ROUNDS = 6;
 
 const DEMOS: Record<string, string> = { "PPA_Model_Europe": "PPA_Model_Europe.xlsx", demo: DEMO_NAME };
 
@@ -53,6 +56,9 @@ export default function App() {
   const [sheet, setSheet] = useState<SheetWindow | null>(initial ? SHEET : null);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [earlier, setEarlier] = useState<Finding[]>([]);
+  const [setAside, setSetAside] = useState<string[]>([]);
+  const [fixedIn, setFixedIn] = useState<InvestigationView | null>(null);
   const upload = useRef<File | null>(null);
 
   useEffect(() => {
@@ -61,6 +67,9 @@ export default function App() {
     if (!saved?.view) return;
     setCheck({ id: saved.id, spreadsheetId: saved.spreadsheetId, name: saved.name, question: saved.question, startedAt: saved.startedAt, sheets: saved.sheets ?? [] });
     setSteps(saved.steps);
+    setEarlier(saved.earlier ?? []);
+    setSetAside(saved.setAside ?? []);
+    setFixedIn(saved.fixedIn ?? null);
     setView(saved.view);
     setSheet(saved.sheet);
     setPhase(saved.view.status === "done" ? "done" : saved.view.status === "running" ? "interrupted" : "paused");
@@ -68,8 +77,8 @@ export default function App() {
 
   useEffect(() => {
     if (!check || story) return;
-    saveRun({ ...check, updatedAt: Date.now(), steps, view, sheet });
-  }, [check, steps, view, sheet]);
+    saveRun({ ...check, updatedAt: Date.now(), steps, view, sheet, earlier, setAside, fixedIn });
+  }, [check, steps, view, sheet, earlier, setAside, fixedIn]);
 
   useEffect(() => {
     listSpreadsheets()
@@ -110,17 +119,27 @@ export default function App() {
     }
   }
 
-  const start = useCallback((spreadsheetId: string, name: string, sheets: string[], file: File | null) => {
-    upload.current = file;
+  const round = useCallback((spreadsheetId: string, aside: string[]) => {
     setSteps([]);
     setView(null);
     setSheet(null);
     setError(null);
     setPhase("running");
-    setCheck({ id: newRunId(), spreadsheetId, name, question: "", startedAt: Date.now(), sheets });
-    window.scrollTo?.({ top: 0 });
-    void run(startInvestigation(spreadsheetId, "", onEvent, file), "interrupted");
+    void run(startInvestigation(spreadsheetId, "", onEvent, upload.current, aside), "interrupted");
   }, []);
+
+  const start = useCallback(
+    (spreadsheetId: string, name: string, sheets: string[], file: File | null) => {
+      upload.current = file;
+      setEarlier([]);
+      setSetAside([]);
+      setFixedIn(null);
+      setCheck({ id: newRunId(), spreadsheetId, name, question: "", startedAt: Date.now(), sheets });
+      window.scrollTo?.({ top: 0 });
+      round(spreadsheetId, []);
+    },
+    [round],
+  );
 
   const startDemo = useCallback(() => {
     const demo = demos.find((candidate) => candidate.id === "PPA_Model_Europe") ?? demos[0];
@@ -143,19 +162,42 @@ export default function App() {
     [start],
   );
 
+  const next = useCallback(
+    (final: InvestigationView) => {
+      if (!check) return;
+      const settled = findingsOf(final, final.sheet ?? sheet);
+      const found = [...earlier, ...settled];
+      const aside = [...setAside, ...settled.map((finding) => finding.cell)];
+      if (final.corrected_file) upload.current = fileOf(final.corrected_file, check.name);
+      if (final.corrected_copy_id) setFixedIn({ ...final, sheet: null });
+      setEarlier(found);
+      setSetAside(aside);
+      if (found.length < MAX_ROUNDS) round(check.spreadsheetId, aside);
+    },
+    [check, sheet, earlier, setAside, round],
+  );
+
   const decide = useCallback(
     (answer: Decision) => {
       if (!view) return;
       setError(null);
       setPhase("running");
-      void run(resumeInvestigation(view.id, answer, onEvent, view, upload.current), "paused");
+      const last: { view: InvestigationView | null } = { view: null };
+      const watch = (event: ProgressEvent) => {
+        if (event.kind === "view") last.view = event.view;
+        onEvent(event);
+      };
+      const work = resumeInvestigation(view.id, answer, watch, view, upload.current).then(() => {
+        if (last.view?.status === "done") next(last.view);
+      });
+      void run(work, "paused");
     },
-    [view],
+    [view, next],
   );
 
   const retry = useCallback(() => {
-    if (check) start(check.spreadsheetId, check.name, check.sheets, upload.current);
-  }, [check, start]);
+    if (check) round(check.spreadsheetId, setAside);
+  }, [check, setAside, round]);
 
   const ask = useCallback(
     (question: string, history: ChatTurn[]) => {
@@ -172,6 +214,9 @@ export default function App() {
     setError(null);
     setPhase("idle");
     setCheck(null);
+    setEarlier([]);
+    setSetAside([]);
+    setFixedIn(null);
     upload.current = null;
     clearCurrent();
     const url = new URL(window.location.href);
@@ -184,8 +229,8 @@ export default function App() {
   const loadWorkbook = useCallback(() => getWorkbook(spreadsheetId, upload.current), [spreadsheetId]);
   const running = phase === "running";
   const phases = useMemo(() => phasesOf(steps, view, running), [steps, view, running]);
-  const findings = useMemo(() => findingsOf(view, sheet), [view, sheet]);
-  const status = statusOf(view, running, steps.at(-1)?.label ?? null);
+  const findings = useMemo(() => [...earlier, ...findingsOf(view, sheet).filter((finding) => !earlier.some((settled) => settled.cell === finding.cell))], [earlier, view, sheet]);
+  const status = statusOf(view, running, steps.at(-1)?.label ?? null, earlier);
 
   return (
     <>
@@ -199,6 +244,7 @@ export default function App() {
             status={status}
             findings={findings}
             view={view}
+            fixedIn={fixedIn}
             running={running}
             error={error}
             loadWorkbook={loadWorkbook}
