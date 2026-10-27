@@ -95,8 +95,8 @@ Screen recording of the live site, <https://model-x-ray.vercel.app>.
 |---|---|
 | A big number rolls up: **98%** · *of planted errors fixed*. | Ninety-eight percent of planted errors, fixed. |
 | **0** · *false alarms on deliberate values*. | Zero false alarms on values put there on purpose. |
-| **14 of 15** · *on models it had never seen*. | Fourteen of fifteen on models it had never seen. |
-| **1.5¢ · 85 s** · *to check the demo model*. | For about one and a half cents. |
+| **18 of 20** · *on models it had never seen*. | Eighteen of twenty on models it had never seen. |
+| **1.4¢ · about a minute** · *per check*. | For about one and a half cents a check. |
 
 ### 9. Close (2:30 – 2:40)
 
@@ -112,17 +112,16 @@ Every claim above, with its source:
 | Claim | Source |
 |---|---|
 | $6B, $2.6B, $11M, $24M and the four cases | Landing page, `frontend/src/landing/Sections.tsx` |
-| PPA model: ten offers, 2,400 formulas, planted errors | README, Try it Live |
-| More than fifty Excel functions | README, Supported Excel functions (52 named, plus cross-sheet references, defined names and circular references) |
-| 98% fixed (82 of 84), vs 86% for rules alone | README, What Nemotron Adds |
-| 0 false alarms on deliberate values (rules alone: 12 of 12) | README, What Nemotron Adds |
-| 14 of 15 on held-out Damodaran models | README, Tested on Models It Never Saw |
-| 1.5 cents and 85 s for the PPA demo | README, Cost and Time per Check |
-| Roles of the three Nemotron models | README, How Nemotron and Token Factory Power It |
-| Original never changes, fix tested in a copy | README, How it Works (`test`, `apply_fix`) |
+| PPA model: ten offers, 2,400 formulas, planted errors | README, Try It Live (2,400 formulas, three planted errors); the ten offers are in the model itself |
+| More than fifty Excel functions | README, What It Checks (52 functions, plus cross-sheet references, defined names and circular references) |
+| 98% fixed (82 of 84), vs 86% for rules alone | README, Results |
+| 0 false alarms on deliberate values (rules alone: 12 of 12) | README, Results |
+| 18 of 20 on held-out Damodaran models | README, Final Test on Unseen Models |
+| 1.4 cents and 65 s per check (median, model with an error) | README, Final Test on Unseen Models |
+| Roles of the three Nemotron models | README, Built on NVIDIA Nemotron and Nebius Token Factory |
+| Original never changes, fix tested in a copy | README, How It Works (`test`, `apply_fix`) |
 
 ## Before recording
 
-- The agent fixes one error per run, so the demo shows one row under *Errors detected*. Do not say "it found all three".
 - Read the error sentence and the cell from the run you recorded, and put them into the voice line of section 6.
 - Record the run end to end once and keep it; cut it to ~45 seconds in the edit.
