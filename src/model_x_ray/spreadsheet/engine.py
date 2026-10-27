@@ -141,7 +141,11 @@ def column_letters(number: int) -> str:
 
 
 def split_ref(ref: str) -> tuple[str, CellAddress]:
-    sheet, cell = ref.rsplit("!", 1)
+    sheet, cell = ref.strip().rsplit("!", 1)
+    if sheet.startswith("'") and not sheet.endswith("'") and cell.endswith("'"):
+        sheet, cell = sheet[1:], cell[:-1]
+    if len(sheet) > 1 and sheet.startswith("'") and sheet.endswith("'"):
+        sheet = sheet[1:-1].replace("''", "'")
     match = CELL_PATTERN.fullmatch(cell)
     if match is None:
         raise FormulaError(f"Invalid cell reference: {ref}")
