@@ -116,13 +116,13 @@ Measured on the synthetic deal models (12 variants per error type plus 24 contro
 
 ## Tested on Models It Never Saw
 
-Five of Aswath Damodaran's public valuation models were kept aside from the start and never used to tune the agent. On 27 Oct 2026 Nemotron 3.5 Super checked them with planted errors and on their original, clean versions:
+Five of Aswath Damodaran's public valuation models were kept aside from the start and never used to tune the agent. On 27 Oct 2026 Nemotron 3.5 Super checked them with planted errors and in their original, clean versions:
 
 | | Result |
 |---|---|
-| Planted errors found and fixed | **14 of 15** (typed numbers 3 of 3, wrong references 3 of 3, wrong periods 5 of 5, flipped signs 3 of 4) |
-| False alarms on the clean originals | **0 of 4** |
-| Checks that did not finish | 6 of 25: three ended on Token Factory's "System is overloaded", one on a sheet name with `&` and spaces, one on an unfinished answer from the model, one was not run. The first two are fixed and retried since |
+| Planted errors found and fixed | **18 of 20 (90%)**: typed numbers 5 of 5, wrong periods 5 of 5, incomplete range 1 of 1, flipped signs 4 of 5, wrong references 3 of 4 |
+| Planted errors the agent pointed at | **20 of 20** |
+| False alarms on the clean originals | **0 of 5** |
 
 ## Cost and Time per Check
 
@@ -130,11 +130,8 @@ Every check below ran on Nebius Token Factory with the production set-up (Nemotr
 
 | Model | Cost per check (median / max) | Time per check (median / max) |
 |---|---|---|
-| Damodaran model with an error | **1.3 cents** / 1.9 cents | **43 s** / 90 s |
-| Damodaran model with no error | **3.7 cents** / 14 cents | **3 min** / 6 min 17 s |
+| Damodaran model with an error | **1.4 cents** / 2.5 cents | **65 s** / 2 min 54 s |
 | The PPA demo model (2,400 formulas) | **1.5 cents** | **85 s** |
-
-A model with an error is quick: a rule points at the suspect and Nemotron judges it. A clean model costs more because, with no suspect, Nemotron reviews every line three times before it says the model is clean. Running those reviews in parallel and capping the time a check may take is the next change (#216).
 
 ## Supported Excel functions
 
@@ -162,7 +159,7 @@ uv run pytest -m live         # live: calls Token Factory / Google APIs, spends 
 - One OpenAI-compatible endpoint and one key gave us five Nemotron models, so each step of the agent uses the model that fits it.
 - Switching the reasoning steps from Nemotron 3 Super to 3.5 Super was a one-line change: fixed errors on an unseen model went from 0 of 5 to 4 of 5, at the same price.
 - With Nemotron, the agent fixed 98% of planted errors against 86% for rules alone, with no false alarm on deliberate values (rules alone broke 12 of 12).
-- A check costs about 1.3 cents and 43 seconds when the model has an error, and 3.7 cents when it has none (medians on models the agent never saw).
+- A check of a model with an error costs about 1.4 cents and takes about a minute (medians on models the agent never saw).
 
 **What would help**
 
