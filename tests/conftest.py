@@ -50,6 +50,13 @@ def write_demo_workbook(path: Path, notes: dict[str, str] | None = None) -> Path
     return path
 
 
+@pytest.fixture(autouse=True)
+def no_waiting_for_the_ai_service(monkeypatch: pytest.MonkeyPatch) -> None:
+    import model_x_ray.llm as llm
+
+    monkeypatch.setattr(llm, "pause", lambda seconds: None)
+
+
 @pytest.fixture
 def demo_workbook_path(tmp_path: Path) -> Path:
     return write_demo_workbook(tmp_path / "demo_model.xlsx")
