@@ -12,6 +12,9 @@ An AI agent built for financial model auditing, powered by NVIDIA Nemotron, that
 
 ## Try it Live
 
+**<https://model-x-ray.vercel.app>**: open the page, press **Try the demo** and watch the agent check a European corporate PPA model (ten renewable offers, 2,400 formulas) with three planted errors, or upload your own `.xlsx` (up to 4.5 MB).
+
+![The opening screen](docs/screenshot-start.png)
 
 ## The Problem
 
@@ -89,7 +92,7 @@ All LLM calls run on **Nebius Token Factory** (OpenAI-compatible) through LangCh
 |---|---|
 | Maths | `SUM` `AVERAGE` `MIN` `MAX` `ROUND` `ROUNDDOWN` `INT` `MOD` `POWER` `ABS` `EXP` `LN` `SUMPRODUCT` `LARGE` `SMALL` |
 | Logic and information | `IF` `IFERROR` `AND` `OR` `NOT` `CHOOSE` `ISERROR` `ISNUMBER` `ISTEXT` `ISBLANK` |
-| Counting and conditional | `COUNT` `COUNTA` `SUMIF` `SUMIFS` `COUNTIF` `COUNTIFS` |
+| Counting, ranking and conditional | `COUNT` `COUNTA` `RANK` `RANK.EQ` `SUMIF` `SUMIFS` `COUNTIF` `COUNTIFS` |
 | Lookups and references | `INDEX` `MATCH` `VLOOKUP` `HLOOKUP` `XLOOKUP` `OFFSET` |
 | Dates | `EOMONTH` `EDATE` `YEAR` `MONTH` `DAY` `DATE` |
 | Valuation, debt, statistics | `NPV` `XNPV` `IRR` `XIRR` `PMT` `PPMT` `NORMSDIST` |
@@ -111,7 +114,7 @@ Model X-Ray was developed and tuned on three sets of workbooks, keeping part of 
 
 ## What Nemotron Adds
 
-Measured on the synthetic deal models (12 variants per error type plus 24 controls, one run each).
+Measured on the synthetic deal models (12 variants per error type plus 24 controls, one run each, 21 and 22 Oct 2026). The wrong-reference and wrong-period rows were measured with the last-period candidates of #186, now on `main`; the other rows just before that change, which only adds candidates on a line's last period.
 
 | Error type | Rules only | Rules + Nemotron 3.5 Super |
 |---|---|---|
@@ -121,6 +124,7 @@ Measured on the synthetic deal models (12 variants per error type plus 24 contro
 | Flipped sign | 11 of 12 | **12 of 12** |
 | Formula pointing to the wrong period | 8 of 12 | **12 of 12** |
 | Blended error (the symptom is not the cause) | 11 of 12 | **11 of 12** |
+| Formula that contradicts its own label | 12 of 12 | **12 of 12** |
 | **Planted errors fixed** | 72 of 84 (86%) | **82 of 84 (98%)** |
 | False alarms on deliberate values | 12 of 12 ❌ | **0 of 12** ✅ |
 | False alarms on clean models | 0 of 12 ✅ | **0 of 12** ✅ |
@@ -139,7 +143,27 @@ Measured on the synthetic deal models (12 variants per error type plus 24 contro
 | Unseen SaaS model, errors fixed (ours) | 0 of 5 | **4 of 5** |
 | Price per 1M tokens (in / out) | $0.30 / $0.90 | $0.30 / $0.90 |
 
-## How we evaluate it
+## Tested on Models It Never Saw
+
+Five of Aswath Damodaran's public valuation models were kept aside from the start and never used to tune the agent. On 27 Oct 2026 Nemotron 3.5 Super checked them with planted errors and on their original, clean versions:
+
+| | Result |
+|---|---|
+| Planted errors found and fixed | **14 of 15** (typed numbers 3 of 3, wrong references 3 of 3, wrong periods 5 of 5, flipped signs 3 of 4) |
+| False alarms on the clean originals | **0 of 4** |
+| Checks that did not finish | 6 of 25: three ended on Token Factory's "System is overloaded", one on a sheet name with `&` and spaces, one on an unfinished answer from the model, one was not run. The first two are fixed and retried since |
+
+## Cost and Time per Check
+
+Every check below ran on Nebius Token Factory with the production set-up (Nemotron 3.5 Super, 3 Super and 3.5 Lightning):
+
+| Model | Cost per check (median / max) | Time per check (median / max) |
+|---|---|---|
+| Damodaran model with an error | **1.3 cents** / 1.9 cents | **43 s** / 90 s |
+| Damodaran model with no error | **3.7 cents** / 14 cents | **3 min** / 6 min 17 s |
+| The PPA demo model (2,400 formulas) | **1.5 cents** | **85 s** |
+
+A model with an error is quick: a rule points at the suspect and Nemotron judges it. A clean model costs more because, with no suspect, Nemotron reviews every line three times before it says the model is clean. Running those reviews in parallel and capping the time a check may take is the next change (#216).
 
 ## How We Evaluate It
 
@@ -157,10 +181,11 @@ Measured on the synthetic deal models (12 variants per error type plus 24 contro
 - One OpenAI-compatible endpoint and one key gave us five Nemotron models, so each step of the agent uses the model that fits it.
 - Switching the reasoning steps from Nemotron 3 Super to 3.5 Super was a one-line change: fixed errors on an unseen model went from 0 of 5 to 4 of 5, at the same price.
 - With Nemotron, the agent fixed 98% of planted errors against 86% for rules alone, with no false alarm on deliberate values (rules alone broke 12 of 12).
-- A full check of a model costs one to three cents.
+- A check costs about 1.3 cents and 43 seconds when the model has an error, and 3.7 cents when it has none (medians on models the agent never saw).
 
 **What would help**
 
+- **"System is overloaded" during peak hours:** some calls ended with HTTP 529 even after retries; we now wait 5, 15 and 30 seconds before giving up. A `Retry-After` header would let clients wait exactly as long as needed.
 - **Errors returned as answers:** long calls sometimes came back as HTTP 200 with `[ERROR: Agent failed ... timed out after 90 seconds]` as the reply. A non-200 status would let clients retry safely.
 - **Reasoning that never reaches the tool call:** Nemotron 3.5 Super sometimes used its whole output budget reasoning and returned no tool call. A per-request way to cap reasoning would help.
 - **Model metadata in the API:** prices, context windows and output limits are only in the web catalogue, not in `GET /v1/models`.
