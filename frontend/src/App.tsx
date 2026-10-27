@@ -33,6 +33,8 @@ const UNREACHABLE = "The Model X-Ray service could not be reached. Please try ag
 
 const DEMO_NAME = "Demo model.xlsx";
 
+const DEMOS: Record<string, string> = { "ppa-model-europe": "PPA Model Europe.xlsx", demo: DEMO_NAME };
+
 function storyRun(story: string | null): { run: Run; view: InvestigationView | null; phase: Phase } | null {
   const view = story === "workspace" ? REVIEW : story === "done" ? APPROVED : story === "running" ? RUNNING : null;
   if (!story || (!view && story !== "starting")) return null;
@@ -121,8 +123,8 @@ export default function App() {
   }, []);
 
   const startDemo = useCallback(() => {
-    const demo = demos[0];
-    if (demo) start(demo.id, DEMO_NAME, demo.sheets, null);
+    const demo = demos.find((candidate) => candidate.id === "ppa-model-europe") ?? demos[0];
+    if (demo) start(demo.id, DEMOS[demo.id] ?? `${demo.id}.xlsx`, demo.sheets, null);
   }, [demos, start]);
 
   const startUpload = useCallback(

@@ -13,7 +13,7 @@ The repository holds two programs, so `vercel.json` declares them as two [Vercel
 | Routing | The top-level rewrites send `/health`, `/spreadsheets`, `/investigations`, `/workbook`, `/docs` and `/openapi.json` (with any path below them) to `api`, and every other path to `web`. A service sees the original path, so the API keeps its routes as they are. `tests/test_server.py` fails if a new API route is not in that list, because the page would answer it |
 | Python and dependencies | `.python-version` (3.13) and `pyproject.toml` with `uv.lock`; Vercel installs them with uv |
 | Same origin | A production build calls the API on its own origin (`API_URL` is `""` unless `VITE_API_URL` is set), so there is no CORS setup to keep in sync |
-| Function size | The `api` service leaves `frontend/`, tests, docs, tools and the demo logic sets out of its bundle; the demo model it serves is `demo_models/demo.xlsx` |
+| Function size | The `api` service leaves `frontend/`, tests, docs, tools and the demo logic sets out of its bundle; the demo models it serves are in `demo_models/` |
 
 `app.py` also serves `frontend/dist` when that folder exists. Vercel's `api` service never has it, so this only matters for the local run at the end of this page.
 
