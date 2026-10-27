@@ -117,7 +117,7 @@ def test_the_ppa_demo_model_is_mapped_fast_enough_for_one_request_on_vercel() ->
     from model_x_ray.agents.mapper import mapper_brief, series_catalogue
     from model_x_ray.spreadsheet.xlsx import load_xlsx
 
-    book = load_xlsx(Path(__file__).resolve().parents[1] / "demo_models" / "ppa-model-europe.xlsx")
+    book = load_xlsx(Path(__file__).resolve().parents[1] / "demo_models" / "PPA_Model_Europe.xlsx")
     started = time.perf_counter()
     brief = mapper_brief(book, series_catalogue(book))
     elapsed = time.perf_counter() - started

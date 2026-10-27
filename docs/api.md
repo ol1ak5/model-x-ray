@@ -17,7 +17,7 @@ The first command fills `models/` with the clean base model and planted-error va
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `MODEL_X_RAY_MODELS_DIR` | `demo_models` | Folder with the demo models anyone can try (the repo ships `demo_models/ppa-model-europe.xlsx`, the PPA evaluation model the web demo checks, with three planted errors, and `demo_models/demo.xlsx`, a synthetic three-sheet model with a sign flip on `P&L!G5` and a typed value on `P&L!I6` that the tests use); point it at `models/` to expose the benchmark set locally |
+| `MODEL_X_RAY_MODELS_DIR` | `demo_models` | Folder with the demo models anyone can try (the repo ships `demo_models/PPA_Model_Europe.xlsx`, the PPA evaluation model the web demo checks, with three planted errors, and `demo_models/demo.xlsx`, a synthetic three-sheet model with a sign flip on `P&L!G5` and a typed value on `P&L!I6` that the tests use); point it at `models/` to expose the benchmark set locally |
 | `MODEL_X_RAY_UPLOAD_DIR` | `uploads` | Where uploaded models are saved while their run is alive; each file is deleted when the run ends or after the upload TTL |
 | `MODEL_X_RAY_OUTPUT_DIR` | `corrected` | Where approved corrected copies are saved |
 | `MODEL_X_RAY_COPY_TTL` | `1800` | Seconds a corrected copy waits for its download before the sweep removes it |
