@@ -45,8 +45,8 @@ Words we never use: "deal", "M&A", "ask a question". The agent does not wait for
 
 | Screen | Voice |
 |---|---|
-| Quick cuts of people at laptops (stock or staged), one title per shot: *Financial analysts*, *FP&A and corporate finance*, *M&A and investment banking*, *Valuation and transaction advisory*, *Financial model audit*. | We built it for the people who build financial models, review them, and make decisions on what they say. |
-| The cuts widen: *Researchers*, *Students and teachers*, *Founders*, *Small business owners*, then *Anyone with a spreadsheet that has to be right*. | But it works for anyone whose numbers have to be right: researchers, students, founders, small business owners. |
+| Quick cuts of people at laptops (stock or staged), one title per shot: *Financial analysts*, *FP&A and corporate finance teams*, *M&A and investment banking teams*, *Valuation and deal advisory*, *Auditors*. | We built it for the people who build financial models, review them, and make decisions on what they say. |
+| The cuts widen: *Researchers*, *Students*, *Founders*, *Small business owners*, then one big line: **Anyone who works in Excel.** | But it works for anyone whose numbers have to be right: researchers, students, founders, small business owners. If you work in Excel, it works for you. |
 | A hand scrolling an endless formula bar: `=SUMPRODUCT(Calc!M51:Calc!AH51, ...)`; function names fly past: `XLOOKUP`, `SUMIFS`, `NPV`, `IRR`, `OFFSET`. Overlay: **50+ Excel functions**. | Thousands of formulas. Dozens of tabs. More than fifty Excel functions it understands. And no time to trace every one by hand. |
 
 ### 4. Why AI alone is not enough (0:45 – 0:58)
