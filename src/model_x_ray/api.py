@@ -229,6 +229,8 @@ def friendly_error(error: Exception) -> tuple[int, str]:
         return 503, "The AI service rejected our access key. Please tell the team."
     if isinstance(error, openai.APIConnectionError):
         return 503, "The AI service could not be reached. Please try again in a minute."
+    if isinstance(error, openai.APIStatusError) and error.status_code in (503, 529):
+        return 503, "The AI service is busy right now. Please try again in a minute."
     if isinstance(error, openai.APIStatusError):
         return 502, "The AI service returned an error. Please try again."
     if isinstance(error, pydantic.ValidationError):
