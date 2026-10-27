@@ -41,7 +41,7 @@ Models come from the role registry: Super for the Investigator, Verifier and loc
 
 | Method and path | Body | Answer |
 |---|---|---|
-| `POST /investigations` | `{"spreadsheet_id", "question"}`; `question` is optional | `201` and the investigation view. Without a question the agent checks the whole model (see below) |
+| `POST /investigations` | `{"spreadsheet_id", "question", "set_aside"}`; `question` and `set_aside` are optional | `201` and the investigation view. Without a question the agent checks the whole model (see below). `set_aside` lists cells already settled in earlier rounds of the same review; each goes into `known_overrides` with its current content and the reason "The reviewer said it is not an error", so the locator skips it and the Investigator does not propose it again. This is how the page finds the next error after each decision |
 | `GET /health` | | `{"status": "ok"}` for the host's health check |
 | `GET /spreadsheets` | | The demo models: `[{"id", "sheets"}]`. Uploads are never listed, so one visitor never sees another's file, and each call first sweeps uploads older than the TTL |
 | `POST /spreadsheets?name=My%20model.xlsx` | The raw `.xlsx` bytes | `201` and `{"id", "name", "sheets"}`; `.xlsx` only, up to 10 MB, checked by opening it; the id is `upload-` plus the first 16 hex digits of the file's SHA-256, so the same bytes get the same id on every server instance, and a name like `../x.xlsx` cannot escape the folder. The file is deleted when the run finishes (approve or reject) or after `MODEL_X_RAY_UPLOAD_TTL` seconds, whichever comes first, and its id stops resolving |

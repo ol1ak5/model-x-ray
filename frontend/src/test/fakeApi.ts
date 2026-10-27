@@ -122,9 +122,11 @@ export function steps(...names: string[]): Event[] {
   });
 }
 
-export function fakeApi(start: Event[], resumes: Event[][] = [], failures: string[] = [], answers: string[] = []) {
+export function fakeApi(start: Event[], resumes: Event[][] = [], failures: string[] = [], answers: string[] = [], rounds: Event[][] = []) {
   const sent: { url: string; body: unknown }[] = [];
   const queue = [...resumes];
+  const starts = [start, ...rounds];
+  let started = 0;
   const refusals = [...failures];
   const replies = [...answers];
   const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
@@ -141,7 +143,7 @@ export function fakeApi(start: Event[], resumes: Event[][] = [], failures: strin
     if (url.endsWith("/sheet")) return Response.json(SHEET);
     if (url.endsWith("/workbook")) return Response.json(WORKBOOK);
     if (url.endsWith("/ask")) return Response.json({ answer: replies.shift() ?? "No answer scripted." });
-    if (url.endsWith("/investigations/stream")) return streamed(sse(start));
+    if (url.endsWith("/investigations/stream")) return streamed(sse(starts[started++] ?? [...steps("explain"), ["view", CLEAR]]));
     if (url.includes("/resume/stream")) {
       const refusal = refusals.shift();
       if (refusal) return Response.json({ detail: refusal }, { status: 422 });

@@ -132,6 +132,48 @@ describe("a model check", () => {
     expect(within(errors).queryByRole("button", { name: "Approve fix" })).toBeNull();
   });
 
+  test("after each decision the agent checks the corrected copy for the next error, until none is left", async () => {
+    const typed: InvestigationView = {
+      ...REVIEW,
+      id: "inv-next",
+      patch: { cell: "P&L!I6", old_formula: "12.5", new_formula: "=H6*(1+Assumptions!$C$3)", source: "agent" },
+      hypotheses: [{ id: "hyp-1", cell: "P&L!I6", error_type: "typed_value", claim: "P&L!I6 is a typed number", evidence_ids: [], confidence: "high", status: "confirmed" }],
+    };
+    const api = fakeApi(
+      [...steps("explain"), ["view", REVIEW]],
+      [
+        [...steps("human_review", "apply_fix"), ["view", { ...APPROVED, corrected_file: CORRECTED }]],
+        [...steps("human_review"), ["view", { ...typed, status: "done", pause: null, corrected_copy_id: null }]],
+      ],
+      [],
+      [],
+      [[...steps("explain"), ["view", typed]]],
+    );
+    vi.stubGlobal("fetch", api.fetch);
+    const user = await checkDemo();
+    const errors = await openTheError(user);
+
+    await user.click(within(errors).getByRole("button", { name: "Approve fix" }));
+
+    const second = await within(errors).findByRole("button", { name: /P&L!I6.*is a typed number/ });
+    const starts = () => api.sent.filter((request) => request.url.endsWith("/investigations/stream"));
+    expect(starts()[1].body).toEqual({ spreadsheet_id: "demo", question: "", set_aside: ["P&L!G5"], file: "Demo model.xlsx" });
+    expect(screen.getByText("Errors detected: 2")).toBeInTheDocument();
+    expect(within(errors).getByText("Fixed")).toBeInTheDocument();
+
+    await user.click(second);
+    await user.click(within(errors).getByRole("button", { name: "Reject" }));
+    await user.click(within(errors).getByRole("button", { name: "It's not an error" }));
+
+    expect(await screen.findByText("Review complete", { selector: ".state" })).toBeInTheDocument();
+    expect(lastResume(api)?.body).toMatchObject({ action: "reject", state: { id: "inv-next" }, file: "Demo model.xlsx" });
+    expect(starts()[2].body).toEqual({ spreadsheet_id: "demo", question: "", set_aside: ["P&L!G5", "P&L!I6"], file: "Demo model.xlsx" });
+    expect(starts()).toHaveLength(3);
+    expect(within(errors).getByText("Not an error")).toBeInTheDocument();
+    expect(screen.getByText("1 fix saved to a new copy")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Download Demo model (corrected).xlsx" })).toHaveAttribute("download", CORRECTED.name);
+  });
+
   test("tests the reviewer's own formula before anything is approved", async () => {
     const edited: InvestigationView = { ...REVIEW, patch: { cell: "P&L!G5", old_formula: "=G4*Assumptions!$C$5", new_formula: "=-G4*0.52", source: "human" } };
     const api = fakeApi([...steps("explain"), ["view", REVIEW]], [[...steps("test", "verify", "explain"), ["view", edited]]]);

@@ -36,8 +36,13 @@ export function phasesOf(steps: { step: string }[], view: InvestigationView | nu
   return PHASES.map(([name, hint], index) => ({ name, hint, state: states[index] }));
 }
 
-export function statusOf(view: InvestigationView | null, running: boolean, lastStep: string | null): { label: string; tone: "run" | "wait" | "done"; line: string } {
-  if (running) return { label: "Checking the model", tone: "run", line: lastStep ?? "Reading the model" };
+export function statusOf(view: InvestigationView | null, running: boolean, lastStep: string | null, earlier: { status: string }[] = []): { label: string; tone: "run" | "wait" | "done"; line: string } {
+  if (running) return { label: "Checking the model", tone: "run", line: lastStep ?? (earlier.length ? "Looking for the next error" : "Reading the model") };
+  const finished = view?.status === "done" || (view?.status === "needs_review" && !view.patch);
+  if (finished && earlier.length) {
+    const fixed = earlier.filter((finding) => finding.status === "fixed").length;
+    return { label: "Review complete", tone: "done", line: fixed ? `${fixed} ${fixed === 1 ? "fix" : "fixes"} saved to a new copy` : "No changes to your file" };
+  }
   if (!view) return { label: "Interrupted", tone: "wait", line: "The check stopped before it finished" };
   if (view.status === "done") return { label: "Review complete", tone: "done", line: view.corrected_copy_id ? "1 fix saved to a new copy" : "No changes to your file" };
   if (view.status === "needs_review" && view.patch) return { label: "1 error detected", tone: "wait", line: "Waiting for your decision" };

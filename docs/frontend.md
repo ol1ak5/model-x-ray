@@ -46,17 +46,16 @@ Try the demo starts a live check of `PPA_Model_Europe` (the PPA evaluation model
   | `period_inconsistency` | Wrong period | uses the wrong period |
   | `logic_error` | Logic error | breaks the logic of its line |
   | `input_outlier` | Unusual input | is out of line with the rest |
+- **One error after another.** A run investigates one error. When a decision settles it (approve or reject), the page starts the next round on its own: after an approval it sends the corrected file it just received, and it always sends `set_aside` with every cell settled so far (`docs/api.md`). Settled errors stay in the list with their status while the next round runs ("Looking for the next error"). The review is complete when a round finds nothing more, or after six errors; the download then offers the copy from the last approved fix, which carries every fix approved before it.
 - **Decisions.** Approve fix (the button says "Testing in a copy…" while the server writes the copy), Edit fix (the reviewer's formula, sent as an `edit` decision and tested again before it can be approved), Reject (then "It's not an error", with "Never flag this cell again" sent as `intentional`). Once every error is settled the page offers the corrected workbook from the view's `corrected_file`.
 - **Sheets.** "Sheets in this file" and "Open in the sheet" open the real workbook (`POST /workbook`) in a dialog that looks like Excel: values as Excel shows them in General format, the formula of the selected cell in the formula bar, arrow keys to move, tabs to switch sheets. Opened from an error, the error cell is red and every cell whose value the tested fix changes is blue, with a line saying the marks exist only on screen.
 - **Stopped states.** A failed request is one red line under the header; a check cut short by a reload says Interrupted and offers Run again. `components/Boundary.tsx` catches a render error on the check page so the worst case is a sentence and a way back, never a white page.
 
 - **Ask the agent.** Under each open error a one-line field asks the agent about it (`POST /investigations/{id}/ask`). The conversation is a thread of lines, "You:" then "Model X-Ray:" in green, each new question on its own line, with "thinking…" while the answer is on its way; the whole conversation so far is sent with each question. The field goes away once the fix is accepted.
 
-Today the agent investigates one error per run, so the list has at most one row; the list, the filters and the counts are built for several.
-
 ## State in the browser
 
-`src/App.tsx` keeps the run: the streamed steps, the latest view, the sheet window, the phase, and the uploaded `File` in memory (re-sent with every request, `docs/api.md`). Runs are stored by `src/storage.ts` (`docs/persistence.md`); a stored run with a view reopens on the check page after a reload.
+`src/App.tsx` keeps the run: the streamed steps, the latest view, the sheet window, the phase, the errors settled in earlier rounds, the set-aside cells, the view that wrote the latest corrected copy, and the uploaded (or latest corrected) `File` in memory (re-sent with every request, `docs/api.md`). Runs are stored by `src/storage.ts` (`docs/persistence.md`); a stored run with a view reopens on the check page after a reload.
 
 ## Recorded demo runs
 
@@ -64,4 +63,4 @@ Today the agent investigates one error per run, so the list has at most one row;
 
 ## Tests
 
-`src/test/app.test.tsx` drives both pages through a fake API that streams real event shapes (`src/test/fakeApi.ts`), by labels, roles and visible text: the landing and the demo start, a refused upload, a full check from upload to the downloaded file (progress states, the error's facts, the explanation without citations, the request bodies with the file), editing the fix, a rejection marked never flag again, a model with nothing to fix, the sheet viewer with its marks and formulas, a failure message, and the way back. `src/test/persistence.test.tsx` covers runs restored after a reload, interrupted runs and the storage budget; `src/test/crash.test.tsx` makes the check page throw and expects a readable way out.
+`src/test/app.test.tsx` drives both pages through a fake API that streams real event shapes (`src/test/fakeApi.ts`), by labels, roles and visible text: the landing and the demo start, a refused upload, a full check from upload to the downloaded file (progress states, the error's facts, the explanation without citations, the request bodies with the file), editing the fix, a rejection marked never flag again, a review that moves on to the next error after each decision (the corrected file and the set-aside cells in each new request), a model with nothing to fix, the sheet viewer with its marks and formulas, a failure message, and the way back. `src/test/persistence.test.tsx` covers runs restored after a reload, interrupted runs and the storage budget; `src/test/crash.test.tsx` makes the check page throw and expects a readable way out.

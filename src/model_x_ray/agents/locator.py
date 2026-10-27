@@ -117,8 +117,8 @@ def relative_move(book: Workbook, ref: str) -> float:
     return abs(now - before) / abs(before) if before else abs(now - before)
 
 
-def check_target(book: Workbook, extra: list[dict] | None = None) -> tuple[str, str]:
-    outliers = [*rank_outliers(book, scan_model(book)), *(extra or [])]
+def check_target(book: Workbook, extra: list[dict] | None = None, skip: frozenset[str] = frozenset()) -> tuple[str, str]:
+    outliers = [o for o in [*rank_outliers(book, scan_model(book)), *(extra or [])] if o["cell"] not in skip]
     for outlier in outliers:
         for ref in [*book.all_dependents(outlier["cell"]), outlier["cell"]]:
             if is_target(book, ref):
@@ -157,12 +157,13 @@ def make_locate_node(llm: BaseChatModel | None, book: Workbook) -> Callable[[Inv
         return answer_question(state)
 
     def check_model(state: InvestigationState) -> dict:
-        outliers = scan_model(book)
+        skip = frozenset(o["cell"] for o in state.get("known_overrides", []))
+        outliers = [o for o in scan_model(book) if o["cell"] not in skip]
         flagged = {o["cell"] for o in outliers}
-        edges = [{**e, "fix": row_fix(book, e["cell"])} for e in edge_breaks(book) if e["cell"] not in flagged and computable(book, e["cell"])]
+        edges = [{**e, "fix": row_fix(book, e["cell"])} for e in edge_breaks(book) if e["cell"] not in flagged and e["cell"] not in skip and computable(book, e["cell"])]
         if outliers or edges:
             try:
-                ref, question = check_target(book, edges)
+                ref, question = check_target(book, edges, skip)
                 target = target_cell(book, ref)
                 ranked = rank_outliers(book, outliers)
                 findings = [{"cell": o["cell"], "reason": o["reason"], "fix": row_fix(book, o["cell"])} for o in ranked[:6]]
@@ -170,12 +171,12 @@ def make_locate_node(llm: BaseChatModel | None, book: Workbook) -> Callable[[Inv
                 return {"target": target, "question": question, "target_choice": None}
             except ValueError:
                 pass
-        table = table_check(book)
+        table = table_check(book, skip)
         if table is not None:
             target, question = table
             return {"target": target, "question": question, "target_choice": None}
         try:
-            ref, question = check_target(book)
+            ref, question = check_target(book, skip=skip)
             return {"target": target_cell(book, ref), "question": question, "target_choice": None}
         except ValueError:
             review = review_target(book)
@@ -211,8 +212,8 @@ def make_locate_node(llm: BaseChatModel | None, book: Workbook) -> Callable[[Inv
     return locate
 
 
-def table_check(book: Workbook) -> tuple[TargetCell, str] | None:
-    findings = [finding for finding in scan_tables(book) if computable(book, finding["cell"])]
+def table_check(book: Workbook, skip: frozenset[str] = frozenset()) -> tuple[TargetCell, str] | None:
+    findings = [finding for finding in scan_tables(book) if finding["cell"] not in skip and computable(book, finding["cell"])]
     if not findings:
         return None
     ranked = sorted(findings, key=lambda f: (len(book.all_dependents(f["cell"])), f["kind"] == "incomplete_total"), reverse=True)

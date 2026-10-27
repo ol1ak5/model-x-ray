@@ -31,7 +31,9 @@ def make_load_sheet_node(book: Workbook, memory: ModelMemory | None = None) -> C
         started = {"started_at": investigator_agent.clock()}
         if memory is None:
             return started
-        return {**started, "known_overrides": memory.overrides(state["spreadsheet_id"], book), "past_findings": memory.findings(state["spreadsheet_id"])}
+        given = state.get("known_overrides", [])
+        remembered = [o for o in memory.overrides(state["spreadsheet_id"], book) if o["cell"] not in {g["cell"] for g in given}]
+        return {**started, "known_overrides": [*given, *remembered], "past_findings": memory.findings(state["spreadsheet_id"])}
 
     return load_sheet_node
 

@@ -178,6 +178,7 @@ export default function CheckPage({
   status,
   findings,
   view,
+  fixedIn,
   running,
   error,
   loadWorkbook,
@@ -193,6 +194,7 @@ export default function CheckPage({
   status: Status;
   findings: Finding[];
   view: InvestigationView | null;
+  fixedIn: InvestigationView | null;
   running: boolean;
   error: string | null;
   loadWorkbook: () => Promise<WorkbookView>;
@@ -228,7 +230,7 @@ export default function CheckPage({
     onDecide(decision);
   }
 
-  const download = view ? correctedFileHref(view) : null;
+  const download = fixedIn ? correctedFileHref(fixedIn) : view ? correctedFileHref(view) : null;
 
   return (
     <div className="check">
@@ -320,7 +322,7 @@ export default function CheckPage({
                     />
                   ))}
                 </ul>
-                {settled && fixed > 0 && download && (
+                {settled && !running && fixed > 0 && download && (
                   <div className="done-note">
                     ✓ {fixed === 1 ? "The fix is" : `${fixed} fixes are`} saved to a new copy.
                     <a {...download}>Download {name.replace(/\.xlsx$/i, "")} (corrected).xlsx</a>

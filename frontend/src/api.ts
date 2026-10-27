@@ -171,8 +171,9 @@ async function stream(path: string, body: unknown, onEvent: (event: ProgressEven
   parseEvents(buffer + "\n\n").events.forEach(onEvent);
 }
 
-export function startInvestigation(spreadsheetId: string, question: string, onEvent: (event: ProgressEvent) => void, file?: File | null): Promise<void> {
-  return stream("/investigations/stream", { spreadsheet_id: spreadsheetId, question }, onEvent, file);
+export function startInvestigation(spreadsheetId: string, question: string, onEvent: (event: ProgressEvent) => void, file?: File | null, setAside: string[] = []): Promise<void> {
+  const body = setAside.length ? { spreadsheet_id: spreadsheetId, question, set_aside: setAside } : { spreadsheet_id: spreadsheetId, question };
+  return stream("/investigations/stream", body, onEvent, file);
 }
 
 export function resumeInvestigation(id: string, answer: Decision, onEvent: (event: ProgressEvent) => void, state?: InvestigationView | null, file?: File | null): Promise<void> {
@@ -215,7 +216,14 @@ export function correctedFileUrl(id: string): string {
   return `${API_URL}/investigations/${id}/corrected`;
 }
 
+const XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
 export function correctedFileHref(view: InvestigationView): { href: string; download?: string } {
   if (!view.corrected_file) return { href: correctedFileUrl(view.id) };
-  return { href: `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${view.corrected_file.base64}`, download: view.corrected_file.name };
+  return { href: `data:${XLSX_TYPE};base64,${view.corrected_file.base64}`, download: view.corrected_file.name };
+}
+
+export function fileOf(corrected: CorrectedFile, name: string): File {
+  const bytes = Uint8Array.from(atob(corrected.base64), (char) => char.charCodeAt(0));
+  return new File([bytes], name, { type: XLSX_TYPE });
 }
