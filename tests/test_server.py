@@ -131,3 +131,14 @@ def test_vercel_sends_every_api_route_to_the_api_service_and_everything_else_to_
 
     assert prefixes - {"redoc"} <= routed, "a route Vercel does not send to the API would be answered by the page"
     assert {"health", "spreadsheets", "investigations"} <= routed
+
+
+def test_a_check_ends_with_time_to_spare_before_vercel_cuts_the_request() -> None:
+    import json
+
+    from model_x_ray.agents.investigator import CHECK_SECONDS
+
+    config = json.loads((Path(__file__).parents[1] / "vercel.json").read_text())
+    limit = config["services"]["api"]["functions"]["app.py"]["maxDuration"]
+    measured_tail = 42
+    assert CHECK_SECONDS + measured_tail + 45 <= limit, "the check, the steps after it (42 s measured on 27 Oct) and a margin for a slow start must fit in one request"
