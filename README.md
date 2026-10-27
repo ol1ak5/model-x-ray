@@ -23,22 +23,9 @@ Financial models drive billion-dollar decisions, yet a single broken formula can
 Even if AI looks like the obvious reviewer for errors that escape from the human's eyes, LLMs struggle with numerical precision and nested logic, and can produce convincing explanations while getting the number wrong. Financial models don’t need plausible explanations. They need verifiable results.
 
 ## The Solution
-Model X-Ray that pairs NVIDIA Nemotron with a deterministic calculation engine, just as an experienced financial analyst combines expertise with reliable tools. Nemotron reasons through the model, interpreting formulas, distinguishing real errors from deliberate choices, and proposing fixes. The engine independently maps formula dependencies and recalculates values, grounding every conclusion in verifiable calculations rather than AI-generated numbers.
+Model X-Ray pairs NVIDIA Nemotron with a deterministic calculation engine, just as an experienced financial analyst combines expertise with reliable tools. Nemotron reasons through the model, interpreting formulas, distinguishing real errors from deliberate choices, and proposing fixes. The engine independently maps formula dependencies and recalculates values, grounding every conclusion in verifiable calculations rather than AI-generated numbers.
 
-## Setup
-
-```bash
-uv sync                       # Python 3.13, installs the package
-cp .env.example .env          # then fill in NEBIUS_API_KEY
-uv run model-x-ray            # smoke check: prints the banner
-```
-
-## Tests
-
-```bash
-uv run pytest                 # offline, no credits: deep end-to-end tests
-uv run pytest -m live         # live: calls Token Factory / Google APIs, spends credits
-```
+It is built for the people who sign off on a model before money moves: M&A and deal teams, investment bankers, corporate finance and FP&A analysts, and the reviewers who check their work.
 
 ## How it Works
 
@@ -61,18 +48,18 @@ flowchart TD
     human_review -. "reject" .-> __end__([End])
     apply_fix --> __end__
 ```
-| Step | What it does | Model |
-|---|---|---|
-| `load_sheet` | Opens the workbook and reads every formula | Engine |
-| `map_model` | Labels every line and period (revenue, cost, ratio) | Nemotron 3 Super |
-| `locate` | Picks the cell to investigate; checks the whole model when there is no question | Code, Nemotron 3 Super only if needed |
-| `trace` | Follows the dependency graph and measures what drives each change | Engine |
-| `diagnose` | The Investigator. Rules propose suspects and the engine tests each fix on a copy; Nemotron judges whether each one is an error or a deliberate choice, and when none is, it reviews the model's logic line by line, three times, keeping what a majority finds | Nemotron 3.5 Super |
-| `test` | Applies the fix to a sandbox copy and recalculates | Engine |
-| `verify` | Engine checks, then the Verifier tries to break the fix; the engine re-checks every objection. A rejected fix goes back to `diagnose` | Nemotron 3.5 Super |
-| `explain` | Writes the report in plain language, checked by code before it is shown | Nemotron 3.5 Lightning |
-| `human_review` | Shows the cell, the cause, the evidence and the numbers before and after, and waits for you | You |
-| `apply_fix` | Writes the corrected copy; the original workbook never changes | Engine |
+| Step | What it does |
+|---|---|
+| `load_sheet` | Opens the workbook and reads every formula |
+| `map_model` | Labels every line and period (revenue, cost, ratio) |
+| `locate` | Picks the cell to investigate; checks the whole model when there is no question |
+| `trace` | Follows the dependency graph and measures what drives each change |
+| `diagnose` | The Investigator. Rules propose suspects and the engine tests each fix on a copy; Nemotron judges whether each one is an error or a deliberate choice, and when none is, it reviews the model's logic line by line, three times, keeping what a majority finds |
+| `test` | Applies the fix to a sandbox copy and recalculates |
+| `verify` | Engine checks, then the Verifier tries to break the fix; the engine re-checks every objection. A rejected fix goes back to `diagnose` |
+| `explain` | Writes the report in plain language, checked by code before it is shown |
+| `human_review` | Shows the cell, the cause, the evidence and the numbers before and after, and waits for you |
+| `apply_fix` | Writes the corrected copy; the original workbook never changes |
 
 ## Built on Nebius × NVIDIA
 
@@ -86,31 +73,29 @@ All LLM calls run on **Nebius Token Factory** (OpenAI-compatible) through LangCh
 | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | Benchmark only: does a small model suffice? | 256K | $0.06 / $0.24 |
 | `nvidia/Nemotron-3-Ultra-550b-a55b` | Benchmark only: the largest model | 1M | $1.00 / $3.00 |
 
-## Supported Excel functions
+- **Nemotron 3.5 Super** is the Investigator and the Verifier: it judges every formula, reviews the model's logic and tries to break every fix.
+- **Nemotron 3 Super** labels every line and period of the workbook.
+- **Nemotron 3.5 Lightning** writes the final report.
+- One Token Factory endpoint gave us all five models, so moving the reasoning steps to 3.5 Super was a one-line change, measured the same day.
 
-| Family | Functions |
-|---|---|
-| Maths | `SUM` `AVERAGE` `MIN` `MAX` `ROUND` `ROUNDDOWN` `INT` `MOD` `POWER` `ABS` `EXP` `LN` `SUMPRODUCT` `LARGE` `SMALL` |
-| Logic and information | `IF` `IFERROR` `AND` `OR` `NOT` `CHOOSE` `ISERROR` `ISNUMBER` `ISTEXT` `ISBLANK` |
-| Counting, ranking and conditional | `COUNT` `COUNTA` `RANK` `RANK.EQ` `SUMIF` `SUMIFS` `COUNTIF` `COUNTIFS` |
-| Lookups and references | `INDEX` `MATCH` `VLOOKUP` `HLOOKUP` `XLOOKUP` `OFFSET` |
-| Dates | `EOMONTH` `EDATE` `YEAR` `MONTH` `DAY` `DATE` |
-| Valuation, debt, statistics | `NPV` `XNPV` `IRR` `XIRR` `PMT` `PPMT` `NORMSDIST` |
-| Other | Cross-sheet references, ranges, whole rows and columns, defined names, circular references (solved iteratively) |
+| | Nemotron 3 Super | Nemotron 3.5 Super |
+|---|---|---|
+| GPQA Diamond, expert reasoning (NVIDIA) | 79.2 | **89.5** |
+| τ²-bench airline, tool use (NVIDIA) | 56.3 | **76.5** |
+| Unseen SaaS model, errors fixed (ours) | 0 of 5 | **4 of 5** |
+| Price per 1M tokens (in / out) | $0.30 / $0.90 | $0.30 / $0.90 |
 
-**Not supported:** links to other workbooks, Data Tables and VBA. Each is reported by name on the cell that uses it, never guessed.
+## How We Built and Tested It
 
-Full spec: [`docs/spreadsheet-core.md`](docs/spreadsheet-core.md).
-
-### The Models We Built It On
-
-Model X-Ray was developed and tuned on three sets of workbooks, keeping part of the real models aside for the final score:
+The agent's checks, the formulas it compares against and the way it reads a model were built and tuned on three sets of workbooks, with part of the real models kept aside for the final score:
 
 | Set | What it is | Errors |
 |---|---|---|
 | **Damodaran valuation models** | 26 public spreadsheets by Aswath Damodaran (NYU Stern): DCFs, cost of capital, capital budgeting; a median of 125 rows and 218 formulas | 95 planted (typed values, wrong references, flipped signs, period slips); 21 models for tuning, 5 held out |
 | **Synthetic deal models** | A three-sheet deal model (assumptions, five-year P&L, summary) and 174 copies of it, each with one planted error, plus clean copies and copies with deliberate, documented values | 150 planted, 24 controls |
 | **Logic test models** | A five-year budget and a SaaS subscription forecast the agent had never seen, in [`demo/`](demo) | 15 planted, including 7 logic errors where a formula contradicts its own label |
+
+Every test model carries errors we planted ourselves, so each answer is scored against the truth (the right cell, the right cause, a fix that restores the original value), and clean models and deliberate values count as much as errors: "fixing" one is a false alarm. The same models are checked with Nemotron switched off and on, `scripts/benchmark.sh` reruns the benchmark, and the scoring rules are in [`docs/evaluation.md`](docs/evaluation.md).
 
 ## What Nemotron Adds
 
@@ -128,20 +113,6 @@ Measured on the synthetic deal models (12 variants per error type plus 24 contro
 | **Planted errors fixed** | 72 of 84 (86%) | **82 of 84 (98%)** |
 | False alarms on deliberate values | 12 of 12 ❌ | **0 of 12** ✅ |
 | False alarms on clean models | 0 of 12 ✅ | **0 of 12** ✅ |
-
-## How Nemotron and Token Factory Power It
-
-- **Nemotron 3.5 Super** is the Investigator and the Verifier: it judges every formula, reviews the model's logic and tries to break every fix.
-- **Nemotron 3 Super** labels every line and period of the workbook.
-- **Nemotron 3.5 Lightning** writes the final report.
-- One Token Factory endpoint gave us all five models, so moving the reasoning steps to 3.5 Super was a one-line change, measured the same day.
-
-| | Nemotron 3 Super | Nemotron 3.5 Super |
-|---|---|---|
-| GPQA Diamond, expert reasoning (NVIDIA) | 79.2 | **89.5** |
-| τ²-bench airline, tool use (NVIDIA) | 56.3 | **76.5** |
-| Unseen SaaS model, errors fixed (ours) | 0 of 5 | **4 of 5** |
-| Price per 1M tokens (in / out) | $0.30 / $0.90 | $0.30 / $0.90 |
 
 ## Tested on Models It Never Saw
 
@@ -165,14 +136,24 @@ Every check below ran on Nebius Token Factory with the production set-up (Nemotr
 
 A model with an error is quick: a rule points at the suspect and Nemotron judges it. A clean model costs more because, with no suspect, Nemotron reviews every line three times before it says the model is clean. Running those reviews in parallel and capping the time a check may take is the next change (#216).
 
-## How We Evaluate It
+## Supported Excel functions
 
-- **Known answers.** Every test model carries errors we planted ourselves, so each diagnosis is scored against the truth: the right cell, the right cause, and a fix that restores the original value.
-- **Controls count as much as errors.** Clean models and values a modeller typed on purpose must be left alone; "fixing" one is a false alarm.
-- **Three test sets.** 174 synthetic deal models (one planted error each, plus clean and deliberate copies), Damodaran's public valuation models with planted errors, and two logic test models in [`demo/`](demo).
-- **Held-out models.** Part of the Damodaran models is kept aside and used only for the final score, so the agent is never tuned on the models that grade it.
-- **Rules alone vs rules + Nemotron.** The same models are checked with the language model switched off and on; the results are in [What Nemotron Adds](#what-nemotron-adds).
-- **Reproducible.** `scripts/benchmark.sh` reruns the benchmark; metrics and scoring rules are in [`docs/evaluation.md`](docs/evaluation.md).
+The engine calculates more than 50 Excel functions, among them `SUM`, `SUMPRODUCT`, `IF`, `IFERROR`, `INDEX`, `MATCH`, `VLOOKUP`, `XLOOKUP`, `OFFSET`, `SUMIFS`, `COUNTIFS`, `RANK`, `NPV`, `XNPV`, `IRR`, `XIRR` and `PMT`, plus cross-sheet references, defined names and circular references (solved iteratively). **Not supported:** links to other workbooks, Data Tables and VBA; each is reported by name on the cell that uses it, never guessed. The full list is in [`docs/spreadsheet-core.md`](docs/spreadsheet-core.md).
+
+## Setup
+
+```bash
+uv sync                       # Python 3.13, installs the package
+cp .env.example .env          # then fill in NEBIUS_API_KEY
+uv run model-x-ray            # smoke check: prints the banner
+```
+
+## Tests
+
+```bash
+uv run pytest                 # offline, no credits: deep end-to-end tests
+uv run pytest -m live         # live: calls Token Factory / Google APIs, spends credits
+```
 
 ## Feedback on Token Factory and the NVIDIA models
 
