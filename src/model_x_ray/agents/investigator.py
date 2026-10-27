@@ -511,11 +511,13 @@ LOGIC_VOTES = 3
 VOTE_WORKERS = 3
 SECOND_REVIEW_AFTER_SECONDS = 60.0
 REVIEW_SECONDS = 120.0
+CHECK_SECONDS = 240.0
+CONCLUDE_SECONDS = 30.0
 clock = time.monotonic
 
 
-def reviews(investigator: CompiledStateGraph, brief: str, count: int) -> list[dict]:
-    deadline = clock() + REVIEW_SECONDS
+def reviews(investigator: CompiledStateGraph, brief: str, count: int, check_ends: float) -> list[dict]:
+    deadline = min(clock() + REVIEW_SECONDS, check_ends - CONCLUDE_SECONDS)
     start = {"messages": [HumanMessage(content=brief)], "deadline": deadline}
     if count == 1 or VOTE_WORKERS <= 1:
         return [investigator.invoke(start) for _ in range(count)]
@@ -559,6 +561,10 @@ def ballot_of(diagnosis: Diagnosis) -> dict:
 def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_text: bool = False) -> Callable[[InvestigationState], dict]:
     def diagnose(state: InvestigationState) -> dict:
         started = clock()
+        check_ends = state.get("started_at", started) + CHECK_SECONDS
+        if started >= check_ends:
+            decision = {"cell": None, "decided_by": "none", "fix": None, "model_fix": None, "rule_would_have": None, "reason": "the check used its time before this review", "candidates": 0, "judgements": [], "cut_short": True}
+            return {"hypotheses": [], "evidence": [], "patch": None, "decisions": [decision], "run_log": [], "tool_call_counts": [0]}
         candidates = tested_candidates(book, state)
         brief = "\n".join(part for part in (investigation_brief(state), candidates_brief(candidates)) if part)
         votes: dict[str, int] | None = None
@@ -568,7 +574,7 @@ def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_t
             brief = f"{brief}\n\nThe whole model, read as text:\n{sheet_as_text(book)}"
         sheet = state["target"]["sheet"]
         voting = not candidates and bool(state["target"].get("checked"))
-        runs = reviews(investigator, brief, LOGIC_VOTES if voting else 1)
+        runs = reviews(investigator, brief, LOGIC_VOTES if voting else 1, check_ends)
         result = {"messages": [message for run in runs for message in run["messages"]], "run_log": [entry for run in runs for entry in run.get("run_log", [])], "tool_calls_used": sum(run.get("tool_calls_used", 0) for run in runs)}
         diagnosis = runs[0]["diagnosis"]
         if voting:
@@ -580,7 +586,7 @@ def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_t
         if all_deliberate and not cut_short:
             set_aside = "; ".join(f"{c['cell']} ({j.reason})" for c in candidates for j in judged if j.number == c["number"])
             followup = "\n".join([f"Question: Check the whole model. The cells the rules flagged were judged deliberate and are set aside: {set_aside}. Do not judge them again; review every other line.", "", logic_review_brief(book, state)])
-            more = reviews(investigator, followup, LOGIC_VOTES)
+            more = reviews(investigator, followup, LOGIC_VOTES, check_ends)
             result = {"messages": [*result["messages"], *[m for run in more for m in run["messages"]]], "run_log": [*result["run_log"], *[e for run in more for e in run.get("run_log", [])]], "tool_calls_used": result["tool_calls_used"] + sum(run.get("tool_calls_used", 0) for run in more)}
             reviewed, votes = majority_diagnosis([run["diagnosis"] for run in more], sheet)
             runs = [*runs, *more]

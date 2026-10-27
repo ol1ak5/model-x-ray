@@ -165,3 +165,23 @@ def test_a_service_that_stays_overloaded_says_it_is_busy(demo_workbook_path: Pat
 
     assert response.status_code == 503
     assert "busy" in response.json()["detail"]
+
+
+def test_a_check_past_its_total_time_gives_its_answer_without_starting_another_review(demo_workbook_path: Path, engine_sandbox, scripted_verdict, monkeypatch) -> None:
+    import itertools
+
+    import model_x_ray.agents.investigator as investigator_module
+
+    ticks = itertools.count(0.0, investigator_module.CHECK_SECONDS + 1)
+    monkeypatch.setattr(investigator_module, "clock", lambda: next(ticks))
+    investigator = Curious(briefs=[], thoughts=[0], turns=[(["P&L!H7"], "P&L!H7")])
+    client = client_with(investigator, demo_workbook_path, engine_sandbox, scripted_verdict)
+
+    response = client.post("/investigations", json={"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump?"})
+
+    assert response.status_code == 201, response.text
+    assert investigator.thoughts[0] == 0, "no review starts once the check has used its time"
+    view = response.json()
+    assert view["decisions"][-1]["cut_short"] is True
+    assert "cut short" in view["report"]
+    assert not view["report"].startswith("No error found")
