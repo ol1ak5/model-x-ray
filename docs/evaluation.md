@@ -76,7 +76,7 @@ The `verify` step is also fed deliberately wrong patches, so its ability to reje
 
 ## Comparisons
 
-The same dataset runs through four set-ups. The graph receives its models as parameters, so switching set-ups is configuration, not new code; the only extra code is the rules-only diagnose.
+The same dataset runs through five set-ups (`rules`, `nano`, `super`, `super-3` and `no-tools`). The graph receives its models as parameters, so switching set-ups is configuration, not new code; the only extra code is the rules-only diagnose.
 
 | Set-up | Diagnose step | What it shows |
 |---|---|---|
@@ -92,9 +92,9 @@ Results are reported per set, because the expected winner differs by set and the
 - Each node records its latency in `node_log` and each LLM call its role, model, tokens and latency in `run_log`; the runner needs no LangSmith.
 - The benchmark isolates the diagnose step: in every set-up `map_model` is the code stub and `locate` runs without an LLM.
 - `uv run tools/benchmark.py --setups rules` runs the rules baseline offline and for free, generating the dataset first if it is missing.
-- `scripts/benchmark.sh` (zero flags) runs all four set-ups with six parallel workers and writes `docs/benchmark-results.json`, the rendered `docs/benchmark.md` and the chart `docs/benchmark.svg`; the three LLM set-ups spend Token Factory credits. Those three files are generated, not committed: the only run kept in the tree is `docs/benchmark-before101.*`.
+- `scripts/benchmark.sh` (zero flags) runs the set-ups with six parallel workers and writes `docs/benchmark-results.json`, the rendered `docs/benchmark.md` and the chart `docs/benchmark.svg`; the three LLM set-ups spend Token Factory credits. Those three files are generated, not committed: the only run kept in the tree is `docs/benchmark-before101.*`.
 - `uv run tools/benchmark.py --render-only` re-renders the report and chart from an existing results file — the re-run-and-refresh workflow needs no new measurements.
-- The evaluators are covered by tests that feed fixed model outputs; the full four-way run is a separate, opt-in invocation.
+- The evaluators are covered by tests that feed fixed model outputs; the full run of the set-ups is a separate, opt-in invocation.
 
 ## Report
 
@@ -103,7 +103,7 @@ Results are reported per set, because the expected winner differs by set and the
 1. A results table per set (type 1 to 4, blended, overrides, clean): root-cause accuracy with 95% Wilson intervals, fix accuracy, false alarms, latency p50 and p95, cost
 2. A per-step table with the metrics above, plus per-node latency p50 and per-role token and cost totals
 3. A confusion matrix of predicted vs planted error types
-4. The four-way comparison, per set
+4. The comparison of the set-ups, per set
 5. A short conclusion in plain language with intervals, quoted in the README and the demo video
 6. `docs/benchmark.svg`, one bar per set-up and set, for the demo video
 
