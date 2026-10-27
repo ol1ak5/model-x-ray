@@ -161,6 +161,7 @@ class Decision(TypedDict):
 
 class InvestigationState(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
+    started_at: float
     spreadsheet_id: str
     question: str
     model_map: ModelMap | None

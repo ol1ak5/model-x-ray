@@ -1,12 +1,15 @@
 import operator
 import re
+import time
 from collections import Counter
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from typing import Annotated, Literal, TypedDict
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, AnyMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import BaseTool
+from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.graph.state import CompiledStateGraph
@@ -56,11 +59,21 @@ class InvestigatorState(TypedDict):
     tool_calls_used: int
     run_log: Annotated[list[RunLog], operator.add]
     diagnosis: Diagnosis | None
+    deadline: float | None
+
+
+def without_thinking(llm: BaseChatModel) -> BaseChatModel:
+    if not isinstance(llm, ChatOpenAI):
+        return llm
+    extra = dict(llm.extra_body or {})
+    extra["chat_template_kwargs"] = {**extra.get("chat_template_kwargs", {}), "enable_thinking": False}
+    return llm.model_copy(update={"extra_body": extra})
 
 
 def build_investigator(llm: BaseChatModel, tools: list[BaseTool], max_tool_calls: int = MAX_TOOL_CALLS) -> CompiledStateGraph:
     model = llm.bind_tools(tools) if tools else llm
     structured = llm.with_structured_output(Diagnosis, method="function_calling")
+    quick = without_thinking(llm).with_structured_output(Diagnosis, method="function_calling")
     tool_node = ToolNode(tools, handle_tool_errors=True)
     system = SystemMessage(content=load_prompt("investigator"))
     model_name = model_name_of(llm)
@@ -83,7 +96,8 @@ def build_investigator(llm: BaseChatModel, tools: list[BaseTool], max_tool_calls
     def next_step(state: InvestigatorState) -> str:
         last = state["messages"][-1]
         wants_tool = isinstance(last, AIMessage) and bool(last.tool_calls)
-        if wants_tool and state.get("tool_calls_used", 0) < max_tool_calls:
+        deadline = state.get("deadline")
+        if wants_tool and state.get("tool_calls_used", 0) < max_tool_calls and (deadline is None or clock() < deadline):
             return "act"
         return "conclude"
 
@@ -92,13 +106,11 @@ def build_investigator(llm: BaseChatModel, tools: list[BaseTool], max_tool_calls
         last = messages[-1]
         if isinstance(last, AIMessage) and last.tool_calls:
             messages += [ToolMessage(content="Tool budget exhausted.", tool_call_id=call["id"]) for call in last.tool_calls]
-        diagnosis, records = invoke_with_usage(
-            structured,
-            [system, *messages, HumanMessage(content=load_prompt("investigator_conclude"))],
-            role="investigator",
-            model=model_name,
-            retry_empty=True,
-        )
+        conclusion = [system, *messages, HumanMessage(content=load_prompt("investigator_conclude"))]
+        diagnosis, records = invoke_with_usage(structured, conclusion, role="investigator", model=model_name)
+        if diagnosis is None:
+            diagnosis, quick_records = invoke_with_usage(quick, conclusion, role="investigator", model=model_name)
+            records = [*records, *quick_records]
         if diagnosis is None:
             diagnosis = Diagnosis(hypotheses=[], patch=None, reason="the model gave no structured answer after several attempts")
         return {"diagnosis": diagnosis, "run_log": records}
@@ -496,6 +508,21 @@ def along_the_line(book: Workbook, patch: dict | None) -> dict | None:
 
 
 LOGIC_VOTES = 3
+VOTE_WORKERS = 3
+SECOND_REVIEW_AFTER_SECONDS = 60.0
+REVIEW_SECONDS = 120.0
+CHECK_SECONDS = 240.0
+CONCLUDE_SECONDS = 30.0
+clock = time.monotonic
+
+
+def reviews(investigator: CompiledStateGraph, brief: str, count: int, check_ends: float) -> list[dict]:
+    deadline = min(clock() + REVIEW_SECONDS, check_ends - CONCLUDE_SECONDS)
+    start = {"messages": [HumanMessage(content=brief)], "deadline": deadline}
+    if count == 1 or VOTE_WORKERS <= 1:
+        return [investigator.invoke(start) for _ in range(count)]
+    with ThreadPoolExecutor(max_workers=min(count, VOTE_WORKERS)) as pool:
+        return list(pool.map(lambda _: investigator.invoke(start), range(count)))
 
 
 def majority_diagnosis(diagnoses: list[Diagnosis], sheet: str) -> tuple[Diagnosis, dict[str, int]]:
@@ -533,6 +560,11 @@ def ballot_of(diagnosis: Diagnosis) -> dict:
 
 def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_text: bool = False) -> Callable[[InvestigationState], dict]:
     def diagnose(state: InvestigationState) -> dict:
+        started = clock()
+        check_ends = state.get("started_at", started) + CHECK_SECONDS
+        if started >= check_ends:
+            decision = {"cell": None, "decided_by": "none", "fix": None, "model_fix": None, "rule_would_have": None, "reason": "the check used its time before this review", "candidates": 0, "judgements": [], "cut_short": True}
+            return {"hypotheses": [], "evidence": [], "patch": None, "decisions": [decision], "run_log": [], "tool_call_counts": [0]}
         candidates = tested_candidates(book, state)
         brief = "\n".join(part for part in (investigation_brief(state), candidates_brief(candidates)) if part)
         votes: dict[str, int] | None = None
@@ -542,17 +574,19 @@ def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_t
             brief = f"{brief}\n\nThe whole model, read as text:\n{sheet_as_text(book)}"
         sheet = state["target"]["sheet"]
         voting = not candidates and bool(state["target"].get("checked"))
-        runs = [investigator.invoke({"messages": [HumanMessage(content=brief)]}) for _ in range(LOGIC_VOTES if voting else 1)]
+        runs = reviews(investigator, brief, LOGIC_VOTES if voting else 1, check_ends)
         result = {"messages": [message for run in runs for message in run["messages"]], "run_log": [entry for run in runs for entry in run.get("run_log", [])], "tool_calls_used": sum(run.get("tool_calls_used", 0) for run in runs)}
         diagnosis = runs[0]["diagnosis"]
         if voting:
             diagnosis, votes = majority_diagnosis([run["diagnosis"] for run in runs], sheet)
         numbers = {c["number"] for c in candidates}
         judged = [j for j in diagnosis.judgements if j.number in numbers]
-        if candidates and state["target"].get("checked") and not diagnosis.hypotheses and diagnosis.patch is None and len(judged) == len(candidates) and all(j.verdict == "intentional" for j in judged):
+        all_deliberate = candidates and state["target"].get("checked") and not diagnosis.hypotheses and diagnosis.patch is None and len(judged) == len(candidates) and all(j.verdict == "intentional" for j in judged)
+        cut_short = bool(all_deliberate) and clock() - started > SECOND_REVIEW_AFTER_SECONDS
+        if all_deliberate and not cut_short:
             set_aside = "; ".join(f"{c['cell']} ({j.reason})" for c in candidates for j in judged if j.number == c["number"])
             followup = "\n".join([f"Question: Check the whole model. The cells the rules flagged were judged deliberate and are set aside: {set_aside}. Do not judge them again; review every other line.", "", logic_review_brief(book, state)])
-            more = [investigator.invoke({"messages": [HumanMessage(content=followup)]}) for _ in range(LOGIC_VOTES)]
+            more = reviews(investigator, followup, LOGIC_VOTES, check_ends)
             result = {"messages": [*result["messages"], *[m for run in more for m in run["messages"]]], "run_log": [*result["run_log"], *[e for run in more for e in run.get("run_log", [])]], "tool_calls_used": result["tool_calls_used"] + sum(run.get("tool_calls_used", 0) for run in more)}
             reviewed, votes = majority_diagnosis([run["diagnosis"] for run in more], sheet)
             runs = [*runs, *more]
@@ -585,7 +619,7 @@ def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_t
         intentional_now = {j["cell"] for j in judgements if j["verdict"] == "intentional"}
         chosen = next((c for c in errors if c["number"] == diagnosis.choice), None) or (errors[0] if errors else None) or next((c for c in candidates if c["number"] == diagnosis.choice and c["cell"] not in intentional_now), None)
         chosen_reason = next((j["reason"] for j in judgements if chosen and j["number"] == chosen["number"]), "") or diagnosis.reason
-        decision = {"cell": None, "decided_by": "none", "fix": None, "model_fix": None, "rule_would_have": f"{rule['cell']} {rule['fix']}" if rule else None, "reason": chosen_reason, "candidates": len(candidates), "judgements": judgements}
+        decision = {"cell": None, "decided_by": "none", "fix": None, "model_fix": None, "rule_would_have": f"{rule['cell']} {rule['fix']}" if rule else None, "reason": chosen_reason, "candidates": len(candidates), "judgements": judgements, "cut_short": cut_short}
         if votes is not None:
             decision["votes"] = votes
             decision["ballots"] = [ballot_of(run["diagnosis"]) for run in runs]

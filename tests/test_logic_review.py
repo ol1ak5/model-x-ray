@@ -225,3 +225,62 @@ def test_a_sign_error_named_on_a_line_that_shares_one_formula_is_treated_as_a_lo
     assert [(h["cell"], h["error_type"]) for h in final["hypotheses"]] == [("Budget!F6", "logic_error")]
     assert len(final["patch"]["also"]) == 4
     assert final["verifications"][-1]["verdict"] == "confirmed"
+
+
+class SlowDiagnosis(ScriptedDiagnosis):
+    def _generate(self, messages, stop=None, **kwargs):
+        import time
+
+        time.sleep(0.3)
+        return super()._generate(messages, stop, **kwargs)
+
+
+def test_the_three_reviews_run_at_the_same_time_so_three_votes_take_about_as_long_as_one(tmp_path: Path, monkeypatch) -> None:
+    import time
+
+    import model_x_ray.agents.investigator as investigator
+
+    monkeypatch.setattr(investigator, "VOTE_WORKERS", 3)
+    path = write_budget(tmp_path / "budget.xlsx", {f"{c}6": f"={c}4+{c}5" for c in YEARS})
+    found = (["Budget!F6"], "Budget!F6", "=F4-F5", "logic_error")
+    model = SlowDiagnosis(briefs=[], turns=[found, found, found])
+
+    started = time.perf_counter()
+    final = investigate(tmp_path, path, model)
+    elapsed = time.perf_counter() - started
+
+    assert len(model.briefs) == 3
+    assert final["decisions"][0]["votes"] == {"Budget!F6": 3}
+    assert final["verifications"][-1]["verdict"] == "confirmed"
+    assert elapsed < 6 * 0.3, f"three reviews of two model calls each took {elapsed:.2f}s, as if they ran one after another"
+
+
+def test_a_check_that_has_used_its_time_skips_the_second_review_and_says_the_review_was_cut_short(tmp_path: Path, monkeypatch) -> None:
+    import model_x_ray.agents.investigator as investigator
+
+    ticks = iter([0.0, investigator.SECOND_REVIEW_AFTER_SECONDS + 1])
+    monkeypatch.setattr(investigator, "clock", lambda: next(ticks, 10_000.0))
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.title = "Budget"
+    sheet["A3"] = "EUR"
+    for index, column in enumerate("BCDE"):
+        sheet[f"{column}3"] = str(2025 + index)
+    for row, (label, values) in {4: ("Net income", [42000, 43500, 45000, 46500]), 5: ("Rent", [14400, 14800, 15200, 15600]), 6: ("Food", [6000, 6200, 6400, 6600]), 7: ("Transport", [2400, 2450, 2500, 2550])}.items():
+        sheet[f"A{row}"] = label
+        for column, value in zip("BCDE", values):
+            sheet[f"{column}{row}"] = value
+    sheet["A8"], sheet["A9"] = "Total spending", "Savings"
+    for column in "BCDE":
+        sheet[f"{column}8"] = f"=SUM({column}5:{column}7)"
+        sheet[f"{column}9"] = f"={column}4-{column}6-{column}7+{column}5"
+    workbook.save(tmp_path / "household.xlsx")
+    deliberate = [{"number": n, "verdict": "intentional", "reason": "net income is not spending"} for n in range(1, 5)]
+    model = ScriptedDiagnosis(briefs=[], turns=[([], None)], judgements=deliberate)
+
+    final = investigate(tmp_path, tmp_path / "household.xlsx", model)
+
+    assert len(model.briefs) == 1, "no second round of reviews once the check has used its time"
+    assert final["decisions"][0]["cut_short"] is True
+    assert final["report"].startswith("No confirmed error")
+    assert "cut short" in final["report"]

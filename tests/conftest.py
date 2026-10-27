@@ -51,6 +51,13 @@ def write_demo_workbook(path: Path, notes: dict[str, str] | None = None) -> Path
 
 
 @pytest.fixture(autouse=True)
+def one_review_at_a_time(monkeypatch: pytest.MonkeyPatch) -> None:
+    import model_x_ray.agents.investigator as investigator
+
+    monkeypatch.setattr(investigator, "VOTE_WORKERS", 1)
+
+
+@pytest.fixture(autouse=True)
 def no_waiting_for_the_ai_service(monkeypatch: pytest.MonkeyPatch) -> None:
     import model_x_ray.llm as llm
 

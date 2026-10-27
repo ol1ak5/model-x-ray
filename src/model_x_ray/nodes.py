@@ -7,6 +7,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.types import interrupt
 
 from model_x_ray import causal
+from model_x_ray.agents import investigator as investigator_agent
 from model_x_ray.agents.verifier import build_verifier, deterministic_checks, invoke_verifier, settle_verdict
 from model_x_ray.llm import invoke_with_usage, model_name_of
 from model_x_ray.memory import ModelMemory
@@ -27,9 +28,10 @@ def make_load_sheet_node(book: Workbook, memory: ModelMemory | None = None) -> C
         readable = any(book.row_label(ref) and book.column_header(ref) for ref in book.cells())
         if not readable:
             raise ValueError(f"Spreadsheet {state['spreadsheet_id']!r} has no lines with a label on the left and a period header above, so Model X-Ray cannot read it")
+        started = {"started_at": investigator_agent.clock()}
         if memory is None:
-            return {}
-        return {"known_overrides": memory.overrides(state["spreadsheet_id"], book), "past_findings": memory.findings(state["spreadsheet_id"])}
+            return started
+        return {**started, "known_overrides": memory.overrides(state["spreadsheet_id"], book), "past_findings": memory.findings(state["spreadsheet_id"])}
 
     return load_sheet_node
 
@@ -323,6 +325,9 @@ CHECK_FAILURES = {
 
 def no_error_report(state: InvestigationState) -> str:
     movement = movement_and_drivers(state)
+    if any(decision.get("cut_short") for decision in state.get("decisions", [])):
+        opening = f"No confirmed error. {movement}." if movement else "No confirmed error."
+        return f"{opening} The review of the model's lines was cut short to keep the check within its time, so check the lines yourself before relying on the number."
     return f"No error found. {movement}." if movement else "No error found."
 
 
