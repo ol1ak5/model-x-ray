@@ -10,6 +10,8 @@
 
 An AI agent built for financial model auditing, powered by NVIDIA Nemotron, that uncovers hidden errors, reasons through financial logic, and verifies every proposed fix through independent workbook recalculation. Every correction is evidence-based, and no changes are made without the user’s approval.
 
+**Live demo:** <https://model-x-ray.vercel.app>
+
 ## Try it Live
 
 **<https://model-x-ray.vercel.app>**: open the page, press **Try the demo** and watch the agent check a European corporate PPA model (ten renewable offers, 2,400 formulas) with three planted errors, or upload your own `.xlsx` (up to 4.5 MB).
@@ -71,12 +73,11 @@ All LLM calls run on **Nebius Token Factory** (OpenAI-compatible) through LangCh
 | `nvidia/nemotron-3-super-120b-a12b` | Mapper, locate; benchmark comparison | 256K | $0.30 / $0.90 |
 | `nvidia/Nemotron-3_5-Lightning` | Report writer | 1M | $0.06 / $0.24 |
 | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | Benchmark only: does a small model suffice? | 256K | $0.06 / $0.24 |
-| `nvidia/Nemotron-3-Ultra-550b-a55b` | Benchmark only: the largest model | 1M | $1.00 / $3.00 |
 
 - **Nemotron 3.5 Super** is the Investigator and the Verifier: it judges every formula, reviews the model's logic and tries to break every fix.
 - **Nemotron 3 Super** labels every line and period of the workbook.
 - **Nemotron 3.5 Lightning** writes the final report.
-- One Token Factory endpoint gave us all five models, so moving the reasoning steps to 3.5 Super was a one-line change, measured the same day.
+- One Token Factory endpoint gave us all four models, so moving the reasoning steps to 3.5 Super was a one-line change, measured the same day.
 
 | | Nemotron 3 Super | Nemotron 3.5 Super |
 |---|---|---|
@@ -99,7 +100,7 @@ Every test model carries errors we planted ourselves, so each answer is scored a
 
 ## What Nemotron Adds
 
-Measured on the synthetic deal models (12 variants per error type plus 24 controls, one run each, 21 and 22 Oct 2026). The wrong-reference and wrong-period rows were measured with the last-period candidates of #186, now on `main`; the other rows just before that change, which only adds candidates on a line's last period.
+Measured on 21 and 22 Oct 2026 on the synthetic deal models (12 variants per error type plus 24 controls, one run each).
 
 | Error type | Rules only | Rules + Nemotron 3.5 Super |
 |---|---|---|
@@ -133,6 +134,8 @@ Every check below ran on Nebius Token Factory with the production set-up (Nemotr
 | Damodaran model with an error | **1.4 cents** / 2.5 cents | **65 s** / 2 min 54 s |
 | The PPA demo model (2,400 formulas) | **1.5 cents** | **85 s** |
 
+A model with no error takes longer, up to about 4 minutes, because Nemotron reviews every line before calling it clean; a check never runs longer than that.
+
 ## Supported Excel functions
 
 The engine calculates more than 50 Excel functions, among them `SUM`, `SUMPRODUCT`, `IF`, `IFERROR`, `INDEX`, `MATCH`, `VLOOKUP`, `XLOOKUP`, `OFFSET`, `SUMIFS`, `COUNTIFS`, `RANK`, `NPV`, `XNPV`, `IRR`, `XIRR` and `PMT`, plus cross-sheet references, defined names and circular references (solved iteratively). **Not supported:** links to other workbooks, Data Tables and VBA; each is reported by name on the cell that uses it, never guessed. The full list is in [`docs/spreadsheet-core.md`](docs/spreadsheet-core.md).
@@ -141,9 +144,11 @@ The engine calculates more than 50 Excel functions, among them `SUM`, `SUMPRODUC
 
 ```bash
 uv sync                       # Python 3.13, installs the package
-cp .env.example .env          # then fill in NEBIUS_API_KEY
-uv run model-x-ray            # smoke check: prints the banner
+cp .env.example .env          # then fill in NEBIUS_API_KEY (a Nebius Token Factory key)
+scripts/dev.sh                # the web app on http://localhost:5173 and the API on http://localhost:8000
 ```
+
+`scripts/dev.sh` installs the frontend with bun (npm when bun is not installed) and stops both servers on Ctrl+C. Deploying the same app on Vercel takes the key and nothing else: [`docs/deployment.md`](docs/deployment.md).
 
 ## Tests
 
@@ -156,7 +161,7 @@ uv run pytest -m live         # live: calls Token Factory / Google APIs, spends 
 
 **What worked well**
 
-- One OpenAI-compatible endpoint and one key gave us five Nemotron models, so each step of the agent uses the model that fits it.
+- One OpenAI-compatible endpoint and one key gave us four Nemotron models, so each step of the agent uses the model that fits it.
 - Switching the reasoning steps from Nemotron 3 Super to 3.5 Super was a one-line change: fixed errors on an unseen model went from 0 of 5 to 4 of 5, at the same price.
 - With Nemotron, the agent fixed 98% of planted errors against 86% for rules alone, with no false alarm on deliberate values (rules alone broke 12 of 12).
 - A check of a model with an error costs about 1.4 cents and takes about a minute (medians on models the agent never saw).
@@ -165,7 +170,7 @@ uv run pytest -m live         # live: calls Token Factory / Google APIs, spends 
 
 - **"System is overloaded" during peak hours:** some calls ended with HTTP 529 even after retries; we now wait 5, 15 and 30 seconds before giving up. A `Retry-After` header would let clients wait exactly as long as needed.
 - **Errors returned as answers:** long calls sometimes came back as HTTP 200 with `[ERROR: Agent failed ... timed out after 90 seconds]` as the reply. A non-200 status would let clients retry safely.
-- **Reasoning that never reaches the tool call:** Nemotron 3.5 Super sometimes used its whole output budget reasoning and returned no tool call. A per-request way to cap reasoning would help.
+- **Reasoning that never reaches the tool call:** Nemotron 3.5 Super sometimes used its whole output budget reasoning and returned no tool call. We now ask once more with `chat_template_kwargs.enable_thinking=false`, which answers at once with no reasoning tokens; a per-request way to cap reasoning, rather than switch it off, would help.
 - **Model metadata in the API:** prices, context windows and output limits are only in the web catalogue, not in `GET /v1/models`.
 - **New models announced in the API:** a changelog or deprecation field would help teams notice new models like Nemotron 3.5 Super.
 
@@ -177,4 +182,6 @@ uv run pytest -m live         # live: calls Token Factory / Google APIs, spends 
 
 ## License
 
-Apache 2.0 – see [LICENSE](LICENSE).
+Copyright © 2026 Olga Aksenova and Guillermo Martín-Coello.
+
+Licensed under the Apache License 2.0; see [LICENSE](LICENSE).
