@@ -48,7 +48,7 @@ SUPPORTED_FUNCTIONS = (
     "YEAR", "MONTH", "DAY", "DATE", "EDATE", "NPV", "XNPV",
     "POWER", "ROUNDDOWN", "INT", "MOD", "PPMT", "XIRR",
     "PMT", "IRR", "HLOOKUP", "COUNT", "COUNTA", "ISERROR", "ISTEXT", "ISNUMBER", "ISBLANK", "LARGE", "SMALL", "CHOOSE",
-    "EXP", "LN", "NORMSDIST", "NORM.S.DIST", "OFFSET",
+    "EXP", "LN", "NORMSDIST", "NORM.S.DIST", "OFFSET", "RANK", "RANK.EQ",
 )
 YEAR_RANGE = (1900, 2100)
 PERIOD_INDEX_RANGE = (-50, 200)
@@ -1311,6 +1311,17 @@ class FormulaEvaluator:
         if not 1 <= position <= len(found):
             raise FormulaError(f"#NUM! position {position} is outside the {len(found)} numbers in {self.ref}")
         return found[position - 1]
+
+    def call_rank(self, values: list) -> Value:
+        target = self.number(values[0])
+        found = list(numbers(values[1:2]))
+        if target not in found:
+            raise FormulaError(f"#N/A {target} is not among the numbers ranked in {self.ref}")
+        ascending = len(values) > 2 and self.number(values[2]) != 0
+        return float(1 + sum(1 for value in found if (value < target if ascending else value > target)))
+
+    def call_rank_eq(self, values: list) -> Value:
+        return self.call_rank(values)
 
     def call_exp(self, values: list) -> Value:
         try:
