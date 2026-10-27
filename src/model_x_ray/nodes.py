@@ -323,6 +323,9 @@ CHECK_FAILURES = {
 
 def no_error_report(state: InvestigationState) -> str:
     movement = movement_and_drivers(state)
+    if any(decision.get("cut_short") for decision in state.get("decisions", [])):
+        opening = f"No confirmed error. {movement}." if movement else "No confirmed error."
+        return f"{opening} The review of the model's lines was cut short to keep the check within its time, so check the lines yourself before relying on the number."
     return f"No error found. {movement}." if movement else "No error found."
 
 

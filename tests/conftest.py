@@ -50,6 +50,13 @@ def write_demo_workbook(path: Path, notes: dict[str, str] | None = None) -> Path
     return path
 
 
+@pytest.fixture(autouse=True)
+def one_review_at_a_time(monkeypatch: pytest.MonkeyPatch) -> None:
+    import model_x_ray.agents.investigator as investigator
+
+    monkeypatch.setattr(investigator, "VOTE_WORKERS", 1)
+
+
 @pytest.fixture
 def demo_workbook_path(tmp_path: Path) -> Path:
     return write_demo_workbook(tmp_path / "demo_model.xlsx")

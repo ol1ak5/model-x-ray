@@ -1,7 +1,9 @@
 import operator
 import re
+import time
 from collections import Counter
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from typing import Annotated, Literal, TypedDict
 
 from langchain_core.language_models import BaseChatModel
@@ -496,6 +498,16 @@ def along_the_line(book: Workbook, patch: dict | None) -> dict | None:
 
 
 LOGIC_VOTES = 3
+VOTE_WORKERS = 3
+SECOND_REVIEW_AFTER_SECONDS = 60.0
+clock = time.monotonic
+
+
+def reviews(investigator: CompiledStateGraph, brief: str, count: int) -> list[dict]:
+    if count == 1 or VOTE_WORKERS <= 1:
+        return [investigator.invoke({"messages": [HumanMessage(content=brief)]}) for _ in range(count)]
+    with ThreadPoolExecutor(max_workers=min(count, VOTE_WORKERS)) as pool:
+        return list(pool.map(lambda _: investigator.invoke({"messages": [HumanMessage(content=brief)]}), range(count)))
 
 
 def majority_diagnosis(diagnoses: list[Diagnosis], sheet: str) -> tuple[Diagnosis, dict[str, int]]:
@@ -533,6 +545,7 @@ def ballot_of(diagnosis: Diagnosis) -> dict:
 
 def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_text: bool = False) -> Callable[[InvestigationState], dict]:
     def diagnose(state: InvestigationState) -> dict:
+        started = clock()
         candidates = tested_candidates(book, state)
         brief = "\n".join(part for part in (investigation_brief(state), candidates_brief(candidates)) if part)
         votes: dict[str, int] | None = None
@@ -542,17 +555,19 @@ def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_t
             brief = f"{brief}\n\nThe whole model, read as text:\n{sheet_as_text(book)}"
         sheet = state["target"]["sheet"]
         voting = not candidates and bool(state["target"].get("checked"))
-        runs = [investigator.invoke({"messages": [HumanMessage(content=brief)]}) for _ in range(LOGIC_VOTES if voting else 1)]
+        runs = reviews(investigator, brief, LOGIC_VOTES if voting else 1)
         result = {"messages": [message for run in runs for message in run["messages"]], "run_log": [entry for run in runs for entry in run.get("run_log", [])], "tool_calls_used": sum(run.get("tool_calls_used", 0) for run in runs)}
         diagnosis = runs[0]["diagnosis"]
         if voting:
             diagnosis, votes = majority_diagnosis([run["diagnosis"] for run in runs], sheet)
         numbers = {c["number"] for c in candidates}
         judged = [j for j in diagnosis.judgements if j.number in numbers]
-        if candidates and state["target"].get("checked") and not diagnosis.hypotheses and diagnosis.patch is None and len(judged) == len(candidates) and all(j.verdict == "intentional" for j in judged):
+        all_deliberate = candidates and state["target"].get("checked") and not diagnosis.hypotheses and diagnosis.patch is None and len(judged) == len(candidates) and all(j.verdict == "intentional" for j in judged)
+        cut_short = bool(all_deliberate) and clock() - started > SECOND_REVIEW_AFTER_SECONDS
+        if all_deliberate and not cut_short:
             set_aside = "; ".join(f"{c['cell']} ({j.reason})" for c in candidates for j in judged if j.number == c["number"])
             followup = "\n".join([f"Question: Check the whole model. The cells the rules flagged were judged deliberate and are set aside: {set_aside}. Do not judge them again; review every other line.", "", logic_review_brief(book, state)])
-            more = [investigator.invoke({"messages": [HumanMessage(content=followup)]}) for _ in range(LOGIC_VOTES)]
+            more = reviews(investigator, followup, LOGIC_VOTES)
             result = {"messages": [*result["messages"], *[m for run in more for m in run["messages"]]], "run_log": [*result["run_log"], *[e for run in more for e in run.get("run_log", [])]], "tool_calls_used": result["tool_calls_used"] + sum(run.get("tool_calls_used", 0) for run in more)}
             reviewed, votes = majority_diagnosis([run["diagnosis"] for run in more], sheet)
             runs = [*runs, *more]
@@ -585,7 +600,7 @@ def make_diagnose_node(investigator: CompiledStateGraph, book: Workbook, plain_t
         intentional_now = {j["cell"] for j in judgements if j["verdict"] == "intentional"}
         chosen = next((c for c in errors if c["number"] == diagnosis.choice), None) or (errors[0] if errors else None) or next((c for c in candidates if c["number"] == diagnosis.choice and c["cell"] not in intentional_now), None)
         chosen_reason = next((j["reason"] for j in judgements if chosen and j["number"] == chosen["number"]), "") or diagnosis.reason
-        decision = {"cell": None, "decided_by": "none", "fix": None, "model_fix": None, "rule_would_have": f"{rule['cell']} {rule['fix']}" if rule else None, "reason": chosen_reason, "candidates": len(candidates), "judgements": judgements}
+        decision = {"cell": None, "decided_by": "none", "fix": None, "model_fix": None, "rule_would_have": f"{rule['cell']} {rule['fix']}" if rule else None, "reason": chosen_reason, "candidates": len(candidates), "judgements": judgements, "cut_short": cut_short}
         if votes is not None:
             decision["votes"] = votes
             decision["ballots"] = [ballot_of(run["diagnosis"]) for run in runs]
