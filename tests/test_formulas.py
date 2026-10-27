@@ -246,21 +246,26 @@ COMMON_FORMULAS = {
     "A22": "=NORMSDIST(1.333333)",
     "A23": "=_xlfn.NORM.S.DIST(1.333333,TRUE)",
     "A24": "=NORM.S.DIST(1.333333,FALSE)",
+    "A25": "=RANK(5,Data!H1:H5)",
+    "A26": "=RANK(4,Data!H1:H5,0)",
+    "A27": "=RANK(4,Data!H1:H5,1)",
+    "A28": "=_xlfn.RANK.EQ(3,Data!H1:H5)",
     "B1": "=LARGE(Data!H1:H5,9)",
     "B2": '=CHOOSE(4,"a","b","c")',
     "B3": "=LN(0)",
     "B4": "=IRR(Data!H1:H5)",
     "B5": '=HLOOKUP("Nuts",Data!C1:E4,2,FALSE)',
+    "B6": "=RANK(7,Data!H1:H5)",
 }
 
 COMMON_EXPECTED = {
     "A1": -1037.032089, "A2": -129.081161, "A3": 0.086630948, "A4": -0.443506941, "A5": 4.0, "A6": 7.0, "A7": 5.0,
     "A8": 2.0, "A9": 4.0, "A10": True, "A11": False, "A12": True, "A13": False, "A14": True, "A15": True,
     "A16": 4.0, "A17": 3.0, "A18": "b", "A19": 5.0, "A20": 2.718281828, "A21": 4.454347296, "A22": 0.908788726,
-    "A23": 0.908788726, "A24": 0.164010148,
+    "A23": 0.908788726, "A24": 0.164010148, "A25": 1.0, "A26": 3.0, "A27": 3.0, "A28": 4.0,
 }
 
-COMMON_ERRORS = {"B1": "#NUM!", "B2": "#VALUE!", "B3": "#NUM!", "B4": "#NUM!", "B5": "not found"}
+COMMON_ERRORS = {"B1": "#NUM!", "B2": "#VALUE!", "B3": "#NUM!", "B4": "#NUM!", "B5": "not found", "B6": "#N/A"}
 
 
 def test_common_functions_from_public_valuation_and_trading_models_calculate_like_excel(tmp_path: Path) -> None:
