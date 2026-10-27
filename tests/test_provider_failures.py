@@ -89,3 +89,34 @@ def test_a_model_that_never_returns_its_conclusion_is_asked_only_once_more_so_th
     asked = 99 - investigator.silences_left[0]
     assert asked % 2 == 0 and asked <= 2 * 3, f"each review asked for its conclusion {asked} times in total; two per review is the limit"
     assert response.json()["patch"] is None
+
+
+class Curious(ScriptedDiagnosis):
+    thoughts: list[int] = [0]
+
+    def bind_tools(self, tools: Any, **kwargs: Any) -> "Curious":
+        return self.model_copy(update={"bound": [getattr(t, "name", None) or getattr(t, "__name__", "") for t in tools], "briefs": self.briefs, "thoughts": self.thoughts})
+
+    def _generate(self, messages: list[BaseMessage], stop: list[str] | None = None, **kwargs: Any) -> ChatResult:
+        if "Diagnosis" not in self.bound:
+            self.thoughts[0] += 1
+            call = {"name": "get_cell", "args": {"ref": "P&L!H7"}, "id": f"look-{self.thoughts[0]}"}
+            return ChatResult(generations=[ChatGeneration(message=AIMessage(content="", tool_calls=[call]))])
+        return super()._generate(messages, stop, **kwargs)
+
+
+def test_a_review_that_keeps_asking_for_tools_concludes_once_its_time_is_up(demo_workbook_path: Path, engine_sandbox, scripted_verdict, monkeypatch) -> None:
+    import itertools
+
+    import model_x_ray.agents.investigator as investigator_module
+
+    ticks = itertools.count(0.0, investigator_module.REVIEW_SECONDS / 2)
+    monkeypatch.setattr(investigator_module, "clock", lambda: next(ticks))
+    investigator = Curious(briefs=[], thoughts=[0], turns=[(["P&L!H7"], "P&L!H7")])
+    client = client_with(investigator, demo_workbook_path, engine_sandbox, scripted_verdict)
+
+    response = client.post("/investigations", json={"spreadsheet_id": "demo", "question": "Why did EBITDA 2027 jump?"})
+
+    assert response.status_code == 201, response.text
+    assert investigator.thoughts[0] <= 3, f"the review kept consulting {investigator.thoughts[0]} times after its time was up"
+    assert response.json()["patch"]["cell"] == "P&L!H7", "the conclusion still comes, from what the review saw"

@@ -59,6 +59,7 @@ class InvestigatorState(TypedDict):
     tool_calls_used: int
     run_log: Annotated[list[RunLog], operator.add]
     diagnosis: Diagnosis | None
+    deadline: float | None
 
 
 def without_thinking(llm: BaseChatModel) -> BaseChatModel:
@@ -95,7 +96,8 @@ def build_investigator(llm: BaseChatModel, tools: list[BaseTool], max_tool_calls
     def next_step(state: InvestigatorState) -> str:
         last = state["messages"][-1]
         wants_tool = isinstance(last, AIMessage) and bool(last.tool_calls)
-        if wants_tool and state.get("tool_calls_used", 0) < max_tool_calls:
+        deadline = state.get("deadline")
+        if wants_tool and state.get("tool_calls_used", 0) < max_tool_calls and (deadline is None or clock() < deadline):
             return "act"
         return "conclude"
 
@@ -508,14 +510,17 @@ def along_the_line(book: Workbook, patch: dict | None) -> dict | None:
 LOGIC_VOTES = 3
 VOTE_WORKERS = 3
 SECOND_REVIEW_AFTER_SECONDS = 60.0
+REVIEW_SECONDS = 120.0
 clock = time.monotonic
 
 
 def reviews(investigator: CompiledStateGraph, brief: str, count: int) -> list[dict]:
+    deadline = clock() + REVIEW_SECONDS
+    start = {"messages": [HumanMessage(content=brief)], "deadline": deadline}
     if count == 1 or VOTE_WORKERS <= 1:
-        return [investigator.invoke({"messages": [HumanMessage(content=brief)]}) for _ in range(count)]
+        return [investigator.invoke(start) for _ in range(count)]
     with ThreadPoolExecutor(max_workers=min(count, VOTE_WORKERS)) as pool:
-        return list(pool.map(lambda _: investigator.invoke({"messages": [HumanMessage(content=brief)]}), range(count)))
+        return list(pool.map(lambda _: investigator.invoke(start), range(count)))
 
 
 def majority_diagnosis(diagnoses: list[Diagnosis], sheet: str) -> tuple[Diagnosis, dict[str, int]]:
