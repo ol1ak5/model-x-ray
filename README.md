@@ -97,10 +97,10 @@ Model X-Ray was developed and tuned on three sets of workbooks:
 | Set | Explanation | Errors |
 |---|---|---|
 | **Damodaran valuation models** | 26 public spreadsheets by Aswath Damodaran (NYU Stern): DCFs, cost of capital, capital budgeting; a median of 125 rows and 218 formulas | 95 planted (typed values, wrong references, flipped signs, period slips) |
-| **Synthetic models** | A three-sheet model (assumptions, five-year P&L, summary) and 174 copies of it, each with one planted error, plus clean copies and copies where a number was typed on purpose and explained in a cell comment, which must be left alone | 150 planted, 24 controls |
+| **Synthetic models** | A three-sheet model (assumptions, five-year P&L, summary) and 174 copies of it, each with one planted error, plus clean copies and copies with numbers typed on purpose and explained in a note, which must be left alone | 150 planted, 24 controls |
 | **Logic test models** | A five-year budget and a SaaS subscription forecast, in [`demo/`](demo) | 15 planted, including 7 logic errors |
 
-## Tested on Models It Never Saw
+## Final Test on Unseen Models
 
 Five of the Damodaran models were kept aside from the start and never used to tune the agent. They were used only for the final score:
 
@@ -108,7 +108,7 @@ Five of the Damodaran models were kept aside from the start and never used to tu
 |---|---|
 | Planted errors found and fixed | **18 of 20 (90%)** |
 | Planted errors the agent pointed at | **20 of 20** |
-| False alarms on the clean originals | **0 of 5** |
+| False alarms on the clean originals | **0 of 5** ✅ |
 | Cost and time per check (median, model with an error) | **1.4 cents, 65 seconds** |
 
 A model with no error takes longer, up to about 4 minutes, because Nemotron reviews every line before calling it clean.
@@ -127,9 +127,9 @@ Why Nemotron 3.5 Super:
 
 | | Nemotron 3 Super | Nemotron 3.5 Super |
 |---|---|---|
-| GPQA Diamond, expert reasoning (NVIDIA) | 79.2 | **89.5** |
-| τ²-bench airline, tool use (NVIDIA) | 56.3 | **76.5** |
-| Unseen SaaS model, errors fixed (ours) | 0 of 5 | **4 of 5** |
+| GPQA Diamond, expert reasoning (NVIDIA) | 79.2 | **89.5** ✅ |
+| τ²-bench airline, tool use (NVIDIA) | 56.3 | **76.5** ✅ |
+| Unseen SaaS model, errors fixed (ours) | 0 of 5 | **4 of 5** ✅ |
 | Price per 1M tokens (in / out) | $0.30 / $0.90 | $0.30 / $0.90 |
 
 ## What It Checks
