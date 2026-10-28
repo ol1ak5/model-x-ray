@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from "react";
 
 const CASES = [
   ["$6,200,000,000", "JPMorgan · 2012", "An error in its Value-at-Risk model understated the risk, and the “London Whale” trades lost $6.2 billion."],
-  ["$1,300,000,000", "Fidelity Magellan · 1995", "A missing minus sign turned a $1.3 billion capital loss into a capital gain in the fund’s figures."],
+  ["$1,300,000,000", "Fidelity Magellan · 1995", "A missing minus sign turned a $1.3 billion capital loss into a capital gain."],
   ["$11,000,000", "Kodak · 2005", "A spreadsheet error overstated a severance cost by $11 million, and two quarters were restated."],
-  ["C$24,000,000", "TransAlta · 2003", "A cut-and-paste error in a bid spreadsheet bought hedges at the wrong price, and the company lost C$24 million."],
+  ["$24,000,000", "TransAlta · 2003", "A cut-and-paste error in a bid spreadsheet bought hedges at the wrong price, and the company lost C$24 million."],
 ];
 
 function Amount({ text, rolling }: { text: string; rolling: boolean }) {
