@@ -1,0 +1,192 @@
+{
+  "voice": "af_heart",
+  "speed": 0.9,
+  "lines": [
+    {
+      "id": "open-1",
+      "scene": "open",
+      "text": "Every big financial decision starts in a spreadsheet.",
+      "seconds": 3.95
+    },
+    {
+      "id": "open-2",
+      "scene": "open",
+      "text": "And somewhere in it, there is a cell nobody checked.",
+      "seconds": 3.45
+    },
+    {
+      "id": "stakes-1",
+      "scene": "stakes",
+      "text": "One formula divided by the wrong number. Six billion dollars lost.",
+      "seconds": 5.55
+    },
+    {
+      "id": "stakes-2",
+      "scene": "stakes",
+      "text": "One missing minus sign. A loss reported as a gain.",
+      "seconds": 4.2
+    },
+    {
+      "id": "stakes-3",
+      "scene": "stakes",
+      "text": "None of them was fraud. They were spreadsheet errors.",
+      "seconds": 3.625
+    },
+    {
+      "id": "who-1",
+      "scene": "who",
+      "text": "We built it for analysts, FP&A and corporate finance, M&A and investment banking, valuation and deal advisory, and auditors.",
+      "seconds": 10.175
+    },
+    {
+      "id": "who-2",
+      "scene": "who",
+      "text": "But it works for anyone whose numbers have to be right. If you work in Excel, it works for you.",
+      "seconds": 6.4
+    },
+    {
+      "id": "who-3",
+      "scene": "who",
+      "text": "Thousands of formulas. Dozens of tabs. And no time to trace every one by hand.",
+      "seconds": 6.3
+    },
+    {
+      "id": "ai-1",
+      "scene": "ai",
+      "text": "You could ask a chatbot. It will sound convincing.",
+      "seconds": 3.6
+    },
+    {
+      "id": "ai-2",
+      "scene": "ai",
+      "text": "But language models are built to reason, not to calculate.",
+      "seconds": 4.225
+    },
+    {
+      "id": "ai-3",
+      "scene": "ai",
+      "text": "A financial model doesn't need a plausible answer. It needs a proven one.",
+      "seconds": 5.025
+    },
+    {
+      "id": "reveal-1",
+      "scene": "reveal",
+      "text": "Meet Model X-Ray.",
+      "seconds": 2.1
+    },
+    {
+      "id": "reveal-2",
+      "scene": "reveal",
+      "text": "The debugger for financial models.",
+      "seconds": 2.625
+    },
+    {
+      "id": "demo-1",
+      "scene": "demo",
+      "text": "Here is a real one. A power purchase agreement model, with 2,400 formulas and three errors we planted.",
+      "seconds": 8.675
+    },
+    {
+      "id": "demo-2",
+      "scene": "demo",
+      "text": "No question needed. It reads every sheet and labels every line.",
+      "seconds": 5.0
+    },
+    {
+      "id": "demo-3",
+      "scene": "demo",
+      "text": "It finds the suspects and works out the cause.",
+      "seconds": 3.1
+    },
+    {
+      "id": "demo-4",
+      "scene": "demo",
+      "text": "Then it proves each fix: it changes a copy, recalculates the whole workbook, and tries to break its own answer.",
+      "seconds": 7.65
+    },
+    {
+      "id": "demo-5",
+      "scene": "demo",
+      "text": "Three planted errors. Three found.",
+      "seconds": 2.975
+    },
+    {
+      "id": "demo-6",
+      "scene": "demo",
+      "text": "The cell. The cause. The fix. And the evidence behind it.",
+      "seconds": 4.325
+    },
+    {
+      "id": "demo-7",
+      "scene": "demo",
+      "text": "Not sure? Ask it.",
+      "seconds": 2.175
+    },
+    {
+      "id": "demo-8",
+      "scene": "demo",
+      "text": "You decide. Approve, and it writes a corrected copy. Your original file never changes.",
+      "seconds": 6.575
+    },
+    {
+      "id": "engine-1",
+      "scene": "engine",
+      "text": "Inside, two minds work together.",
+      "seconds": 2.9
+    },
+    {
+      "id": "engine-2",
+      "scene": "engine",
+      "text": "NVIDIA Nemotron does the thinking. A calculation engine does the maths.",
+      "seconds": 5.5
+    },
+    {
+      "id": "engine-3",
+      "scene": "engine",
+      "text": "Nemotron maps the model, judges every suspect, tells a real error from a deliberate choice, and argues against its own fix.",
+      "seconds": 9.05
+    },
+    {
+      "id": "engine-4",
+      "scene": "engine",
+      "text": "All of it running on Nebius Token Factory.",
+      "seconds": 3.35
+    },
+    {
+      "id": "proof-1",
+      "scene": "proof",
+      "text": "98% of planted errors, fixed.",
+      "seconds": 3.35
+    },
+    {
+      "id": "proof-2",
+      "scene": "proof",
+      "text": "Zero false alarms on values set on purpose.",
+      "seconds": 3.525
+    },
+    {
+      "id": "proof-3",
+      "scene": "proof",
+      "text": "18 of 20 on models it had never seen.",
+      "seconds": 3.7
+    },
+    {
+      "id": "proof-4",
+      "scene": "proof",
+      "text": "For about one and a half cents a check.",
+      "seconds": 2.5
+    },
+    {
+      "id": "close-1",
+      "scene": "close",
+      "text": "Every formula, checked. Every fix, proven.",
+      "seconds": 3.65
+    },
+    {
+      "id": "close-2",
+      "scene": "close",
+      "text": "Model X-Ray.",
+      "seconds": 1.925
+    }
+  ]
+}

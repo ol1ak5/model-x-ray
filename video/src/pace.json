@@ -1,0 +1,15 @@
+{
+  "fps": 30,
+  "order": ["open", "stakes", "who", "ai", "reveal", "demo", "engine", "proof", "close"],
+  "scenes": {
+    "open": { "lead": 24, "gap": 14, "tail": 18, "dark": true },
+    "stakes": { "lead": 8, "gap": 16, "tail": 24, "dark": true },
+    "who": { "lead": 10, "gap": 10, "tail": 12, "dark": false },
+    "ai": { "lead": 10, "gap": 10, "tail": 14, "dark": false },
+    "reveal": { "lead": 40, "gap": 10, "tail": 28, "dark": true },
+    "demo": { "lead": 18, "gap": 10, "tail": 16, "dark": false },
+    "engine": { "lead": 10, "gap": 10, "tail": 14, "dark": true },
+    "proof": { "lead": 8, "gap": 12, "tail": 16, "dark": false },
+    "close": { "lead": 6, "gap": 16, "tail": 75, "dark": false }
+  }
+}
