@@ -198,11 +198,11 @@ export default function CheckPage({
   running: boolean;
   error: string | null;
   loadWorkbook: () => Promise<WorkbookView>;
-  onDecide: (decision: Decision) => void;
+  onDecide: (cell: string, decision: Decision) => void;
   onHome: () => void;
   onDemo: () => void;
   onRetry: () => void;
-  onAsk: (question: string, history: ChatTurn[]) => Promise<string>;
+  onAsk: (cell: string, question: string, history: ChatTurn[]) => Promise<string>;
 }) {
   const [filter, setFilter] = useState("All");
   const [open, setOpen] = useState<Set<string>>(new Set());
@@ -225,9 +225,9 @@ export default function CheckPage({
     });
   }
 
-  function decide(decision: Decision, kind: Pending) {
+  function decide(cell: string, decision: Decision, kind: Pending) {
     setPending(kind);
-    onDecide(decision);
+    onDecide(cell, decision);
   }
 
   const download = fixedIn ? correctedFileHref(fixedIn) : view ? correctedFileHref(view) : null;
@@ -317,8 +317,8 @@ export default function CheckPage({
                       busy={running}
                       onToggle={() => toggle(finding.cell)}
                       onOpenSheet={() => setViewer({ sheet: finding.sheet, title: `${finding.cell} · ${finding.title}`, marks: { error: finding.cell, dependents: finding.dependents } })}
-                      onDecide={decide}
-                      onAsk={onAsk}
+                      onDecide={(decision, kind) => decide(finding.cell, decision, kind)}
+                      onAsk={(question, history) => onAsk(finding.cell, question, history)}
                     />
                   ))}
                 </ul>

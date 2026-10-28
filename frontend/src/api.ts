@@ -181,6 +181,12 @@ export function resumeInvestigation(id: string, answer: Decision, onEvent: (even
   return stream(`/investigations/${id}/resume/stream`, carried ? { ...answer, state: carried } : answer, onEvent, file);
 }
 
+export async function findSuspects(spreadsheetId: string, file?: File | null): Promise<string[]> {
+  const response = await fetch(`${API_URL}/suspects`, requestBody({ spreadsheet_id: spreadsheetId }, file));
+  if (!response.ok) throw await failure(response);
+  return (await response.json()).cells;
+}
+
 export type SheetCell = { ref: string; value: number | null; formula: string | null };
 export type SheetWindow = { sheet: string; header_row?: number | null; columns: { letter: string; header: string }[]; rows: { row: number; label: string; cells: SheetCell[] }[] };
 

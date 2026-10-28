@@ -10,6 +10,7 @@ import {
   type Spreadsheet,
   askAgent,
   fileOf,
+  findSuspects,
   getSheet,
   getWorkbook,
   listSpreadsheets,
@@ -20,13 +21,11 @@ import {
 import CheckPage from "./check/CheckPage";
 import Boundary from "./components/Boundary";
 import Wave from "./components/Wave";
-import { type Finding, findingsOf } from "./findings";
+import { findingsOf } from "./findings";
 import Landing from "./landing/Landing";
 import { phasesOf, statusOf } from "./progress";
 import { type StoredStep, clearCurrent, currentRun, newRunId, saveRun } from "./storage";
 import { APPROVED, REVIEW, RUNNING, SHEET, fakeSteps } from "./test/fakeApi";
-
-type Phase = "idle" | "running" | "paused" | "done" | "interrupted";
 
 type Run = { id: string; spreadsheetId: string; name: string; question: string; startedAt: number; sheets: string[] };
 
@@ -34,15 +33,18 @@ const UNREACHABLE = "The Model X-Ray service could not be reached. Please try ag
 
 const DEMO_NAME = "Demo model.xlsx";
 
-const MAX_ROUNDS = 6;
-
 const DEMOS: Record<string, string> = { "PPA_Model_Europe": "PPA_Model_Europe.xlsx", demo: DEMO_NAME };
 
-function storyRun(story: string | null): { run: Run; view: InvestigationView | null; phase: Phase } | null {
+function storyRun(story: string | null): { run: Run; views: (InvestigationView | null)[]; busy: number } | null {
   const view = story === "workspace" ? REVIEW : story === "done" ? APPROVED : story === "running" ? RUNNING : null;
   if (!story || (!view && story !== "starting")) return null;
   const run = { id: `story-${story}`, spreadsheetId: "demo", name: DEMO_NAME, question: "", startedAt: 0, sheets: ["P&L", "Assumptions", "Summary"] };
-  return { run, view: story === "running" ? null : view, phase: story === "done" ? "done" : story === "workspace" ? "paused" : "running" };
+  const busy = story === "running" || story === "starting" ? 1 : 0;
+  return { run, views: [story === "running" ? null : view], busy };
+}
+
+function groupsOf(suspects: string[]): string[][] {
+  return suspects.length < 2 ? [[]] : suspects.map((cell) => suspects.filter((other) => other !== cell));
 }
 
 export default function App() {
@@ -50,35 +52,32 @@ export default function App() {
   const initial = storyRun(story);
   const [demos, setDemos] = useState<Spreadsheet[]>([]);
   const [check, setCheck] = useState<Run | null>(initial?.run ?? null);
-  const [phase, setPhase] = useState<Phase>(initial?.phase ?? "idle");
+  const [busy, setBusy] = useState(initial?.busy ?? 0);
   const [steps, setSteps] = useState<StoredStep[]>(story ? fakeSteps(story) : []);
-  const [view, setView] = useState<InvestigationView | null>(initial?.view ?? null);
+  const [views, setViews] = useState<(InvestigationView | null)[]>(initial?.views ?? []);
   const [sheet, setSheet] = useState<SheetWindow | null>(initial ? SHEET : null);
+  const [fixedIn, setFixedIn] = useState<InvestigationView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [earlier, setEarlier] = useState<Finding[]>([]);
-  const [setAside, setSetAside] = useState<string[]>([]);
-  const [fixedIn, setFixedIn] = useState<InvestigationView | null>(null);
   const upload = useRef<File | null>(null);
+  const first = views[0] ?? null;
 
   useEffect(() => {
     if (story) return;
     const saved = currentRun();
-    if (!saved?.view) return;
+    const restored = saved?.views ?? (saved?.view ? [saved.view] : []);
+    if (!saved || restored.length === 0) return;
     setCheck({ id: saved.id, spreadsheetId: saved.spreadsheetId, name: saved.name, question: saved.question, startedAt: saved.startedAt, sheets: saved.sheets ?? [] });
     setSteps(saved.steps);
-    setEarlier(saved.earlier ?? []);
-    setSetAside(saved.setAside ?? []);
-    setFixedIn(saved.fixedIn ?? null);
-    setView(saved.view);
+    setViews(restored);
     setSheet(saved.sheet);
-    setPhase(saved.view.status === "done" ? "done" : saved.view.status === "running" ? "interrupted" : "paused");
+    setFixedIn(saved.fixedIn ?? null);
   }, []);
 
   useEffect(() => {
     if (!check || story) return;
-    saveRun({ ...check, updatedAt: Date.now(), steps, view, sheet, earlier, setAside, fixedIn });
-  }, [check, steps, view, sheet, earlier, setAside, fixedIn]);
+    saveRun({ ...check, updatedAt: Date.now(), steps, view: first, views, sheet, fixedIn });
+  }, [check, steps, views, sheet, fixedIn]);
 
   useEffect(() => {
     listSpreadsheets()
@@ -87,59 +86,55 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!view?.target || story) return;
-    if (view.sheet) {
-      setSheet(view.sheet);
+    if (!first?.target || story) return;
+    if (first.sheet) {
+      setSheet(first.sheet);
       return;
     }
     if (sheet) return;
-    getSheet(view.id)
+    getSheet(first.id)
       .then(setSheet)
       .catch(() => undefined);
-  }, [view]);
+  }, [first]);
 
-  function onEvent(event: ProgressEvent) {
-    if (event.kind === "step") setSteps((current) => [...current, { step: event.step, label: event.label }]);
-    if (event.kind === "view") {
-      setView(event.view);
-      setPhase(event.view.status === "running" ? "running" : event.view.status === "done" ? "done" : "paused");
-    }
-    if (event.kind === "error") {
-      setError(event.detail);
-      setPhase((current) => (current === "running" ? "paused" : current));
-    }
+  function eventsFor(slot: number, seen?: { view: InvestigationView | null }) {
+    return (event: ProgressEvent) => {
+      if (event.kind === "step") setSteps((current) => [...current, { step: event.step, label: event.label }]);
+      if (event.kind === "view") {
+        if (seen) seen.view = event.view;
+        setViews((current) => current.map((view, index) => (index === slot ? event.view : view)));
+      }
+      if (event.kind === "error") setError(event.detail);
+    };
   }
 
-  async function run(work: Promise<void>, fallback: Phase) {
+  async function run(work: () => Promise<void>) {
+    setBusy((count) => count + 1);
     try {
-      await work;
+      await work();
     } catch (reason) {
       setError(reason instanceof ApiError ? reason.message : UNREACHABLE);
-      setPhase(fallback);
+    } finally {
+      setBusy((count) => count - 1);
     }
   }
 
-  const round = useCallback((spreadsheetId: string, aside: string[]) => {
+  const start = useCallback((spreadsheetId: string, name: string, sheets: string[], file: File | null) => {
+    upload.current = file;
     setSteps([]);
-    setView(null);
+    setViews([]);
     setSheet(null);
+    setFixedIn(null);
     setError(null);
-    setPhase("running");
-    void run(startInvestigation(spreadsheetId, "", onEvent, upload.current, aside), "interrupted");
+    setCheck({ id: newRunId(), spreadsheetId, name, question: "", startedAt: Date.now(), sheets });
+    window.scrollTo?.({ top: 0 });
+    void run(async () => {
+      const suspects = await findSuspects(spreadsheetId, file).catch(() => []);
+      const groups = groupsOf(suspects);
+      setViews(groups.map(() => null));
+      await Promise.all(groups.map((aside, slot) => run(() => startInvestigation(spreadsheetId, "", eventsFor(slot), file, aside))));
+    });
   }, []);
-
-  const start = useCallback(
-    (spreadsheetId: string, name: string, sheets: string[], file: File | null) => {
-      upload.current = file;
-      setEarlier([]);
-      setSetAside([]);
-      setFixedIn(null);
-      setCheck({ id: newRunId(), spreadsheetId, name, question: "", startedAt: Date.now(), sheets });
-      window.scrollTo?.({ top: 0 });
-      round(spreadsheetId, []);
-    },
-    [round],
-  );
 
   const startDemo = useCallback(() => {
     const demo = demos.find((candidate) => candidate.id === "PPA_Model_Europe") ?? demos[0];
@@ -162,61 +157,43 @@ export default function App() {
     [start],
   );
 
-  const next = useCallback(
-    (final: InvestigationView) => {
-      if (!check) return;
-      const settled = findingsOf(final, final.sheet ?? sheet);
-      const found = [...earlier, ...settled];
-      const aside = [...setAside, ...settled.map((finding) => finding.cell)];
-      if (final.corrected_file) upload.current = fileOf(final.corrected_file, check.name);
-      if (final.corrected_copy_id) setFixedIn({ ...final, sheet: null });
-      setEarlier(found);
-      setSetAside(aside);
-      if (found.length < MAX_ROUNDS) round(check.spreadsheetId, aside);
-    },
-    [check, sheet, earlier, setAside, round],
-  );
-
   const decide = useCallback(
-    (answer: Decision) => {
-      if (!view) return;
+    (cell: string, answer: Decision) => {
+      const slot = views.findIndex((view) => view?.patch?.cell === cell);
+      const view = views[slot];
+      if (!view || !check) return;
       setError(null);
-      setPhase("running");
-      const last: { view: InvestigationView | null } = { view: null };
-      const watch = (event: ProgressEvent) => {
-        if (event.kind === "view") last.view = event.view;
-        onEvent(event);
-      };
-      const work = resumeInvestigation(view.id, answer, watch, view, upload.current).then(() => {
-        if (last.view?.status === "done") next(last.view);
+      const seen: { view: InvestigationView | null } = { view: null };
+      void run(async () => {
+        await resumeInvestigation(view.id, answer, eventsFor(slot, seen), view, upload.current);
+        const settled = seen.view;
+        if (settled?.corrected_file) upload.current = fileOf(settled.corrected_file, check.name);
+        if (settled?.corrected_copy_id) setFixedIn({ ...settled, sheet: null });
       });
-      void run(work, "paused");
     },
-    [view, next],
+    [views, check],
   );
 
   const retry = useCallback(() => {
-    if (check) round(check.spreadsheetId, setAside);
-  }, [check, setAside, round]);
+    if (check) start(check.spreadsheetId, check.name, check.sheets, upload.current);
+  }, [check, start]);
 
   const ask = useCallback(
-    (question: string, history: ChatTurn[]) => {
+    (cell: string, question: string, history: ChatTurn[]) => {
+      const view = views.find((candidate) => candidate?.patch?.cell === cell);
       if (!view) return Promise.reject(new ApiError("The check has not finished yet."));
       return askAgent(view.id, question, view, history);
     },
-    [view],
+    [views],
   );
 
   const reset = useCallback(() => {
     setSteps([]);
-    setView(null);
+    setViews([]);
     setSheet(null);
-    setError(null);
-    setPhase("idle");
-    setCheck(null);
-    setEarlier([]);
-    setSetAside([]);
     setFixedIn(null);
+    setError(null);
+    setCheck(null);
     upload.current = null;
     clearCurrent();
     const url = new URL(window.location.href);
@@ -227,10 +204,11 @@ export default function App() {
 
   const spreadsheetId = check?.spreadsheetId ?? "";
   const loadWorkbook = useCallback(() => getWorkbook(spreadsheetId, upload.current), [spreadsheetId]);
-  const running = phase === "running";
-  const phases = useMemo(() => phasesOf(steps, view, running), [steps, view, running]);
-  const findings = useMemo(() => [...earlier, ...findingsOf(view, sheet).filter((finding) => !earlier.some((settled) => settled.cell === finding.cell))], [earlier, view, sheet]);
-  const status = statusOf(view, running, steps.at(-1)?.label ?? null, earlier);
+  const running = busy > 0;
+  const phases = useMemo(() => phasesOf(steps, views, running), [steps, views, running]);
+  const findings = useMemo(() => views.flatMap((view) => findingsOf(view, view?.sheet ?? sheet)), [views, sheet]);
+  const status = statusOf(views, running, steps.at(-1)?.label ?? null);
+  const shown = views.length > 0 && views.every((view) => view !== null) ? first : null;
 
   return (
     <>
@@ -243,7 +221,7 @@ export default function App() {
             phases={phases}
             status={status}
             findings={findings}
-            view={view}
+            view={shown}
             fixedIn={fixedIn}
             running={running}
             error={error}
