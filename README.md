@@ -95,9 +95,9 @@ Every test model carries errors we planted ourselves, so each answer is scored a
 | False alarms on values set on purpose | 12 of 12 ❌ | **0 of 12** ✅ |
 | False alarms on clean models | 0 of 12 ✅ | **0 of 12** ✅ |
 
-## The Models We Built It On
+## The Workbooks We Tuned It On
 
-Model X-Ray was developed and tuned on three sets of workbooks:
+The agent's rules and prompts were developed and tuned on three sets of workbooks:
 
 | Set | Explanation | Errors |
 |---|---|---|
@@ -105,7 +105,7 @@ Model X-Ray was developed and tuned on three sets of workbooks:
 | **Synthetic models** | A three-sheet model (assumptions, five-year P&L, summary) and 174 copies of it, each with one planted error, plus clean copies and copies with numbers typed on purpose and explained in a note, which must be left alone | 150 planted, 24 controls |
 | **Logic test models** | A five-year budget and a SaaS subscription forecast, in [`demo/`](demo) | 15 planted, including 7 logic errors |
 
-## Final Test on Unseen Models
+## Final Test on Unseen Workbooks
 
 Five of the Damodaran models were kept aside from the start and never used to tune the agent. They were used only for the final score:
 
