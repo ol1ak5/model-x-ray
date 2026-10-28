@@ -58,7 +58,7 @@ export default function Landing({ onDemo, onUpload, busy, demoReady, error }: { 
           <Brand onHome={top} />
           <div className="nav-right">
             <nav className="nav-links" aria-label="Sections">
-              <a href="#why">Did you know that?</a>
+              <a href="#why">Did you know?</a>
               <a href="#answer">Our answer</a>
               <a href="#how">How it works</a>
               <a href="#strengths">Strengths</a>
@@ -96,7 +96,7 @@ export default function Landing({ onDemo, onUpload, busy, demoReady, error }: { 
           <span>
             Do you know how much <b>one spreadsheet error</b> can cost?
           </span>
-          <a href="#why" aria-label="Did you know that?">
+          <a href="#why" aria-label="Did you know?">
             ↓
           </a>
         </div>
@@ -104,7 +104,7 @@ export default function Landing({ onDemo, onUpload, busy, demoReady, error }: { 
         <section id="why">
           <div className="wrap">
             <div className="heading wide reveal">
-              <div className="label">Did you know that?</div>
+              <div className="label">Did you know?</div>
               <h2>
                 Small errors, <em>billion-dollar consequences</em>
               </h2>
