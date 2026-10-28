@@ -18,7 +18,7 @@ The debugger for financial models. An AI agent powered by NVIDIA Nemotron that h
 
 Open the [live demo](https://model-x-ray.vercel.app) and press **Try the demo** to watch the agent check a European power purchase agreement model with 2,400 formulas and three planted errors, or upload your own `.xlsx`.
 
-![The opening screen](docs/screenshot-start.png)
+<p align="center"><img src="docs/screenshot-start.png" alt="The opening screen" width="800"></p>
 
 ## The Problem
 
@@ -38,6 +38,7 @@ Model X-Ray checks your model the way an experienced financial analyst does. **N
 
 - **NVIDIA Nemotron** reads the model, judges every suspect cell, tells a real error from a deliberate choice, and argues against its own fix.
 - **A calculation engine** maps every formula and recalculates the whole workbook, so no number in the answer is guessed by AI.
+- **You, the human in the loop,** approve, edit or reject every fix before anything changes in your file, and can ask the agent about any error you are unsure of.
 
 Designed with M&A and deal teams, investment bankers, corporate finance and FP&A analysts in mind, it works for anyone who needs to trust the numbers in a spreadsheet.
 
