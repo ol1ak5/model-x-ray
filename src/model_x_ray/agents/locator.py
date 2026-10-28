@@ -117,13 +117,33 @@ def relative_move(book: Workbook, ref: str) -> float:
     return abs(now - before) / abs(before) if before else abs(now - before)
 
 
+MAX_SUSPECTS = 6
+
+
+def target_of(book: Workbook, outlier: dict) -> str | None:
+    return next((ref for ref in [*book.all_dependents(outlier["cell"]), outlier["cell"]] if is_target(book, ref)), None)
+
+
+def suspects(book: Workbook) -> list[str]:
+    outliers = scan_model(book)
+    flagged = {o["cell"] for o in outliers}
+    edges = [e for e in edge_breaks(book) if e["cell"] not in flagged and computable(book, e["cell"])]
+    found: list[str] = []
+    for outlier in [*rank_outliers(book, outliers), *edges]:
+        if outlier["cell"] not in found and target_of(book, outlier) is not None:
+            found.append(outlier["cell"])
+    tables = [finding for finding in scan_tables(book) if finding["cell"] not in found and computable(book, finding["cell"])]
+    ranked = sorted(tables, key=lambda f: (len(book.all_dependents(f["cell"])), f["kind"] == "incomplete_total"), reverse=True)
+    return [*found, *dict.fromkeys(f["cell"] for f in ranked)][:MAX_SUSPECTS]
+
+
 def check_target(book: Workbook, extra: list[dict] | None = None, skip: frozenset[str] = frozenset()) -> tuple[str, str]:
     outliers = [o for o in [*rank_outliers(book, scan_model(book)), *(extra or [])] if o["cell"] not in skip]
     for outlier in outliers:
-        for ref in [*book.all_dependents(outlier["cell"]), outlier["cell"]]:
-            if is_target(book, ref):
-                finding = f"which is a {outlier['reason']}" if outlier["reason"].startswith("typed value") else f"whose {outlier['reason']}"
-                return ref, f"Check the model: {book.row_label(ref)} {book.column_header(ref)} depends on {outlier['cell']}, {finding}."
+        ref = target_of(book, outlier)
+        if ref is not None:
+            finding = f"which is a {outlier['reason']}" if outlier["reason"].startswith("typed value") else f"whose {outlier['reason']}"
+            return ref, f"Check the model: {book.row_label(ref)} {book.column_header(ref)} depends on {outlier['cell']}, {finding}."
     candidates = [ref for ref in book.cells() if is_target(book, ref) and "/" not in (book.formula(ref) or "/")]
     if not candidates:
         raise ValueError("Model X-Ray found no calculated line with periods to check in this model")

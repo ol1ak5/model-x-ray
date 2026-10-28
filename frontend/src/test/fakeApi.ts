@@ -122,10 +122,10 @@ export function steps(...names: string[]): Event[] {
   });
 }
 
-export function fakeApi(start: Event[], resumes: Event[][] = [], failures: string[] = [], answers: string[] = [], rounds: Event[][] = []) {
+export function fakeApi(start: Event[], resumes: Event[][] = [], failures: string[] = [], answers: string[] = [], others: Event[][] = [], suspects: string[] = []) {
   const sent: { url: string; body: unknown }[] = [];
   const queue = [...resumes];
-  const starts = [start, ...rounds];
+  const starts = [start, ...others];
   let started = 0;
   const refusals = [...failures];
   const replies = [...answers];
@@ -142,6 +142,7 @@ export function fakeApi(start: Event[], resumes: Event[][] = [], failures: strin
     if (url.includes("/spreadsheets?name=")) return Response.json({ id: "upload-1", name: decodeURIComponent(url.split("name=")[1]), sheets: ["P&L"] }, { status: 201 });
     if (url.endsWith("/sheet")) return Response.json(SHEET);
     if (url.endsWith("/workbook")) return Response.json(WORKBOOK);
+    if (url.endsWith("/suspects")) return Response.json({ cells: suspects });
     if (url.endsWith("/ask")) return Response.json({ answer: replies.shift() ?? "No answer scripted." });
     if (url.endsWith("/investigations/stream")) return streamed(sse(starts[started++] ?? [...steps("explain"), ["view", CLEAR]]));
     if (url.includes("/resume/stream")) {

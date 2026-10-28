@@ -24,6 +24,7 @@ from langgraph.types import Command
 from pydantic import BaseModel
 
 from model_x_ray.agents.ask import answer_question
+from model_x_ray.agents.locator import suspects as suspects_of
 from model_x_ray.agents.verifier import CHECK_LABELS
 from model_x_ray.graph import run_continuation, run_investigation
 from model_x_ray.llm import ProviderFailure
@@ -165,7 +166,7 @@ class StartRequest(BaseModel):
     set_aside: list[str] = []
 
 
-SET_ASIDE_REASON = "The reviewer said it is not an error"
+SET_ASIDE_REASON = "Settled or checked separately in this review"
 
 
 class AskRequest(BaseModel):
@@ -561,6 +562,15 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
         answer, _ = answer_question(models.explainer or models.llm, state, request.history[-MAX_HISTORY_TURNS:], question, cell_labels(state))
         questions.record(visitor)
         return {"answer": answer}
+
+    @app.post("/suspects")
+    async def suspects(http: Request) -> dict:
+        request, content, name = await read_request(http, WorkbookRequest)
+        spreadsheet_id = hold(content, name) if content is not None else request.spreadsheet_id
+        try:
+            return {"cells": suspects_of(source.load(spreadsheet_id))}
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from error
 
     @app.post("/workbook")
     async def workbook(http: Request) -> dict:

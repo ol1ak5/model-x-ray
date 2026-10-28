@@ -1,5 +1,4 @@
 import type { InvestigationView, SheetWindow } from "./api";
-import type { Finding } from "./findings";
 
 export const STORAGE_KEY = "model-x-ray:runs:v1";
 export const STORAGE_BYTES = 2_000_000;
@@ -20,8 +19,7 @@ export type StoredRun = {
   view: InvestigationView | null;
   sheet: SheetWindow | null;
   sheets?: string[];
-  earlier?: Finding[];
-  setAside?: string[];
+  views?: (InvestigationView | null)[];
   fixedIn?: InvestigationView | null;
 };
 
@@ -74,7 +72,7 @@ function slimmer(state: Stored): Stored | null {
   if (drop) return { ...state, runs: state.runs.filter((run) => run.id !== drop.id) };
   const current = state.runs.find((run) => run.id === state.current);
   if (current?.sheet) return { ...state, runs: state.runs.map((run) => (run.id === current.id ? { ...run, sheet: null } : run)) };
-  if (current?.view) return { ...state, runs: state.runs.map((run) => (run.id === current.id ? { ...run, view: null } : run)) };
+  if (current?.view || current?.views?.length) return { ...state, runs: state.runs.map((run) => (run.id === current.id ? { ...run, view: null, views: [] } : run)) };
   return null;
 }
 
@@ -126,7 +124,8 @@ export function currentRun(): StoredRun | null {
 export function saveRun(run: StoredRun): void {
   const state = read();
   const others = state.runs.filter((held) => held.id !== run.id);
-  const kept = run.view ? { ...run, view: { ...run.view, sheet: undefined, corrected_file: undefined } } : run;
+  const slim = (view: InvestigationView | null | undefined) => (view ? { ...view, sheet: undefined, corrected_file: undefined } : null);
+  const kept = { ...run, view: slim(run.view), views: run.views?.map(slim), fixedIn: slim(run.fixedIn) };
   const runs = [kept, ...others].sort((left, right) => right.updatedAt - left.updatedAt);
   write({ version: VERSION, current: run.id, runs });
 }

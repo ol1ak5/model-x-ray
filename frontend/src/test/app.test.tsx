@@ -132,10 +132,10 @@ describe("a model check", () => {
     expect(within(errors).queryByRole("button", { name: "Approve fix" })).toBeNull();
   });
 
-  test("after each decision the agent checks the corrected copy for the next error, until none is left", async () => {
+  test("investigates every suspect at the same time, then takes the decisions one by one on the latest corrected copy", async () => {
     const typed: InvestigationView = {
       ...REVIEW,
-      id: "inv-next",
+      id: "inv-typed",
       patch: { cell: "P&L!I6", old_formula: "12.5", new_formula: "=H6*(1+Assumptions!$C$3)", source: "agent" },
       hypotheses: [{ id: "hyp-1", cell: "P&L!I6", error_type: "typed_value", claim: "P&L!I6 is a typed number", evidence_ids: [], confidence: "high", status: "confirmed" }],
     };
@@ -148,27 +148,32 @@ describe("a model check", () => {
       [],
       [],
       [[...steps("explain"), ["view", typed]]],
+      ["P&L!G5", "P&L!I6"],
     );
     vi.stubGlobal("fetch", api.fetch);
     const user = await checkDemo();
+
     const errors = await openTheError(user);
+    const starts = api.sent.filter((request) => request.url.endsWith("/investigations/stream")).map((request) => request.body);
+    expect(starts).toEqual([
+      { spreadsheet_id: "demo", question: "", set_aside: ["P&L!I6"] },
+      { spreadsheet_id: "demo", question: "", set_aside: ["P&L!G5"] },
+    ]);
+    const second = await within(errors).findByRole("button", { name: /P&L!I6.*is a typed number/ });
+    expect(screen.getByText("Errors detected: 2")).toBeInTheDocument();
+    expect(screen.getByText("2 errors detected")).toBeInTheDocument();
 
     await user.click(within(errors).getByRole("button", { name: "Approve fix" }));
-
-    const second = await within(errors).findByRole("button", { name: /P&L!I6.*is a typed number/ });
-    const starts = () => api.sent.filter((request) => request.url.endsWith("/investigations/stream"));
-    expect(starts()[1].body).toEqual({ spreadsheet_id: "demo", question: "", set_aside: ["P&L!G5"], file: "Demo model.xlsx" });
-    expect(screen.getByText("Errors detected: 2")).toBeInTheDocument();
-    expect(within(errors).getByText("Fixed")).toBeInTheDocument();
+    expect(await within(errors).findByText("Fixed")).toBeInTheDocument();
+    expect(screen.getByText("1 error detected")).toBeInTheDocument();
 
     await user.click(second);
     await user.click(within(errors).getByRole("button", { name: "Reject" }));
     await user.click(within(errors).getByRole("button", { name: "It's not an error" }));
 
     expect(await screen.findByText("Review complete", { selector: ".state" })).toBeInTheDocument();
-    expect(lastResume(api)?.body).toMatchObject({ action: "reject", state: { id: "inv-next" }, file: "Demo model.xlsx" });
-    expect(starts()[2].body).toEqual({ spreadsheet_id: "demo", question: "", set_aside: ["P&L!G5", "P&L!I6"], file: "Demo model.xlsx" });
-    expect(starts()).toHaveLength(3);
+    expect(lastResume(api)?.body).toMatchObject({ action: "reject", state: { id: "inv-typed" }, file: "Demo model.xlsx" });
+    expect(api.sent.filter((request) => request.url.endsWith("/investigations/stream"))).toHaveLength(2);
     expect(within(errors).getByText("Not an error")).toBeInTheDocument();
     expect(screen.getByText("1 fix saved to a new copy")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Download Demo model (corrected).xlsx" })).toHaveAttribute("download", CORRECTED.name);
