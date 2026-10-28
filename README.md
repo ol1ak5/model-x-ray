@@ -14,6 +14,8 @@ The debugger for financial models. An AI agent powered by NVIDIA Nemotron that h
 - 🏆 Devpost submission:
 - 🎬 Demo video (YouTube):
 
+`Track: Best Apps and Agents` · `Nebius x NVIDIA Global AI Hackathon 2026`
+
 ## Try It Live
 
 Open the [live demo](https://model-x-ray.vercel.app) and press **Try the demo** to watch the agent check a European power purchase agreement model with 2,400 formulas and three planted errors, or upload your own `.xlsx`.
@@ -193,3 +195,5 @@ uv run pytest -m live         # live tests on Token Factory, spends credits
 ## License
 
 Copyright © 2026 Olga Aksenova and Guillermo Martín-Coello. Licensed under the [Apache License 2.0](LICENSE).
+
+*Built for the Nebius x NVIDIA Global AI Hackathon 2026*
