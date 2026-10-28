@@ -38,7 +38,7 @@ Model X-Ray checks your model the way an experienced financial analyst does. **N
 
 - **NVIDIA Nemotron** reads the model, judges every suspect cell, tells a real error from a deliberate choice, and argues against its own fix.
 - **A calculation engine** maps every formula and recalculates the whole workbook, so no number in the answer is guessed by AI.
-- **You, the human in the loop,** approve, edit or reject every fix before anything changes in your file, and can ask the agent about any error you are unsure of.
+- **You, the human in the loop,** approve, edit or reject every fix before anything changes in your file, and can ask the agent about any error or fix you are unsure of.
 
 Designed with M&A and deal teams, investment bankers, corporate finance and FP&A analysts in mind, it works for anyone who needs to trust the numbers in a spreadsheet.
 
