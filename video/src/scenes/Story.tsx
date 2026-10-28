@@ -85,8 +85,8 @@ export function Open({ scene }: { scene: Scene }) {
 }
 
 const CASES = [
-  { amount: "$6,000,000,000", who: "JPMorgan · 2012", what: "One formula divided by the wrong number." },
-  { amount: "$2,600,000,000", who: "Fidelity Magellan · 1995", what: "One missing minus sign." },
+  { amount: "$6,200,000,000", who: "JPMorgan · 2012", what: "One formula divided by the wrong number." },
+  { amount: "$2,600,000,000", who: "Fidelity Magellan · 1995", what: "A capital loss reported as a capital gain." },
 ];
 
 export function Stakes({ scene }: { scene: Scene }) {
@@ -115,7 +115,7 @@ export function Stakes({ scene }: { scene: Scene }) {
       {frame >= l3.start - 2 && (
         <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", opacity: outro }}>
           <div style={{ display: "flex", gap: 70, marginBottom: 70, fontSize: 44, fontWeight: 700, color: "rgba(255,255,255,0.4)", fontVariantNumeric: "tabular-nums" }}>
-            {["$6B", "$2.6B", "$24M", "$11M"].map((amount, index) => (
+            {["$6.2B", "$2.6B", "$24M", "$11M"].map((amount, index) => (
               <Rise key={amount} at={l3.start + index * 4} distance={30}>
                 <span>{amount}</span>
               </Rise>
@@ -207,14 +207,14 @@ export function Who({ scene }: { scene: Scene }) {
   );
 }
 
-const CLAIM = "EBITDA grew 18% because revenue outpaced costs. Gross margin reached ";
+const CLAIM = "EBITDA grew 12% in 2027. Gross profit margin reached ";
 
 export function Ai({ scene }: { scene: Scene }) {
   const frame = useCurrentFrame();
   const [l1, l2, l3] = scene.lines;
   const chars = Math.floor(clamp(frame, l1.start, l1.start + l1.frames - 8, 0, CLAIM.length + 5, (t) => t));
   const shown = CLAIM.slice(0, chars);
-  const number = chars > CLAIM.length ? "41.7%" : "";
+  const number = chars > CLAIM.length ? "47.5%" : "";
   const wrong = clamp(frame, l2.start, l2.start + 10);
   const glitch = frame >= l2.start && frame < l2.start + 14 ? (frame % 3) - 1 : 0;
   const enter = useSpring(l1.start - 8);
@@ -234,7 +234,7 @@ export function Ai({ scene }: { scene: Scene }) {
             {chars <= CLAIM.length + 4 && <span style={{ color: C.g3 }}>▍</span>}
           </div>
           <Rise at={l2.start + 12} distance={20}>
-            <div style={{ marginTop: 22, fontFamily: MONO, fontSize: 30, color: C.red }}>Recalculated: 38.2%</div>
+            <div style={{ marginTop: 22, fontFamily: MONO, fontSize: 30, color: C.red }}>Recalculated: 97.2 / 216.0 = 45.0%</div>
           </Rise>
         </div>
         <div style={{ position: "absolute", left: 1060, top: 330, fontSize: 84, fontWeight: 800, letterSpacing: "-0.045em", lineHeight: 1.08 }}>

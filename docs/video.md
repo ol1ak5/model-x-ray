@@ -1,6 +1,6 @@
 # Demo video
 
-The ≤3-minute submission video (#76) is code: a [Remotion](https://www.remotion.dev) project in `video/` that renders the script in `docs/video-script.md` with a synthetic voice, generated music and burned-in English subtitles. Output: 1920×1080, 30 fps, about 2:41.
+The ≤3-minute submission video (#76) is code: a [Remotion](https://www.remotion.dev) project in `video/` that renders the narration in `video/voice/lines.json` with a synthetic voice, generated music and burned-in English subtitles. Output: 1920×1080, 30 fps, about 2:45.
 
 ## Pieces
 

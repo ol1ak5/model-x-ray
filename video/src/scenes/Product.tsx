@@ -1,7 +1,7 @@
-import { AbsoluteFill, Img, interpolate, random, staticFile, useCurrentFrame } from "remotion";
+import { AbsoluteFill, Easing, Img, interpolate, random, staticFile, useCurrentFrame } from "remotion";
 import { BAND, C, FONT, MONO } from "../theme";
 import type { Scene } from "../timeline";
-import { Brand, Fade, Logo, Rise, Wave, Words, clamp, ease, useSpring } from "../parts";
+import { Brand, Fade, Logo, Rise, Wave, Words, clamp, useSpring } from "../parts";
 
 export function Reveal({ scene }: { scene: Scene }) {
   const frame = useCurrentFrame();
@@ -38,7 +38,9 @@ export function Reveal({ scene }: { scene: Scene }) {
 }
 
 type Cam = { t: number; x: number; y: number; z: number };
-type Shot = { src: string; from: number; to: number; cams: Cam[] };
+type Shot = { src: string; from: number; to: number; cams: Cam[]; dip?: boolean };
+
+const smooth = Easing.inOut(Easing.sin);
 
 const FW = 1400;
 const FH = 875;
@@ -49,7 +51,7 @@ function camAt(cams: Cam[], t: number): Cam {
     if (t <= cams[i].t) {
       const a = cams[i - 1];
       const b = cams[i];
-      const p = ease((t - a.t) / (b.t - a.t));
+      const p = smooth((t - a.t) / (b.t - a.t));
       return { t, x: a.x + (b.x - a.x) * p, y: a.y + (b.y - a.y) * p, z: a.z + (b.z - a.z) * p };
     }
   }
@@ -58,8 +60,8 @@ function camAt(cams: Cam[], t: number): Cam {
 
 function Screen({ shot, frame }: { shot: Shot; frame: number }) {
   const cam = camAt(shot.cams, frame);
-  const fadeIn = clamp(frame, shot.from - 8, shot.from + 4);
-  const fadeOut = clamp(frame, shot.to - 4, shot.to + 8, 1, 0);
+  const fadeIn = shot.dip ? clamp(frame, shot.from + 2, shot.from + 12, 0, 1, smooth) : clamp(frame, shot.from - 7, shot.from + 7, 0, 1, smooth);
+  const fadeOut = shot.src === "landing" ? clamp(frame, shot.to - 8, shot.to + 2, 1, 0, smooth) : clamp(frame, shot.to + 7, shot.to + 9, 1, 0);
   const cx = Math.min(Math.max(cam.x, 0.5 / cam.z), 1 - 0.5 / cam.z);
   const cy = Math.min(Math.max(cam.y, 0.5 / cam.z), 1 - 0.5 / cam.z);
   return (
@@ -91,17 +93,28 @@ export function Demo({ scene }: { scene: Scene }) {
   const L = scene.lines;
   const mid = (i: number, k: number) => L[i].start + Math.round(L[i].frames * k);
   const click = L[1].start - 6;
+  const path: Cam[] = [
+    { t: L[1].start, x: 0.5, y: 0.45, z: 1.08 },
+    { t: mid(1, 0.7), x: 0.32, y: 0.6, z: 1.38 },
+    { t: mid(3, 0.55), x: 0.32, y: 0.6, z: 1.42 },
+    { t: L[4].start, x: 0.58, y: 0.56, z: 1.42 },
+    { t: L[5].start, x: 0.59, y: 0.54, z: 1.45 },
+    { t: mid(5, 0.75), x: 0.6, y: 0.6, z: 1.48 },
+    { t: L[7].start, x: 0.6, y: 0.8, z: 1.48 },
+    { t: mid(7, 0.45), x: 0.55, y: 0.6, z: 1.3 },
+    { t: scene.duration, x: 0.5, y: 0.5, z: 1.04 },
+  ];
   const shots: Shot[] = [
     { src: "landing", from: 0, to: L[1].start, cams: [{ t: 0, x: 0.5, y: 0.5, z: 1 }, { t: mid(0, 0.4), x: 0.42, y: 0.42, z: 1.12 }, { t: click, x: 0.25, y: 0.5, z: 1.5 }] },
-    { src: "run-read", from: L[1].start, to: mid(1, 0.55), cams: [{ t: L[1].start, x: 0.5, y: 0.35, z: 1.15 }, { t: mid(1, 0.5), x: 0.22, y: 0.42, z: 1.75 }] },
-    { src: "run-investigate", from: mid(1, 0.55), to: L[3].start, cams: [{ t: mid(1, 0.55), x: 0.22, y: 0.42, z: 1.75 }, { t: L[3].start, x: 0.2, y: 0.5, z: 1.9 }] },
-    { src: "run-prove", from: L[3].start, to: mid(3, 0.65), cams: [{ t: L[3].start, x: 0.2, y: 0.5, z: 1.9 }, { t: mid(3, 0.6), x: 0.22, y: 0.58, z: 2.0 }] },
-    { src: "run-first", from: mid(3, 0.65), to: L[4].start, cams: [{ t: mid(3, 0.65), x: 0.55, y: 0.58, z: 1.4 }, { t: L[4].start, x: 0.59, y: 0.56, z: 1.45 }] },
-    { src: "run-found", from: L[4].start, to: L[5].start, cams: [{ t: L[4].start, x: 0.59, y: 0.56, z: 1.45 }, { t: L[5].start, x: 0.59, y: 0.56, z: 1.5 }] },
-    { src: "error-open", from: L[5].start, to: L[6].start, cams: [{ t: L[5].start, x: 0.59, y: 0.56, z: 1.5 }, { t: mid(5, 0.5), x: 0.63, y: 0.5, z: 1.8 }, { t: L[6].start, x: 0.59, y: 0.62, z: 1.5 }] },
-    { src: "ask", from: L[6].start, to: L[7].start, cams: [{ t: L[6].start, x: 0.59, y: 0.62, z: 1.5 }, { t: L[7].start, x: 0.6, y: 0.85, z: 1.6 }] },
-    { src: "approving", from: L[7].start, to: mid(7, 0.3), cams: [{ t: L[7].start, x: 0.55, y: 0.72, z: 1.5 }, { t: mid(7, 0.3), x: 0.5, y: 0.74, z: 1.7 }] },
-    { src: "fixed", from: mid(7, 0.3), to: scene.duration + 10, cams: [{ t: mid(7, 0.3), x: 0.55, y: 0.5, z: 1.6 }, { t: scene.duration, x: 0.5, y: 0.5, z: 1.05 }] },
+    { src: "run-read", from: L[1].start, to: mid(1, 0.55), cams: path, dip: true },
+    { src: "run-investigate", from: mid(1, 0.55), to: L[3].start, cams: path },
+    { src: "run-prove", from: L[3].start, to: mid(3, 0.65), cams: path },
+    { src: "run-first", from: mid(3, 0.65), to: L[4].start, cams: path },
+    { src: "run-found", from: L[4].start, to: L[5].start, cams: path },
+    { src: "error-open", from: L[5].start, to: L[6].start, cams: path },
+    { src: "ask", from: L[6].start, to: L[7].start, cams: path },
+    { src: "approving", from: L[7].start, to: mid(7, 0.3), cams: path },
+    { src: "fixed", from: mid(7, 0.3), to: scene.duration + 10, cams: path },
   ];
   const enter = useSpring(0, 16, 60);
   const sway = Math.sin(frame / 70) * 1.5;
@@ -123,7 +136,7 @@ export function Demo({ scene }: { scene: Scene }) {
     { kicker: "Result", text: "3 planted errors, 3 found" },
     { kicker: "Evidence", text: "The cell, the cause, the fix and the proof" },
     { kicker: "Ask", text: "It answers questions about its own finding" },
-    { kicker: "You decide", text: "Your original file never changes" },
+    { kicker: "You decide", text: "Approve, edit or reject. The original never changes" },
   ];
   return (
     <AbsoluteFill style={{ background: "#fff", fontFamily: FONT }}>
@@ -211,9 +224,9 @@ function Calc({ frame, at }: { frame: number; at: number }) {
 }
 
 const MODELS = [
-  { name: "Nemotron 3.5 Super", job: "Investigates every suspect and tries to break every fix" },
+  { name: "Nemotron 3.5 Super", job: "The Investigator judges every suspect. The Verifier tries to break every fix" },
   { name: "Nemotron 3 Super", job: "Maps the model, line by line and period by period" },
-  { name: "Nemotron 3.5 Lightning", job: "Writes the report in plain language" },
+  { name: "Nemotron 3.5 Lightning", job: "Writes the report and answers your questions" },
 ];
 
 export function Engine({ scene }: { scene: Scene }) {
@@ -248,14 +261,14 @@ export function Engine({ scene }: { scene: Scene }) {
         <div style={{ position: "absolute", left: 960, top: 300, width: 1, height: 560, background: "rgba(255,255,255,0.15)", transform: `scaleY(${clamp(frame, l2.start, l2.start + 30)})`, transformOrigin: "top" }} />
       </AbsoluteFill>
       {frame >= l3.start - 8 && (
-        <AbsoluteFill style={{ justifyContent: "center", padding: "0 180px", opacity: split }}>
+        <AbsoluteFill style={{ justifyContent: "center", padding: "0 140px", opacity: split }}>
           {MODELS.map((model, index) => {
             const at = l3.start + index * Math.round(l3.frames / 3.3);
             const on = clamp(frame, at, at + 14);
             return (
-              <div key={model.name} style={{ display: "flex", alignItems: "baseline", gap: 60, padding: "34px 0", borderBottom: "1px solid rgba(255,255,255,0.14)", opacity: 0.25 + 0.75 * on, transform: `translateX(${(1 - on) * 40}px)` }}>
-                <div style={{ width: 660, fontSize: 64, fontWeight: 800, letterSpacing: "-0.04em", color: on > 0.5 ? C.bright : "#fff" }}>{model.name}</div>
-                <div style={{ fontSize: 38, color: "rgba(255,255,255,0.8)" }}>{model.job}</div>
+              <div key={model.name} style={{ display: "flex", alignItems: "center", gap: 60, padding: "34px 0", borderBottom: "1px solid rgba(255,255,255,0.14)", opacity: 0.25 + 0.75 * on, transform: `translateX(${(1 - on) * 40}px)` }}>
+                <div style={{ width: 760, flexShrink: 0, whiteSpace: "nowrap", fontSize: 60, fontWeight: 800, letterSpacing: "-0.04em", color: on > 0.5 ? C.bright : "#fff" }}>{model.name}</div>
+                <div style={{ fontSize: 34, lineHeight: 1.3, color: "rgba(255,255,255,0.8)" }}>{model.job}</div>
               </div>
             );
           })}
@@ -284,7 +297,7 @@ export function Proof({ scene }: { scene: Scene }) {
   const stats = [
     { at: L[0].start, big: (f: number) => <Count frame={f} at={L[0].start} to={98} render={(n) => `${Math.round(n)}%`} />, label: "of planted errors fixed", sub: "86% with rules alone" },
     { at: L[1].start, big: () => <>0</>, label: "false alarms on values set on purpose", sub: "rules alone: 12 of 12" },
-    { at: L[2].start, big: (f: number) => <Count frame={f} at={L[2].start} to={18} render={(n) => `${Math.round(n)}/20`} />, label: "on models it had never seen", sub: "five Damodaran valuation models" },
+    { at: L[2].start, big: (f: number) => <Count frame={f} at={L[2].start} to={18} render={(n) => `${Math.round(n)}/20`} />, label: "on workbooks it had never seen", sub: "five Damodaran valuation workbooks" },
     { at: L[3].start, big: (f: number) => <Count frame={f} at={L[3].start} to={1.4} render={(n) => `${n.toFixed(1)}¢`} />, label: "per check, about a minute", sub: "median, on Nebius Token Factory" },
   ];
   return (
@@ -332,7 +345,7 @@ export function Close({ scene }: { scene: Scene }) {
       <AbsoluteFill style={{ justifyContent: "flex-end", alignItems: "center", paddingBottom: 150 }}>
         <Fade from={l2.start + 20} to={100000}>
           <Rise at={l2.start + 20} distance={20}>
-            <div style={{ fontSize: 24, color: C.faint, letterSpacing: "0.04em" }}>Built with NVIDIA Nemotron on Nebius Token Factory · Nebius × NVIDIA Global AI Hackathon</div>
+            <div style={{ fontSize: 24, color: C.faint, letterSpacing: "0.04em" }}>Built with NVIDIA Nemotron for the Nebius × NVIDIA Global AI Hackathon. Runs on Nebius Token Factory.</div>
           </Rise>
         </Fade>
       </AbsoluteFill>

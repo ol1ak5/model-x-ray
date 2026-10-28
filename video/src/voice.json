@@ -17,14 +17,14 @@
     {
       "id": "stakes-1",
       "scene": "stakes",
-      "text": "One formula divided by the wrong number. Six billion dollars lost.",
-      "seconds": 5.55
+      "text": "One formula divided by the wrong number. $6.2 billion lost.",
+      "seconds": 6.05
     },
     {
       "id": "stakes-2",
       "scene": "stakes",
-      "text": "One missing minus sign. A loss reported as a gain.",
-      "seconds": 4.2
+      "text": "One missing minus sign. A capital loss reported as a capital gain.",
+      "seconds": 5.35
     },
     {
       "id": "stakes-3",
@@ -35,8 +35,8 @@
     {
       "id": "who-1",
       "scene": "who",
-      "text": "We built it for analysts, FP&A and corporate finance, M&A and investment banking, valuation and deal advisory, and auditors.",
-      "seconds": 10.175
+      "text": "We built it for the people who build financial models, review them, and make decisions on what they say.",
+      "seconds": 6.8
     },
     {
       "id": "who-2",
@@ -125,8 +125,8 @@
     {
       "id": "demo-8",
       "scene": "demo",
-      "text": "You decide. Approve, and it writes a corrected copy. Your original file never changes.",
-      "seconds": 6.575
+      "text": "You decide: approve, edit or reject. Approved fixes go to a corrected copy. Your original file never changes.",
+      "seconds": 8.575
     },
     {
       "id": "engine-1",
@@ -143,8 +143,8 @@
     {
       "id": "engine-3",
       "scene": "engine",
-      "text": "Nemotron maps the model, judges every suspect, tells a real error from a deliberate choice, and argues against its own fix.",
-      "seconds": 9.05
+      "text": "Nemotron maps the model, judges every suspect and tells a real error from a deliberate choice. Then a second Nemotron, the Verifier, tries to break every fix before you see it.",
+      "seconds": 12.675
     },
     {
       "id": "engine-4",
@@ -167,8 +167,8 @@
     {
       "id": "proof-3",
       "scene": "proof",
-      "text": "18 of 20 on models it had never seen.",
-      "seconds": 3.7
+      "text": "18 of 20 on workbooks it had never seen.",
+      "seconds": 3.775
     },
     {
       "id": "proof-4",
