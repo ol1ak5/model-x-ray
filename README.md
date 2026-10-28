@@ -26,11 +26,11 @@ Open the [live demo](https://model-x-ray.vercel.app) and press **Try the demo** 
 
 Every big financial decision starts in a spreadsheet. And one wrong cell is enough.
 
-> **$6,000,000,000** – JPMorgan, 2012<br>
-> A risk model that divided by a sum instead of an average understated the risk, and the "London Whale" trades lost $6 billion
+> **$6,200,000,000** – JPMorgan, 2012<br>
+> A risk model that divided by a sum instead of an average understated the risk, and the "London Whale" trades lost $6.2 billion
 
 > **$2,600,000,000** – Fidelity Magellan, 1995<br>
-> One missing minus sign turned a $1.3 billion loss into a gain, and the fund's reported figures were $2.6 billion off
+> One missing minus sign turned a $1.3 billion capital loss into a capital gain, and the fund's reported figures were $2.6 billion off
 
 A real model has thousands of formulas across dozens of tabs, and nobody has time to trace every one by hand. AI looks like the obvious reviewer, but language models are built to reason, not to calculate. They can explain a number convincingly and still get it wrong. A financial model doesn't need a plausible answer. It needs a proven one.
 
