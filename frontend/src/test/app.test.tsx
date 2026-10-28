@@ -59,7 +59,7 @@ describe("the landing page", () => {
 
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Your AI agent for financial model analysis.");
     expect(screen.getByRole("heading", { name: /Small errors, billion-dollar consequences/ })).toBeInTheDocument();
-    expect(screen.getByText("Did you know that?", { selector: ".label" })).toBeInTheDocument();
+    expect(screen.getByText("Did you know?", { selector: ".label" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Read the code on GitHub" })).toHaveAttribute("href", "https://github.com/ol1ak5/model-x-ray");
 
     await user.click((await screen.findAllByRole("button", { name: "Try the demo →" }))[0]);
