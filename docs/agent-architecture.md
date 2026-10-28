@@ -362,7 +362,7 @@ A plain rejection (without `intentional`) writes nothing: "not convinced" is not
 |---|---|---|---|
 | Investigator, Verifier | `nvidia/Nemotron-3.5-Super-VL` | 1M | $0.30 / $0.90 |
 | `locate`, mapper; benchmark set-up `super-3` | `nvidia/nemotron-3-super-120b-a12b` | 256K | $0.30 / $0.90 |
-| Report writer (`explain`) | `nvidia/Nemotron-3_5-Lightning` | 1M | $0.06 / $0.24 |
+| Report writer and answers to the reviewer's questions (`explain`, also used by `/ask`) | `nvidia/Nemotron-3_5-Lightning` | 1M | $0.06 / $0.24 |
 | Small-model comparison / benchmark set-up | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | 262K | $0.06 / $0.24 |
 | Optional: hardest verification, strongest benchmark attacker | `nvidia/Nemotron-3-Ultra-550b-a55b` | 1M | $1.00 / $3.00 |
 
