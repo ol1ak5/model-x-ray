@@ -15,3 +15,7 @@ uploads/
 enron_data/
 damodaran_data/
 .trace-work/
+
+# Internal drafts kept out of the public repo
+docs/video-script.md
+docs/progress/

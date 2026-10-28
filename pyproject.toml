@@ -4,8 +4,8 @@ version = "0.1.0"
 description = "Evidence-first Nemotron agent that debugs financial models"
 readme = "README.md"
 authors = [
-    { name = "Guillermo", email = "guillermo.martincoello@gmail.com" },
-    { name = "Olya", email = "ol2ksenova@gmail.com" }
+    { name = "Olga Aksenova" },
+    { name = "Guillermo Martín-Coello" }
 ]
 requires-python = ">=3.13.2"
 dependencies = [
