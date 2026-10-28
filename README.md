@@ -14,7 +14,7 @@ The debugger for financial models. An AI agent powered by NVIDIA Nemotron that h
 - 🏆 Devpost submission:
 - 🎬 Demo video (YouTube):
 
-`Track: Best Apps and Agents` · `Nebius x NVIDIA Global AI Hackathon 2026`
+> **Track:** Best Apps and Agents – Nebius x NVIDIA Global AI Hackathon 2026
 
 ## Try It Live
 
