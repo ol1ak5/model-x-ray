@@ -73,12 +73,12 @@ Screen recording of the live site, <https://model-x-ray.vercel.app>.
 | Landing page, cursor clicks **Try the demo**. | Here is a real one. |
 | The check page opens: *PPA Model Europe.xlsx*, its five sheets. Overlay: **10 renewable offers · 2,400 formulas**. | A European power purchase agreement model. Ten offers, two thousand four hundred formulas, and errors we planted ourselves. |
 | Progress rail, **Read** spins then turns green. | No question needed. It reads every sheet and labels every line. |
-| **Investigate** spins. Overlay: *Nemotron 3.5 Super*. | It finds the suspects and works out the cause. |
+| **Investigate** spins. Overlay: *Nemotron 3.5 Super · 3 suspects at once*. | It finds every suspect and investigates all of them at the same time. |
 | **Prove** spins. Overlay: *Tested in a copy*. Timer in the corner speeds from 0:00 to the real run time. | Then it proves the fix: it changes a copy, recalculates the whole workbook, and tries to break its own answer. |
-| **Errors detected: 1**. The row opens: *Where*, *Error*, *Solution*, *Explanation*. Zoom on the formula as it is, then the tested formula. | *[read the sentence the page shows, e.g. "Strike price is a typed number"]* The cell. The cause. The fix. The evidence. |
+| **Errors detected: 3**, the header says *3 errors detected · Waiting for your decision*. The first row opens: *Where*, *Error*, *Solution*, *Explanation*. Zoom on the formula as it is, then the tested formula. | Three errors, each with its cell, its cause, its fix and the evidence. *[read the sentence the page shows for the first one]* |
 | **Open in the sheet**: the Excel-like dialog, the error cell red, every cell the fix changes in blue. | And every number it touches, so you can see the impact before you accept it. |
 | Type in **Ask the agent**: *Could this value be deliberate?* The answer appears in green. | Not sure? Ask it. |
-| Click **Approve fix**, then download the corrected copy. Overlay: **Your original file is never touched.** | You decide. It writes a corrected copy, and your original never changes. |
+| Click **Approve fix** on each of the three; the header turns to *Review complete · 3 fixes saved to a new copy*. Download the corrected copy. Overlay: **Your original file is never touched.** | You decide, one fix at a time. It writes a corrected copy with every fix you approved, and your original never changes. |
 
 ### 7. Built on NVIDIA Nemotron (1:55 – 2:15)
 
@@ -96,7 +96,7 @@ Screen recording of the live site, <https://model-x-ray.vercel.app>.
 | A big number rolls up: **98%** · *of planted errors fixed*. | Ninety-eight percent of planted errors, fixed. |
 | **0** · *false alarms on deliberate values*. | Zero false alarms on values put there on purpose. |
 | **18 of 20** · *on models it had never seen*. | Eighteen of twenty on models it had never seen. |
-| **1.4¢ · about a minute** · *per check*. | For about one and a half cents a check. |
+| **1.4¢ · about a minute** · *per error checked*. | For about one and a half cents and a minute per error. |
 
 ### 9. Close (2:30 – 2:40)
 
@@ -112,16 +112,19 @@ Every claim above, with its source:
 | Claim | Source |
 |---|---|
 | $6B, $2.6B, $11M, $24M and the four cases | Landing page, `frontend/src/landing/Sections.tsx` |
-| PPA model: ten offers, 2,400 formulas, planted errors | README, Try It Live (2,400 formulas, three planted errors); the ten offers are in the model itself |
+| PPA model: ten offers, 2,400 formulas, three planted errors | README, Try It Live (2,400 formulas, three planted errors); the ten offers are in the model itself |
 | More than fifty Excel functions | README, What It Checks (52 functions, plus cross-sheet references, defined names and circular references) |
 | 98% fixed (82 of 84), vs 86% for rules alone | README, Results |
 | 0 false alarms on deliberate values (rules alone: 12 of 12) | README, Results |
 | 18 of 20 on held-out Damodaran models | README, Final Test on Unseen Models |
-| 1.4 cents and 65 s per check (median, model with an error) | README, Final Test on Unseen Models |
+| 1.4 cents and 65 s per error checked (median, model with an error) | README, Final Test on Unseen Models |
+| Every suspect investigated at the same time | `docs/frontend.md`, All errors at once |
+| The reviewer can ask the agent about an error or a fix | README, The Solution (the human in the loop) |
 | Roles of the three Nemotron models | README, Built on NVIDIA Nemotron and Nebius Token Factory |
-| Original never changes, fix tested in a copy | README, How It Works (`test`, `apply_fix`) |
+| Original never changes, fix tested in a copy | README, Architecture (`test`, `apply_fix`) |
 
 ## Before recording
 
-- Read the error sentence and the cell from the run you recorded, and put them into the voice line of section 6.
+- Read the error sentences and cells from the run you recorded, and put the first one into the voice line of section 6.
+- The three planted errors: a typed strike in `Calc!M51`, the strike headroom reversed in `Results!P15`, the NPV discount range shifted one year in `Results!M16`.
 - Record the run end to end once and keep it; cut it to ~45 seconds in the edit.
