@@ -1,6 +1,11 @@
+import { createContext } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { AbsoluteFill, Easing, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import { C, FONT, HEIGHT, MONO, WIDTH } from "./theme";
+
+export type Camera = "path" | "spotlight";
+
+export const CameraStyle = createContext<Camera>("path");
 
 export const ease = Easing.bezier(0.22, 1, 0.36, 1);
 

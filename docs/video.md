@@ -1,6 +1,6 @@
 # Demo video
 
-The ≤3-minute submission video (#76) is code: a [Remotion](https://www.remotion.dev) project in `video/` that renders the narration in `video/voice/lines.json` with a synthetic voice, generated music and burned-in English subtitles. Output: 1920×1080, 30 fps, about 2:45.
+The ≤3-minute submission video (#76) is code: a [Remotion](https://www.remotion.dev) project in `video/` that renders the narration in `video/voice/lines.json` with a synthetic voice, generated music and burned-in English subtitles. Output: 1920×1080, 30 fps, about 2:50.
 
 ## Pieces
 
@@ -31,5 +31,7 @@ npx remotion render Film out/model-x-ray.mp4
 `npx remotion studio` opens the editor with a timeline. After changing a line, run `generate.py`, `music.py` and `subtitles.py` again, in that order, because the timings change.
 
 To change the voice: `VOICE=am_michael uv run --script voice/generate.py`.
+
+The demo scene has two camera styles: `path` (the default, one continuous move over the review page) and `spotlight` (the page stays still and a highlight moves over it): `npx remotion render Film out/spotlight.mp4 --props='{"camera":"spotlight"}'`.
 
 Remotion is free for individuals and companies of up to three people; see its license before using it in a larger company.

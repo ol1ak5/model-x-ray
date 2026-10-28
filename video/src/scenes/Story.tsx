@@ -86,7 +86,7 @@ export function Open({ scene }: { scene: Scene }) {
 
 const CASES = [
   { amount: "$6,200,000,000", who: "JPMorgan · 2012", what: "One formula divided by the wrong number." },
-  { amount: "$2,600,000,000", who: "Fidelity Magellan · 1995", what: "A capital loss reported as a capital gain." },
+  { amount: "$1,300,000,000", who: "Fidelity Magellan · 1995", what: "A capital loss reported as a capital gain." },
 ];
 
 export function Stakes({ scene }: { scene: Scene }) {
@@ -115,7 +115,7 @@ export function Stakes({ scene }: { scene: Scene }) {
       {frame >= l3.start - 2 && (
         <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", opacity: outro }}>
           <div style={{ display: "flex", gap: 70, marginBottom: 70, fontSize: 44, fontWeight: 700, color: "rgba(255,255,255,0.4)", fontVariantNumeric: "tabular-nums" }}>
-            {["$6.2B", "$2.6B", "$24M", "$11M"].map((amount, index) => (
+            {["$6.2B", "$1.3B", "$24M", "$11M"].map((amount, index) => (
               <Rise key={amount} at={l3.start + index * 4} distance={30}>
                 <span>{amount}</span>
               </Rise>
@@ -190,7 +190,7 @@ export function Who({ scene }: { scene: Scene }) {
             );
           })}
           <AbsoluteFill style={{ justifyContent: "center", alignItems: "center" }}>
-            <div style={{ background: "rgba(255,255,255,0.86)", padding: "40px 70px", textAlign: "center" }}>
+            <div style={{ background: "radial-gradient(ellipse 50% 50% at 50% 50%, rgba(255,255,255,1) 55%, rgba(255,255,255,0) 100%)", padding: "110px 220px", textAlign: "center" }}>
               <div style={{ fontSize: 96, fontWeight: 800, letterSpacing: "-0.045em", lineHeight: 1.05 }}>
                 <Words text="Thousands of formulas." at={l3.start} every={4} />
                 <br />

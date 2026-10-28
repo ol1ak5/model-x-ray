@@ -28,7 +28,8 @@
   {
     "id": "who-1",
     "scene": "who",
-    "text": "We built it for the people who build financial models, review them, and make decisions on what they say."
+    "text": "We built it for analysts, FP&A and corporate finance, M&A and investment banking, valuation and deal advisory, and auditors.",
+    "say": "We built it for analysts, financial planning and analysis, and corporate finance, mergers and acquisitions, and investment banking, valuation and deal advisory, and auditors."
   },
   {
     "id": "who-2",
@@ -94,7 +95,7 @@
   {
     "id": "demo-6",
     "scene": "demo",
-    "text": "The cell. The cause. The fix. And the evidence behind it."
+    "text": "The cell, the cause, the fix, and the evidence behind it."
   },
   {
     "id": "demo-7",
@@ -120,8 +121,8 @@
   {
     "id": "engine-3",
     "scene": "engine",
-    "text": "Nemotron maps the model, judges every suspect and tells a real error from a deliberate choice. Then a second Nemotron, the Verifier, tries to break every fix before you see it.",
-    "say": "[Nemotron](/nˈimoʊtɹɑn/) maps the model, judges every suspect, and tells a real error from a deliberate choice. Then a second [Nemotron](/nˈimoʊtɹɑn/), the Verifier, tries to break every fix before you see it."
+    "text": "Nemotron maps the model, judges every suspect and tells a real error from a deliberate choice. Then a second agent, the Verifier, tries to break every fix before you see it.",
+    "say": "[Nemotron](/nˈimoʊtɹɑn/) maps the model, judges every suspect, and tells a real error from a deliberate choice. Then a second agent, the Verifier, tries to break every fix before you see it."
   },
   {
     "id": "engine-4",

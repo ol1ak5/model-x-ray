@@ -2,7 +2,8 @@ import { AbsoluteFill, Audio, Sequence, staticFile, useCurrentFrame } from "remo
 import { C, FONT } from "./theme";
 import { SCENES } from "./timeline";
 import type { Scene, SceneName } from "./timeline";
-import { clamp } from "./parts";
+import { CameraStyle, clamp } from "./parts";
+import type { Camera } from "./parts";
 import { Ai, Open, Stakes, Who } from "./scenes/Story";
 import { Close, Demo, Engine, Proof, Reveal } from "./scenes/Product";
 
@@ -34,8 +35,9 @@ function Caption({ text, frames, dark }: { text: string; frames: number; dark: b
   );
 }
 
-export function Film() {
+export function Film({ camera }: { camera: Camera }) {
   return (
+    <CameraStyle.Provider value={camera}>
     <AbsoluteFill style={{ background: "#000" }}>
       <Audio src={staticFile("music.wav")} volume={0.3} />
       {SCENES.map((scene) => {
@@ -57,6 +59,7 @@ export function Film() {
         )),
       )}
     </AbsoluteFill>
+    </CameraStyle.Provider>
   );
 }
 

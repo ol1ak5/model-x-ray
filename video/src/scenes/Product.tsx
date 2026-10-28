@@ -1,7 +1,8 @@
+import { useContext } from "react";
 import { AbsoluteFill, Easing, Img, interpolate, random, staticFile, useCurrentFrame } from "remotion";
 import { BAND, C, FONT, MONO } from "../theme";
 import type { Scene } from "../timeline";
-import { Brand, Fade, Logo, Rise, Wave, Words, clamp, useSpring } from "../parts";
+import { Brand, CameraStyle, Fade, Logo, Rise, Wave, Words, clamp, useSpring } from "../parts";
 
 export function Reveal({ scene }: { scene: Scene }) {
   const frame = useCurrentFrame();
@@ -74,6 +75,44 @@ function Screen({ shot, frame }: { shot: Shot; frame: number }) {
   );
 }
 
+type Spot = { t: number; x: number; y: number; w: number; h: number };
+
+function spotAt(spots: Spot[], t: number): Spot {
+  if (t <= spots[0].t) return spots[0];
+  for (let i = 1; i < spots.length; i++) {
+    const a = spots[i - 1];
+    const b = spots[i];
+    const start = b.t - 22;
+    if (t < start) return a;
+    if (t <= b.t) {
+      const p = smooth((t - start) / 22);
+      return { t, x: a.x + (b.x - a.x) * p, y: a.y + (b.y - a.y) * p, w: a.w + (b.w - a.w) * p, h: a.h + (b.h - a.h) * p };
+    }
+  }
+  return spots[spots.length - 1];
+}
+
+function Spotlight({ spots, cam, frame, end }: { spots: Spot[]; cam: Cam; frame: number; end: number }) {
+  const s = spotAt(spots, frame);
+  const on = Math.min(clamp(frame, spots[0].t - 10, spots[0].t + 8, 0, 1, smooth), clamp(frame, end - 40, end - 20, 1, 0, smooth));
+  const left = FW / 2 + (s.x - cam.x) * FW * cam.z;
+  const top = FH / 2 + (s.y - cam.y) * FH * cam.z;
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left,
+        top,
+        width: s.w * FW * cam.z,
+        height: s.h * FH * cam.z,
+        borderRadius: 14,
+        border: `2px solid rgba(18, 129, 74, ${0.9 * on})`,
+        boxShadow: `0 0 0 3000px rgba(12, 22, 16, ${0.3 * on}), 0 0 40px rgba(74, 222, 128, ${0.35 * on})`,
+      }}
+    />
+  );
+}
+
 function Note({ at, until, kicker, text }: { at: number; until: number; kicker: string; text: string }) {
   const frame = useCurrentFrame();
   const p = clamp(frame, at, at + 16);
@@ -93,6 +132,19 @@ export function Demo({ scene }: { scene: Scene }) {
   const L = scene.lines;
   const mid = (i: number, k: number) => L[i].start + Math.round(L[i].frames * k);
   const click = L[1].start - 6;
+  const style = useContext(CameraStyle);
+  const drift: Cam[] = [
+    { t: L[1].start, x: 0.5, y: 0.5, z: 1.0 },
+    { t: scene.duration, x: 0.5, y: 0.5, z: 1.07 },
+  ];
+  const spots: Spot[] = [
+    { t: L[1].start + 14, x: 0.06, y: 0.27, w: 0.26, h: 0.52 },
+    { t: mid(3, 0.6), x: 0.06, y: 0.27, w: 0.26, h: 0.52 },
+    { t: L[4].start, x: 0.255, y: 0.27, w: 0.685, h: 0.28 },
+    { t: L[5].start, x: 0.34, y: 0.415, w: 0.6, h: 0.32 },
+    { t: L[6].start, x: 0.34, y: 0.83, w: 0.6, h: 0.16 },
+    { t: mid(7, 0.3), x: 0.255, y: 0.33, w: 0.685, h: 0.34 },
+  ];
   const path: Cam[] = [
     { t: L[1].start, x: 0.5, y: 0.45, z: 1.08 },
     { t: mid(1, 0.7), x: 0.32, y: 0.6, z: 1.38 },
@@ -106,15 +158,15 @@ export function Demo({ scene }: { scene: Scene }) {
   ];
   const shots: Shot[] = [
     { src: "landing", from: 0, to: L[1].start, cams: [{ t: 0, x: 0.5, y: 0.5, z: 1 }, { t: mid(0, 0.4), x: 0.42, y: 0.42, z: 1.12 }, { t: click, x: 0.25, y: 0.5, z: 1.5 }] },
-    { src: "run-read", from: L[1].start, to: mid(1, 0.55), cams: path, dip: true },
-    { src: "run-investigate", from: mid(1, 0.55), to: L[3].start, cams: path },
-    { src: "run-prove", from: L[3].start, to: mid(3, 0.65), cams: path },
-    { src: "run-first", from: mid(3, 0.65), to: L[4].start, cams: path },
-    { src: "run-found", from: L[4].start, to: L[5].start, cams: path },
-    { src: "error-open", from: L[5].start, to: L[6].start, cams: path },
-    { src: "ask", from: L[6].start, to: L[7].start, cams: path },
-    { src: "approving", from: L[7].start, to: mid(7, 0.3), cams: path },
-    { src: "fixed", from: mid(7, 0.3), to: scene.duration + 10, cams: path },
+    { src: "run-read", from: L[1].start, to: mid(1, 0.55), cams: style === "spotlight" ? drift : path, dip: true },
+    { src: "run-investigate", from: mid(1, 0.55), to: L[3].start, cams: style === "spotlight" ? drift : path },
+    { src: "run-prove", from: L[3].start, to: mid(3, 0.65), cams: style === "spotlight" ? drift : path },
+    { src: "run-first", from: mid(3, 0.65), to: L[4].start, cams: style === "spotlight" ? drift : path },
+    { src: "run-found", from: L[4].start, to: L[5].start, cams: style === "spotlight" ? drift : path },
+    { src: "error-open", from: L[5].start, to: L[6].start, cams: style === "spotlight" ? drift : path },
+    { src: "ask", from: L[6].start, to: L[7].start, cams: style === "spotlight" ? drift : path },
+    { src: "approving", from: L[7].start, to: mid(7, 0.3), cams: style === "spotlight" ? drift : path },
+    { src: "fixed", from: mid(7, 0.3), to: scene.duration + 10, cams: style === "spotlight" ? drift : path },
   ];
   const enter = useSpring(0, 16, 60);
   const sway = Math.sin(frame / 70) * 1.5;
@@ -163,6 +215,7 @@ export function Demo({ scene }: { scene: Scene }) {
           </div>
           <div style={{ position: "relative", width: FW, height: FH, overflow: "hidden" }}>
             {shots.map((shot) => (frame >= shot.from - 10 && frame <= shot.to + 10 ? <Screen key={shot.src} shot={shot} frame={frame} /> : null))}
+            {style === "spotlight" && frame >= L[1].start && <Spotlight spots={spots} cam={camAt(drift, frame)} frame={frame} end={scene.duration} />}
             {frame < L[1].start + 4 && cursorIn > 0 && (
               <div style={{ position: "absolute", left: cx, top: cy, transform: `scale(${press})`, transformOrigin: "0 0", opacity: clamp(frame, L[1].start - 2, L[1].start + 4, 1, 0) }}>
                 <div style={{ position: "absolute", left: -40, top: -40, width: 80, height: 80, borderRadius: 40, border: `3px solid ${C.g3}`, opacity: ring > 0 && ring < 1 ? 1 - ring : 0, transform: `scale(${0.3 + ring})` }} />
@@ -295,7 +348,7 @@ export function Proof({ scene }: { scene: Scene }) {
   const frame = useCurrentFrame();
   const L = scene.lines;
   const stats = [
-    { at: L[0].start, big: (f: number) => <Count frame={f} at={L[0].start} to={98} render={(n) => `${Math.round(n)}%`} />, label: "of planted errors fixed", sub: "86% with rules alone" },
+    { at: L[0].start, big: (f: number) => <Count frame={f} at={L[0].start} to={98} render={(n) => `${Math.round(n)}%`} />, label: "of planted errors fixed correctly", sub: "86% with rules alone" },
     { at: L[1].start, big: () => <>0</>, label: "false alarms on values set on purpose", sub: "rules alone: 12 of 12" },
     { at: L[2].start, big: (f: number) => <Count frame={f} at={L[2].start} to={18} render={(n) => `${Math.round(n)}/20`} />, label: "on workbooks it had never seen", sub: "five Damodaran valuation workbooks" },
     { at: L[3].start, big: (f: number) => <Count frame={f} at={L[3].start} to={1.4} render={(n) => `${n.toFixed(1)}¢`} />, label: "per check, about a minute", sub: "median, on Nebius Token Factory" },
@@ -307,7 +360,7 @@ export function Proof({ scene }: { scene: Scene }) {
         {stats.map((stat, index) => {
           const on = clamp(frame, stat.at - 4, stat.at + 14);
           return (
-            <div key={index} style={{ flex: 1, padding: "0 34px", borderLeft: index ? `1px solid ${C.line}` : undefined, height: 420, display: "flex", flexDirection: "column", justifyContent: "center", opacity: 0.15 + 0.85 * on, transform: `translateY(${(1 - on) * 50}px)` }}>
+            <div key={index} style={{ flex: 1, padding: "0 34px", borderLeft: index ? `1px solid ${C.line}` : undefined, height: 420, display: "flex", flexDirection: "column", justifyContent: "flex-start", paddingTop: 40, boxSizing: "border-box", opacity: 0.15 + 0.85 * on, transform: `translateY(${(1 - on) * 50}px)` }}>
               <div style={{ fontSize: 124, fontWeight: 800, letterSpacing: "-0.06em", lineHeight: 1, color: on > 0.5 ? C.g3 : C.ink, fontVariantNumeric: "tabular-nums" }}>{stat.big(frame)}</div>
               <div style={{ marginTop: 26, fontSize: 34, fontWeight: 600, lineHeight: 1.2, letterSpacing: "-0.01em" }}>{stat.label}</div>
               <div style={{ marginTop: 14, fontSize: 24, color: C.muted }}>{stat.sub}</div>
