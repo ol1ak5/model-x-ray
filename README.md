@@ -79,7 +79,7 @@ flowchart TD
 | `trace` | Follows the dependency graph and measures what drives each change |
 | `diagnose` | The Investigator. Rules propose suspects and the engine tests each fix on a copy. Nemotron judges whether each one is an error or a deliberate choice, and when none is, it reviews the model's logic line by line, three times, keeping what a majority finds |
 | `test` | Applies the fix to a sandbox copy and recalculates |
-| `verify` | Engine checks, then the Verifier tries to break the fix; the engine re-checks every objection. A rejected fix goes back to `diagnose` |
+| `verify` | Engine checks, then the Verifier tries to break the fix. The engine re-checks every objection. A rejected fix goes back to `diagnose` |
 | `explain` | Writes the report in plain language, checked by code before it is shown |
 | `human_review` | Shows the cell, the cause, the evidence and the numbers before and after, and waits for you |
 | `apply_fix` | Writes the corrected copy, the original workbook never changes |
@@ -111,7 +111,7 @@ The agent's rules and prompts were developed and tuned on three sets of workbook
 
 | Set | Explanation | Errors |
 |---|---|---|
-| **Damodaran valuation models** | 26 public spreadsheets by Aswath Damodaran (NYU Stern): DCFs, cost of capital, capital budgeting; a median of 125 rows and 218 formulas | 95 planted (typed values, wrong references, flipped signs, period slips) |
+| **Damodaran valuation models** | 26 public spreadsheets by Aswath Damodaran (NYU Stern): DCFs, cost of capital, capital budgeting. A median of 125 rows and 218 formulas | 95 planted (typed values, wrong references, flipped signs, period slips) |
 | **Synthetic models** | A three-sheet model (assumptions, five-year P&L, summary) and 174 copies of it, each with one planted error, plus clean copies and copies with numbers typed on purpose and explained in a note, which must be left alone | 150 planted, 24 controls |
 | **Logic test models** | A five-year budget and a SaaS subscription forecast, in [`demo/`](demo) | 15 planted, including 7 logic errors |
 
@@ -188,9 +188,9 @@ uv run pytest -m live         # live tests on Token Factory, spends credits
 
 **What would help**
 
-- **"System is overloaded" during peak hours:** some calls ended with HTTP 529 even after retries; we now wait 5, 15 and 30 seconds before giving up. A `Retry-After` header would let clients wait exactly as long as needed.
+- **"System is overloaded" during peak hours:** some calls ended with HTTP 529 even after retries. We now wait 5, 15 and 30 seconds before giving up. A `Retry-After` header would let clients wait exactly as long as needed.
 - **Errors returned as answers:** long calls sometimes came back as HTTP 200 with `[ERROR: Agent failed ... timed out after 90 seconds]` as the reply. A non-200 status would let clients retry safely.
-- **Reasoning that never reaches the tool call:** Nemotron 3.5 Super sometimes used its whole output budget reasoning and returned no tool call. We now ask once more with `chat_template_kwargs.enable_thinking=false`, which answers at once with no reasoning tokens; a per-request way to cap reasoning, rather than switch it off, would help.
+- **Reasoning that never reaches the tool call:** Nemotron 3.5 Super sometimes used its whole output budget reasoning and returned no tool call. We now ask once more with `chat_template_kwargs.enable_thinking=false`, which answers at once with no reasoning tokens. A per-request way to cap reasoning, rather than switch it off, would help.
 - **Model metadata in the API:** prices, context windows and output limits are only in the web catalogue, not in `GET /v1/models`.
 - **New models announced in the API:** a changelog or deprecation field would help teams notice new models like Nemotron 3.5 Super.
 
