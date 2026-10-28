@@ -92,7 +92,7 @@ Every language-model call runs on **Nebius Token Factory**, through one OpenAI-c
 |---|---|
 | **Nemotron 3.5 Super** | Investigator and Verifier: judges every suspect and tries to break every fix |
 | **Nemotron 3 Super** | Mapper: labels every line and period of the workbook |
-| **Nemotron 3.5 Lightning** | Writer: turns the evidence into a plain-language report |
+| **Nemotron 3.5 Lightning** | Writer: turns the evidence into a plain-language report and answers your questions about any error or fix |
 
 Why Nemotron 3.5 Super:
 
@@ -149,7 +149,7 @@ A model with no error takes longer, up to about 4 minutes, because Nemotron revi
 
 | Stack | Used for |
 |---|---|
-| NVIDIA Nemotron 3.5 Super, 3 Super and 3.5 Lightning | Investigating, verifying, mapping the model and writing the report |
+| NVIDIA Nemotron 3.5 Super, 3 Super and 3.5 Lightning | Investigating, verifying, mapping the model, writing the report and answering your questions |
 | Nebius Token Factory | Every model call, through one OpenAI-compatible endpoint |
 | LangGraph | The agent graph, its retry loop and the pause for your decision |
 | Our own calculation engine (Python) | Parsing formulas, the dependency graph and recalculating the workbook |
