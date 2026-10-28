@@ -14,6 +14,8 @@ The debugger for financial models. An AI agent powered by NVIDIA Nemotron that h
 - 🏆 Devpost submission:
 - 🎬 Demo video (YouTube):
 
+`Track: Best Apps and Agents` · `Nebius x NVIDIA Global AI Hackathon 2026`
+
 ## Try It Live
 
 Open the [live demo](https://model-x-ray.vercel.app) and press **Try the demo** to watch the agent check a European power purchase agreement model with 2,400 formulas and three planted errors, or upload your own `.xlsx`.
@@ -43,6 +45,12 @@ Model X-Ray checks your model the way an experienced financial analyst does. **N
 <p align="center"><img src="docs/screenshot-review.png" alt="The three planted errors in the PPA model, found at once and waiting for approval" width="800"></p>
 
 Designed with M&A and deal teams, investment bankers, corporate finance and FP&A analysts in mind, it works for anyone who needs to trust the numbers in a spreadsheet.
+
+## What It Checks
+
+- **Seven error types:** typed values, wrong references, flipped signs, incomplete ranges, wrong periods, logic errors (a formula that contradicts its own label) and unusual inputs.
+- **52 Excel functions,** from `SUM` and `XLOOKUP` to `NPV`, `IRR` and `OFFSET`, plus cross-sheet references, defined names and circular references. Full list: [`docs/spreadsheet-core.md`](docs/spreadsheet-core.md).
+- **Links to other workbooks, Data Tables and VBA** are not supported yet. When a check needs one of them, the agent stops and tells you which cell and which formula it could not calculate, instead of guessing a number.
 
 ## Architecture
 
@@ -76,46 +84,6 @@ flowchart TD
 | `human_review` | Shows the cell, the cause, the evidence and the numbers before and after, and waits for you |
 | `apply_fix` | Writes the corrected copy, the original workbook never changes |
 
-## Results
-
-Every test model carries errors we planted ourselves, so each answer is scored against a known correct value. Measured on 21 and 22 Oct 2026 on the synthetic models below (12 variants per error type plus 24 controls). Method and scoring rules: [`docs/evaluation.md`](docs/evaluation.md).
-
-| | Rules only | Rules + Nemotron 3.5 Super |
-|---|---|---|
-| Typed number in place of a formula | 12 of 12 | **12 of 12** |
-| Formula pointing to the wrong cell | 8 of 12 | **11 of 12** |
-| SUM over the wrong range | 10 of 12 | **12 of 12** |
-| Flipped sign | 11 of 12 | **12 of 12** |
-| Formula pointing to the wrong period | 8 of 12 | **12 of 12** |
-| Blended error (the symptom is not the cause) | 11 of 12 | **11 of 12** |
-| Formula that contradicts its own label | 12 of 12 | **12 of 12** |
-| **Planted errors fixed** | 72 of 84 (86%) | **82 of 84 (98%)** |
-| False alarms on values set on purpose | 12 of 12 ❌ | **0 of 12** ✅ |
-| False alarms on clean models | 0 of 12 ✅ | **0 of 12** ✅ |
-
-## The Models We Built It On
-
-Model X-Ray was developed and tuned on three sets of workbooks:
-
-| Set | Explanation | Errors |
-|---|---|---|
-| **Damodaran valuation models** | 26 public spreadsheets by Aswath Damodaran (NYU Stern): DCFs, cost of capital, capital budgeting; a median of 125 rows and 218 formulas | 95 planted (typed values, wrong references, flipped signs, period slips) |
-| **Synthetic models** | A three-sheet model (assumptions, five-year P&L, summary) and 174 copies of it, each with one planted error, plus clean copies and copies with numbers typed on purpose and explained in a note, which must be left alone | 150 planted, 24 controls |
-| **Logic test models** | A five-year budget and a SaaS subscription forecast, in [`demo/`](demo) | 15 planted, including 7 logic errors |
-
-## Final Test on Unseen Models
-
-Five of the Damodaran models were kept aside from the start and never used to tune the agent. They were used only for the final score:
-
-| | Rules + Nemotron 3.5 Super |
-|---|---|
-| Planted errors found and fixed | **18 of 20 (90%)** |
-| Planted errors the agent pointed at | **20 of 20** |
-| False alarms on the clean originals | **0 of 5** ✅ |
-| Cost and time per check (median, model with an error) | **1.4 cents, 65 seconds** |
-
-A model with no error takes longer, up to about 4 minutes, because Nemotron reviews every line before calling it clean.
-
 ## Built on NVIDIA Nemotron and Nebius Token Factory
 
 Every language-model call runs on **Nebius Token Factory**, through one OpenAI-compatible endpoint and one key. Each step uses the Nemotron model that fits its job:
@@ -135,11 +103,47 @@ Why Nemotron 3.5 Super:
 | Unseen SaaS model, errors fixed (ours) | 0 of 5 | **4 of 5** ✅ |
 | Price per 1M tokens (in / out) | $0.30 / $0.90 | $0.30 / $0.90 |
 
-## What It Checks
+## How We Tested It
 
-- **Seven error types:** typed values, wrong references, flipped signs, incomplete ranges, wrong periods, logic errors (a formula that contradicts its own label) and unusual inputs.
-- **52 Excel functions,** from `SUM` and `XLOOKUP` to `NPV`, `IRR` and `OFFSET`, plus cross-sheet references, defined names and circular references. Full list: [`docs/spreadsheet-core.md`](docs/spreadsheet-core.md).
-- **Links to other workbooks, Data Tables and VBA** are not supported yet. When a check needs one of them, the agent stops and tells you which cell and which formula it could not calculate, instead of guessing a number.
+### The Workbooks We Tuned It On
+
+The agent's rules and prompts were developed and tuned on three sets of workbooks:
+
+| Set | Explanation | Errors |
+|---|---|---|
+| **Damodaran valuation models** | 26 public spreadsheets by Aswath Damodaran (NYU Stern): DCFs, cost of capital, capital budgeting; a median of 125 rows and 218 formulas | 95 planted (typed values, wrong references, flipped signs, period slips) |
+| **Synthetic models** | A three-sheet model (assumptions, five-year P&L, summary) and 174 copies of it, each with one planted error, plus clean copies and copies with numbers typed on purpose and explained in a note, which must be left alone | 150 planted, 24 controls |
+| **Logic test models** | A five-year budget and a SaaS subscription forecast, in [`demo/`](demo) | 15 planted, including 7 logic errors |
+
+### Results
+
+Every test model carries errors we planted ourselves, so each answer is scored against a known correct value. Measured on 21 and 22 Oct 2026 on the synthetic workbooks above (12 variants per error type plus 24 controls). Method and scoring rules: [`docs/evaluation.md`](docs/evaluation.md).
+
+| | Rules only | Rules + Nemotron 3.5 Super |
+|---|---|---|
+| Typed number in place of a formula | 12 of 12 | **12 of 12** |
+| Formula pointing to the wrong cell | 8 of 12 | **11 of 12** |
+| SUM over the wrong range | 10 of 12 | **12 of 12** |
+| Flipped sign | 11 of 12 | **12 of 12** |
+| Formula pointing to the wrong period | 8 of 12 | **12 of 12** |
+| Blended error (the symptom is not the cause) | 11 of 12 | **11 of 12** |
+| Formula that contradicts its own label | 12 of 12 | **12 of 12** |
+| **Planted errors fixed** | 72 of 84 (86%) | **82 of 84 (98%)** |
+| False alarms on values set on purpose | 12 of 12 ❌ | **0 of 12** ✅ |
+| False alarms on clean models | 0 of 12 ✅ | **0 of 12** ✅ |
+
+### Final Test on Unseen Workbooks
+
+Five of the Damodaran models were kept aside from the start and never used to tune the agent. They were used only for the final score:
+
+| | Rules + Nemotron 3.5 Super |
+|---|---|
+| Planted errors found and fixed | **18 of 20 (90%)** |
+| Planted errors the agent pointed at | **20 of 20** |
+| False alarms on the clean originals | **0 of 5** ✅ |
+| Cost and time per check (median, model with an error) | **1.4 cents, 65 seconds** |
+
+A model with no error takes longer, up to about 4 minutes, because Nemotron reviews every line before calling it clean.
 
 ## Tech Stack
 
@@ -193,3 +197,5 @@ uv run pytest -m live         # live tests on Token Factory, spends credits
 ## License
 
 Copyright © 2026 Olga Aksenova and Guillermo Martín-Coello. Licensed under the [Apache License 2.0](LICENSE).
+
+*Built for the Nebius x NVIDIA Global AI Hackathon 2026*
