@@ -18,7 +18,7 @@ The debugger for financial models. An AI agent powered by NVIDIA Nemotron that h
 
 Open the [live demo](https://model-x-ray.vercel.app) and press **Try the demo** to watch the agent check a European power purchase agreement model with 2,400 formulas and three planted errors, or upload your own `.xlsx`.
 
-![The opening screen](docs/screenshot-start.png)
+<p align="center"><img src="docs/screenshot-start.png" alt="The opening screen" width="800"></p>
 
 ## The Problem
 
@@ -38,10 +38,13 @@ Model X-Ray checks your model the way an experienced financial analyst does. **N
 
 - **NVIDIA Nemotron** reads the model, judges every suspect cell, tells a real error from a deliberate choice, and argues against its own fix.
 - **A calculation engine** maps every formula and recalculates the whole workbook, so no number in the answer is guessed by AI.
+- **You, the human in the loop,** approve, edit or reject every fix before anything changes in your file, and can ask the agent about any error or fix you are unsure of.
+
+<p align="center"><img src="docs/screenshot-review.png" alt="The three planted errors in the PPA model, found at once and waiting for approval" width="800"></p>
 
 Designed with M&A and deal teams, investment bankers, corporate finance and FP&A analysts in mind, it works for anyone who needs to trust the numbers in a spreadsheet.
 
-## How It Works
+## Architecture
 
 ```mermaid
 flowchart TD
@@ -138,11 +141,26 @@ Why Nemotron 3.5 Super:
 - **52 Excel functions,** from `SUM` and `XLOOKUP` to `NPV`, `IRR` and `OFFSET`, plus cross-sheet references, defined names and circular references. Full list: [`docs/spreadsheet-core.md`](docs/spreadsheet-core.md).
 - **Links to other workbooks, Data Tables and VBA** are not supported yet. When a check needs one of them, the agent stops and tells you which cell and which formula it could not calculate, instead of guessing a number.
 
+## Tech Stack
+
+| Stack | Used for |
+|---|---|
+| NVIDIA Nemotron 3.5 Super, 3 Super and 3.5 Lightning | Investigating, verifying, mapping the model and writing the report |
+| Nebius Token Factory | Every model call, through one OpenAI-compatible endpoint |
+| LangGraph | The agent graph, its retry loop and the pause for your decision |
+| Our own calculation engine (Python) | Parsing formulas, the dependency graph and recalculating the workbook |
+| openpyxl | Reading the `.xlsx` and writing the corrected copy |
+| FastAPI | The API and the live progress stream |
+| React, TypeScript and Vite | The web app |
+| Vercel | Hosting the web app and the API on one address |
+| uv, pytest and Vitest | Packaging and tests |
+
 ## Quick Start
 
 You need Python 3.13 with [uv](https://docs.astral.sh/uv/), Node.js (or bun) and a Nebius Token Factory key.
 
 ```bash
+git clone https://github.com/ol1ak5/model-x-ray.git && cd model-x-ray
 uv sync                       # installs the Python package
 cp .env.example .env          # then set NEBIUS_API_KEY to your Token Factory key
 scripts/dev.sh                # starts the API and the web app together
