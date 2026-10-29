@@ -62,14 +62,7 @@ We built and tuned the agent on 217 workbooks: 26 public valuation models by Asw
 | False alarms on deliberate values | 12 of 12 ❌ | **0 of 12** ✅ |
 | False alarms on clean models | 0 of 12 ✅ | **0 of 12** ✅ |
 
-Five Damodaran models were kept aside and never used for tuning:
-
-| Final test on unseen models | Rules + Nemotron 3.5 Super |
-|---|---|
-| Planted errors fixed | **18 of 20 (90%)** |
-| Planted errors the agent pointed at | **20 of 20** |
-| False alarms on the five clean originals | **0 of 5** ✅ |
-| Time and cost per check (median, model with an error) | **65 seconds, 1.4 cents** |
+On five Damodaran models kept aside and never used for tuning, it fixed 18 of 20 planted errors (90%), pointed at 20 of 20, and raised no false alarm on the five clean originals. A check on a model with an error takes a median of 65 seconds and 1.4 cents.
 
 ## Built on NVIDIA Nemotron and Nebius Token Factory
 
