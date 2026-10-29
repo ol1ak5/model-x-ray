@@ -85,6 +85,8 @@ describe("the landing page", () => {
 
 describe("a model check", () => {
   test("follows the stream, lists the error with its tested fix, and hands over the corrected file after approval", async () => {
+    const made: Blob[] = [];
+    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: (blob: Blob) => (made.push(blob), "blob:corrected-copy"), revokeObjectURL: () => undefined }));
     const api = fakeApi(
       [...steps(...STEPS.map(([name]) => name)), ["view", { ...REVIEW, sheet: SHEET, report: `${REVIEW.report} G5 uses \`=G4*Assumptions!$C$5\` instead of a subtraction; the other years subtract it..` }]],
       [[...steps("human_review", "apply_fix"), ["view", { ...APPROVED, sheet: SHEET, corrected_file: CORRECTED }]]],
@@ -128,7 +130,10 @@ describe("a model check", () => {
     expect(screen.getByText("Progress: 5 of 5")).toBeInTheDocument();
     const download = screen.getByRole("link", { name: "Download My model (corrected).xlsx" });
     expect(download).toHaveAttribute("download", CORRECTED.name);
-    expect(download.getAttribute("href")).toBe(`data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${CORRECTED.base64}`);
+    expect(download.getAttribute("href")).toBe("blob:corrected-copy");
+    const saved = made.at(-1) as Blob;
+    expect(saved.type).toBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    expect(btoa(String.fromCharCode(...new Uint8Array(await saved.arrayBuffer())))).toBe(CORRECTED.base64);
     expect(within(errors).queryByRole("button", { name: "Approve fix" })).toBeNull();
   });
 
