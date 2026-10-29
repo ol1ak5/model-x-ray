@@ -22,35 +22,15 @@ Open the [live demo](https://model-x-ray.vercel.app) and press **Try the demo** 
 
 <p align="center"><img src="docs/screenshot-start.png" alt="The opening screen" width="800"></p>
 
-## The Problem
+## The Agent
 
-Every big financial decision starts in a spreadsheet. And one wrong cell is enough.
+It finds the error, tests the fix on a copy and waits for your approval.
 
-> **$6,200,000,000** – JPMorgan, 2012<br>
-> A risk model that divided by a sum instead of an average understated the risk, and the "London Whale" trades lost $6.2 billion
-
-> **$1,300,000,000** – Fidelity Magellan, 1995<br>
-> A missing minus sign turned a $1.3 billion capital loss into a capital gain
-
-A real model has thousands of formulas across dozens of tabs, and nobody has time to trace every one by hand. AI looks like the obvious reviewer, but language models are built to reason, not to calculate. They can explain a number convincingly and still get it wrong. A financial model doesn't need a plausible answer. It needs a proven one.
-
-## The Solution
-
-Model X-Ray checks your model the way an experienced financial analyst does. **Nemotron reasons. The engine calculates.**
-
-- **NVIDIA Nemotron** reads the model, judges every suspect cell, tells a real error from a deliberate choice, and argues against its own fix.
-- **A calculation engine** maps every formula and recalculates the whole workbook, so no number in the answer is guessed by AI.
-- **You, the human in the loop,** approve, edit or reject every fix before anything changes in your file, and can ask the agent about any error or fix you are unsure of.
+- **7 error types:** typed values, wrong references, flipped signs, incomplete ranges, wrong periods, logic errors and unusual inputs.
+- **52 Excel functions:** `SUM`, `SUMIF`, `XLOOKUP`, `NPV`, `IRR`, plus cross-sheet references, defined names and circular references ([full list](docs/spreadsheet-core.md)).
+- **Not supported yet:** links to other workbooks, Data Tables and VBA.
 
 <p align="center"><img src="docs/screenshot-review.png" alt="The three planted errors in the PPA model, found at once and waiting for approval" width="800"></p>
-
-Designed with M&A and deal teams, investment bankers, corporate finance and FP&A analysts in mind, it works for anyone who needs to trust the numbers in a spreadsheet.
-
-## What It Checks
-
-- **Seven error types:** typed values, wrong references, flipped signs, incomplete ranges, wrong periods, logic errors (a formula that contradicts its own label) and unusual inputs.
-- **52 Excel functions,** from `SUM` and `XLOOKUP` to `NPV`, `IRR` and `OFFSET`, plus cross-sheet references, defined names and circular references. Full list: [`docs/spreadsheet-core.md`](docs/spreadsheet-core.md).
-- **Links to other workbooks, Data Tables and VBA** are not supported yet. When a check needs one of them, the agent stops and tells you which cell and which formula it could not calculate, instead of guessing a number.
 
 ## Architecture
 
@@ -71,22 +51,8 @@ flowchart TD
     human_review -. "reject" .-> __end__([End])
     apply_fix --> __end__
 ```
-| Step | What it does |
-|---|---|
-| `load_sheet` | Opens the workbook and reads every formula |
-| `map_model` | Labels every line and period (revenue, cost, ratio) |
-| `locate` | Picks the cell to investigate, checks the whole model when there is no question |
-| `trace` | Follows the dependency graph and measures what drives each change |
-| `diagnose` | The Investigator. Rules propose suspects and the engine tests each fix on a copy. Nemotron judges whether each one is an error or a deliberate choice, and when none is, it reviews the model's logic line by line, three times, keeping what a majority finds |
-| `test` | Applies the fix to a sandbox copy and recalculates |
-| `verify` | Engine checks, then the Verifier tries to break the fix. The engine re-checks every objection. A rejected fix goes back to `diagnose` |
-| `explain` | Writes the report in plain language, checked by code before it is shown |
-| `human_review` | Shows the cell, the cause, the evidence and the numbers before and after, and waits for you |
-| `apply_fix` | Writes the corrected copy, the original workbook never changes |
 
 ## Built on NVIDIA Nemotron and Nebius Token Factory
-
-Every language-model call runs on **Nebius Token Factory**, through one OpenAI-compatible endpoint and one key. Each step uses the Nemotron model that fits its job:
 
 | Model | Its job |
 |---|---|
@@ -94,30 +60,9 @@ Every language-model call runs on **Nebius Token Factory**, through one OpenAI-c
 | **Nemotron 3 Super** | Mapper: labels every line and period of the workbook |
 | **Nemotron 3.5 Lightning** | Writer: turns the evidence into a plain-language report and answers your questions about any error or fix |
 
-Why Nemotron 3.5 Super:
-
-| | Nemotron 3 Super | Nemotron 3.5 Super |
-|---|---|---|
-| GPQA Diamond, expert reasoning (NVIDIA) | 79.2 | **89.5** ✅ |
-| τ²-bench airline, tool use (NVIDIA) | 56.3 | **76.5** ✅ |
-| Unseen SaaS model, errors fixed (ours) | 0 of 5 | **4 of 5** ✅ |
-| Price per 1M tokens (in / out) | $0.30 / $0.90 | $0.30 / $0.90 |
-
 ## How We Tested It
 
-### The Workbooks We Tuned It On
-
-The agent's rules and prompts were developed and tuned on three sets of workbooks:
-
-| Set | Explanation | Errors |
-|---|---|---|
-| **Damodaran valuation models** | 26 public spreadsheets by Aswath Damodaran (NYU Stern): DCFs, cost of capital, capital budgeting. A median of 125 rows and 218 formulas | 95 planted (typed values, wrong references, flipped signs, period slips) |
-| **Synthetic models** | A three-sheet model (assumptions, five-year P&L, summary) and 174 copies of it, each with one planted error, plus clean copies and copies with numbers typed on purpose and explained in a note, which must be left alone | 150 planted, 24 controls |
-| **Logic test models** | A five-year budget and a SaaS subscription forecast, in [`demo/`](demo) | 15 planted, including 7 logic errors |
-
-### Results
-
-Every test model carries errors we planted ourselves, so each answer is scored against a known correct value. Measured on 21 and 22 Oct 2026 on the synthetic workbooks above (12 variants per error type plus 24 controls). Method and scoring rules: [`docs/evaluation.md`](docs/evaluation.md).
+We built and tuned it on 217 financial models (26 Damodaran valuation models, 174 synthetic models and 17 logic test models in [`demo/`](demo)). Results on the synthetic set ([method](docs/evaluation.md)):
 
 | | Rules only | Rules + Nemotron 3.5 Super |
 |---|---|---|
@@ -132,9 +77,9 @@ Every test model carries errors we planted ourselves, so each answer is scored a
 | False alarms on values set on purpose | 12 of 12 ❌ | **0 of 12** ✅ |
 | False alarms on clean models | 0 of 12 ✅ | **0 of 12** ✅ |
 
-### Final Test on Unseen Workbooks
+## Final Test on Five Unseen Damodaran Models
 
-Five of the Damodaran models were kept aside from the start and never used to tune the agent. They were used only for the final score:
+None of them was used to tune the agent.
 
 | | Rules + Nemotron 3.5 Super |
 |---|---|
@@ -143,21 +88,15 @@ Five of the Damodaran models were kept aside from the start and never used to tu
 | False alarms on the clean originals | **0 of 5** ✅ |
 | Cost and time per check (median, model with an error) | **1.4 cents, 65 seconds** |
 
-A model with no error takes longer, up to about 4 minutes, because Nemotron reviews every line before calling it clean.
+## What Token Factory Accelerated
 
-## Tech Stack
-
-| Stack | Used for |
-|---|---|
-| NVIDIA Nemotron 3.5 Super, 3 Super and 3.5 Lightning | Investigating, verifying, mapping the model, writing the report and answering your questions |
-| Nebius Token Factory | Every model call, through one OpenAI-compatible endpoint |
-| LangGraph | The agent graph, its retry loop and the pause for your decision |
-| Our own calculation engine (Python) | Parsing formulas, the dependency graph and recalculating the workbook |
-| openpyxl | Reading the `.xlsx` and writing the corrected copy |
-| FastAPI | The API and the live progress stream |
-| React, TypeScript and Vite | The web app |
-| Vercel | Hosting the web app and the API on one address |
-| uv, pytest and Vitest | Packaging and tests |
+- **One endpoint, every model.** One OpenAI-compatible API and one key serve all three Nemotron models.
+- **The right model for each step.** 3.5 Super reasons, 3 Super maps, 3.5 Lightning writes.
+- **Upgrades in one line.** Moving to Nemotron 3.5 Super was a config change. Fixed errors on an unseen SaaS model went from 0 of 5 to 4 of 5.
+- **No new price.** 3.5 Super costs the same as 3 Super: $0.30 / $0.90 per million tokens.
+- **Our stack worked as is.** LangGraph and LangChain's OpenAI client connected with no adapter.
+- **Cheap enough for a public demo.** About 1.4 cents per error checked.
+- **Fast enough to run live.** About a minute per error, with every suspect checked at the same time.
 
 ## Quick Start
 
@@ -176,23 +115,6 @@ Open <http://localhost:5173>, press **Try the demo**, or upload your own `.xlsx`
 uv run pytest                 # offline tests, no credits spent
 uv run pytest -m live         # live tests on Token Factory, spends credits
 ```
-
-## Feedback on Token Factory and the NVIDIA models
-
-**What worked well**
-
-- One OpenAI-compatible endpoint and one key gave us every Nemotron model we needed, so each step of the agent uses the model that fits it.
-- Switching the reasoning steps from Nemotron 3 Super to 3.5 Super was a one-line change: fixed errors on an unseen model went from 0 of 5 to 4 of 5, at the same price.
-- With Nemotron, the agent fixed 98% of planted errors against 86% for rules alone, with no false alarm on deliberate values (rules alone broke 12 of 12).
-- A check of a model with an error costs about 1.4 cents and takes about a minute (medians on models the agent never saw).
-
-**What would help**
-
-- **"System is overloaded" during peak hours:** some calls ended with HTTP 529 even after retries. We now wait 5, 15 and 30 seconds before giving up. A `Retry-After` header would let clients wait exactly as long as needed.
-- **Errors returned as answers:** long calls sometimes came back as HTTP 200 with `[ERROR: Agent failed ... timed out after 90 seconds]` as the reply. A non-200 status would let clients retry safely.
-- **Reasoning that never reaches the tool call:** Nemotron 3.5 Super sometimes used its whole output budget reasoning and returned no tool call. We now ask once more with `chat_template_kwargs.enable_thinking=false`, which answers at once with no reasoning tokens. A per-request way to cap reasoning, rather than switch it off, would help.
-- **Model metadata in the API:** prices, context windows and output limits are only in the web catalogue, not in `GET /v1/models`.
-- **New models announced in the API:** a changelog or deprecation field would help teams notice new models like Nemotron 3.5 Super.
 
 ## License
 
