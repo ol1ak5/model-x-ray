@@ -24,51 +24,13 @@ Open the [live demo](https://model-x-ray.vercel.app) and press **Try the demo** 
 
 ## The Agent
 
-It finds the error, tests the fix on a copy and waits for your approval.
+Model X-Ray finds the errors in your Excel model, tests each fix on a copy and waits for your approval.
 
 - **7 error types:** typed values, wrong references, flipped signs, incomplete ranges, wrong periods, logic errors and unusual inputs.
 - **52 Excel functions:** `SUM`, `SUMIF`, `XLOOKUP`, `NPV`, `IRR`, plus cross-sheet references, defined names and circular references ([full list](docs/spreadsheet-core.md)).
 - **Not supported yet:** links to other workbooks, Data Tables and VBA.
 
-## Architecture
-
-```mermaid
-flowchart TD
-    __start__([Excel workbook]) --> load_sheet["load_sheet<br/>engine"]
-    load_sheet --> map_model["map_model<br/>Nemotron 3 Super"]
-    map_model --> locate["locate<br/>code, Nemotron 3 Super if needed"]
-    locate --> trace["trace<br/>engine"]
-    trace --> diagnose["diagnose · Investigator<br/>Nemotron 3.5 Super"]
-    diagnose --> test["test<br/>engine, sandbox copy"]
-    test --> verify["verify · Verifier<br/>engine checks + Nemotron 3.5 Super"]
-    verify -. "rejected, retry" .-> diagnose
-    verify -. "confirmed" .-> explain["explain<br/>Nemotron 3.5 Lightning"]
-    explain --> human_review{"human_review<br/>you"}
-    human_review -. "edit the fix" .-> test
-    human_review -. "approve" .-> apply_fix["apply_fix<br/>engine, corrected copy"]
-    human_review -. "reject" .-> __end__([End])
-    apply_fix --> __end__
-```
-
-## Quick Start
-
-You need Python 3.13 with [uv](https://docs.astral.sh/uv/), Node.js (or bun) and a Nebius Token Factory key.
-
-```bash
-git clone https://github.com/ol1ak5/model-x-ray.git && cd model-x-ray
-uv sync                       # installs the Python package
-cp .env.example .env          # then set NEBIUS_API_KEY to your Token Factory key
-scripts/dev.sh                # starts the API and the web app together
-```
-
-Open <http://localhost:5173>, press **Try the demo**, or upload your own `.xlsx`. The API docs are on <http://localhost:8000/docs>.
-
-```bash
-uv run pytest                 # offline tests, no credits spent
-uv run pytest -m live         # live tests on Token Factory, spends credits
-```
-
-## How We Tested It
+## How We Tested The Agent
 
 We built and tuned it on 217 financial models (26 Damodaran valuation models, 174 synthetic models and 17 logic test models in [`demo/`](demo)). Results on the synthetic set ([method](docs/evaluation.md)):
 
@@ -96,6 +58,26 @@ We ran the final test on five Damodaran models that were never used to tune the 
 | False alarms on the clean originals | **0 of 5** ✅ |
 | Cost and time per check (median, model with an error) | **1.4 cents, 65 seconds** |
 
+## Architecture
+
+```mermaid
+flowchart TD
+    __start__([Excel workbook]) --> load_sheet["load_sheet<br/>engine"]
+    load_sheet --> map_model["map_model<br/>Nemotron 3 Super"]
+    map_model --> locate["locate<br/>code, Nemotron 3 Super if needed"]
+    locate --> trace["trace<br/>engine"]
+    trace --> diagnose["diagnose · Investigator<br/>Nemotron 3.5 Super"]
+    diagnose --> test["test<br/>engine, sandbox copy"]
+    test --> verify["verify · Verifier<br/>engine checks + Nemotron 3.5 Super"]
+    verify -. "rejected, retry" .-> diagnose
+    verify -. "confirmed" .-> explain["explain<br/>Nemotron 3.5 Lightning"]
+    explain --> human_review{"human_review<br/>you"}
+    human_review -. "edit the fix" .-> test
+    human_review -. "approve" .-> apply_fix["apply_fix<br/>engine, corrected copy"]
+    human_review -. "reject" .-> __end__([End])
+    apply_fix --> __end__
+```
+
 ## Built on NVIDIA Nemotron and Nebius Token Factory
 
 | Model | Its job |
@@ -113,6 +95,24 @@ We ran the final test on five Damodaran models that were never used to tune the 
 - **Our stack worked as is.** LangGraph and LangChain's OpenAI client connected with no adapter.
 - **Cheap enough for a public demo.** About 1.4 cents per error checked.
 - **Fast enough to run live.** About a minute per error, with every suspect checked at the same time.
+
+## Quick Start
+
+You need Python 3.13 with [uv](https://docs.astral.sh/uv/), Node.js (or bun) and a Nebius Token Factory key.
+
+```bash
+git clone https://github.com/ol1ak5/model-x-ray.git && cd model-x-ray
+uv sync                       # installs the Python package
+cp .env.example .env          # then set NEBIUS_API_KEY to your Token Factory key
+scripts/dev.sh                # starts the API and the web app together
+```
+
+Open <http://localhost:5173>, press **Try the demo**, or upload your own `.xlsx`. The API docs are on <http://localhost:8000/docs>.
+
+```bash
+uv run pytest                 # offline tests, no credits spent
+uv run pytest -m live         # live tests on Token Factory, spends credits
+```
 
 ## License
 
