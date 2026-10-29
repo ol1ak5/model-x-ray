@@ -215,6 +215,11 @@ export default function CheckPage({
   const fixed = findings.filter((finding) => finding.status === "fixed").length;
   const done = phases.filter((phase) => phase.state === "done").length;
   const load = useCallback(() => loadWorkbook(), [loadWorkbook]);
+  const complete = settled && !running;
+
+  useEffect(() => {
+    if (complete) setOpen(new Set());
+  }, [complete]);
 
   function toggle(cell: string) {
     setOpen((current) => {

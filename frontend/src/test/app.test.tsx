@@ -123,8 +123,10 @@ describe("a model check", () => {
       url: `http://localhost:8000/investigations/${REVIEW.id}/resume/stream`,
       body: { action: "approve", state: { id: REVIEW.id, status: "needs_review" }, file: "My model.xlsx" },
     });
-    expect(await within(errors).findByText("✓ Fix accepted")).toBeInTheDocument();
-    expect(within(errors).getByText("Fixed")).toBeInTheDocument();
+    expect(await within(errors).findByText("Fixed")).toBeInTheDocument();
+    expect(within(errors).queryByText("✓ Fix accepted")).toBeNull();
+    await user.click(within(errors).getByRole("button", { name: /COGS 2025A has the wrong sign/ }));
+    expect(within(errors).getByText("✓ Fix accepted")).toBeInTheDocument();
     expect(within(errors).getByText("Fixed with")).toBeInTheDocument();
     expect(screen.getByText("Review complete", { selector: ".state" })).toBeInTheDocument();
     expect(screen.getByText("Progress: 5 of 5")).toBeInTheDocument();
