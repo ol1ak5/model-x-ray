@@ -7,13 +7,15 @@ The debugger for financial models. An AI agent powered by NVIDIA Nemotron that f
 - **Demo video (YouTube):**
 - **Documentation:** [docs/](docs/), [API reference](docs/api.md), [Agent architecture](docs/agent-architecture.md)
 
+> **Track:** Best Apps and Agents – Nebius x NVIDIA Global AI Hackathon 2026
+
 <p align="center"><img src="docs/screenshot-start.png" alt="Model X-Ray: the opening screen" width="800"></p>
 
-## Try it
+## Try It
 
 Open the [live demo](https://model-x-ray.vercel.app) and press **Try the demo**. It checks a European power purchase agreement model with 2,400 formulas and three planted errors, and stops for your approval before it writes anything. You can also upload your own `.xlsx`, up to 4.5 MB.
 
-## Run it locally
+## Run It Locally
 
 You need Python 3.13 with [uv](https://docs.astral.sh/uv/), Node 20.19+ or [bun](https://bun.sh), and a Nebius Token Factory key.
 
@@ -24,7 +26,7 @@ uv sync
 cp .env.example .env
 ```
 
-In `.env`, set `NEBIUS_API_KEY`. The models folder already points at `demo_models`, the two workbooks that ship with the repository; point `MODEL_X_RAY_MODELS_DIR` somewhere else to check your own files. Then start both servers:
+In `.env`, set `NEBIUS_API_KEY`. The models folder already points at `demo_models`, the two workbooks that ship with the repository. Point `MODEL_X_RAY_MODELS_DIR` somewhere else to check your own files. Then start both servers:
 
 ```bash
 scripts/dev.sh
@@ -32,7 +34,7 @@ scripts/dev.sh
 
 Open <http://localhost:5173> and press **Try the demo**. The API reference is on <http://localhost:8000/docs>. The rest of `.env.example` is optional: model overrides, file paths and cleanup, CORS, the public demo limits and LangSmith tracing. `GOOGLE_APPLICATION_CREDENTIALS` belongs to the Google Sheets sandbox, which no server path uses yet.
 
-## Use it from the API
+## Use It from the API
 
 The web app is one client of a typed HTTP API. `POST /investigations` runs a check and returns the whole run, paused for your approval. `POST /investigations/{id}/resume` approves, edits or rejects the fix.
 
@@ -46,13 +48,15 @@ curl -s -X POST localhost:8000/investigations \
 
 Every route and payload is in [`docs/api.md`](docs/api.md). Drop the `jq` part to see the whole run.
 
-## What it does
+## What It Does
+
+Model X-Ray finds the errors in your Excel model, tests each fix on a copy and waits for your approval.
 
 - **Seven error types:** typed values, wrong references, flipped signs, incomplete ranges, wrong periods, logic errors (a formula that contradicts its own label) and unusual inputs.
 - **52 Excel functions**, cross-sheet references, defined names and circular references ([full list](docs/spreadsheet-core.md)).
 - **Not supported yet:** links to other workbooks, Data Tables and VBA. When a check needs one of them, the agent names the cell and the formula and stops instead of guessing.
 
-## Why it matters
+## Why It Matters
 
 A wrong cell moves real money and stays invisible. In 2012 a JPMorgan risk model divided by a sum instead of an average, and the "London Whale" trades lost $6.2 billion. In 1995 a missing minus sign turned Fidelity Magellan's $1.3 billion capital loss into a gain.
 
@@ -61,20 +65,26 @@ A real model has thousands of formulas across dozens of tabs. AI looks like the 
 ## Architecture
 
 ```mermaid
-flowchart LR
-    A([Excel workbook]) --> B["Understand<br/>sheets, lines, periods"]
-    B --> C["Diagnose<br/>a cause and a candidate fix"]
-    C --> D["Test and verify<br/>recalculate a sandbox copy"]
-    D -. "rejected, try again" .-> C
-    D --> E["Explain<br/>the evidence and a plain report"]
-    E --> F{"You decide"}
-    F -. "edit the fix" .-> D
-    F --> G([Corrected file, or nothing changes])
+flowchart TD
+    __start__([Excel workbook]) --> load_sheet["load_sheet<br/>engine"]
+    load_sheet --> map_model["map_model<br/>Nemotron 3 Super"]
+    map_model --> locate["locate<br/>code, Nemotron 3 Super if needed"]
+    locate --> trace["trace<br/>engine"]
+    trace --> diagnose["diagnose · Investigator<br/>Nemotron 3.5 Super"]
+    diagnose --> test["test<br/>engine, sandbox copy"]
+    test --> verify["verify · Verifier<br/>engine checks + Nemotron 3.5 Super"]
+    verify -. "rejected, retry" .-> diagnose
+    verify -. "confirmed" .-> explain["explain<br/>Nemotron 3.5 Lightning"]
+    explain --> human_review{"human_review<br/>you"}
+    human_review -. "edit the fix" .-> test
+    human_review -. "approve" .-> apply_fix["apply_fix<br/>engine, corrected copy"]
+    human_review -. "reject" .-> __end__([End])
+    apply_fix --> __end__
 ```
 
-Solid arrows are the run. Dotted arrows are the retry loop and your edit going back through the test. Nemotron 3 Super maps the model, 3.5 Super diagnoses and argues against every fix, 3.5 Lightning writes the report, and the engine does every calculation. The ten nodes, the retry budget and the time limits are in [`docs/agent-architecture.md`](docs/agent-architecture.md).
+Dotted arrows are decisions: the Verifier sends a fix back, or you approve, edit or reject it. The ten nodes, the retry budget and the time limits are in [`docs/agent-architecture.md`](docs/agent-architecture.md).
 
-## How we tested it
+## How We Tested The Agent
 
 We built and tuned the agent on 217 workbooks: 26 Damodaran valuation models, 174 synthetic models with one planted error each plus clean and deliberate-value controls, and 17 logic test models in [`demo/`](demo). Every model carries a known correct answer, so each run is scored against it ([method](docs/evaluation.md)).
 
@@ -105,7 +115,7 @@ All three are served on Nebius Token Factory through one OpenAI-compatible endpo
 
 ## What Token Factory Accelerated
 
-- **One endpoint, every model.** One key and one OpenAI-compatible API serve all three Nemotron models; LangGraph's client needed no adapter.
+- **One endpoint, every model.** One key and one OpenAI-compatible API serve all three Nemotron models. LangChain's OpenAI client (`langchain-openai`) needed no adapter.
 - **The right model for each step.** 3.5 Super reasons, 3 Super maps, 3.5 Lightning writes.
 - **Upgrades in one line.** Moving the Investigator to Nemotron 3.5 Super was a config change: on an unseen SaaS model, fixed errors went from 0 of 5 to 4 of 5.
 - **No new price.** 3.5 Super costs the same as 3 Super, $0.30 / $0.90 per million tokens.
@@ -133,11 +143,12 @@ uv run pytest -m live   # 26 live tests against Token Factory, spends credits
 
 `scripts/serve.sh` runs the API alone, `scripts/export_graph.sh` refreshes the graph picture, and `scripts/screenshots.sh` renders the page at two sizes. The working contract for changes is in [`AGENTS.md`](AGENTS.md): branches, draft PRs, issue format and commit naming.
 
-## Feedback on Token Factory and the NVIDIA models
+## Feedback on Token Factory and the NVIDIA Models
 
-- **What worked:** one endpoint for every model, OpenAI-compatible, with no adapter for LangGraph. Model IDs, context and prices come from `GET /v1/models`.
+- **What worked:** one OpenAI-compatible endpoint for every model, with no adapter for LangChain's OpenAI client.
+- **Model details are not in the API.** `GET /v1/models` returns only the model IDs. Prices, context windows and output limits are only in the web catalogue.
 - **The one thing to know:** a reasoning model can spend its whole output budget on thinking. The structured conclusion is asked once more with thinking turned off, which keeps a check inside a browser request.
-- **Failures arrive as 200s.** An overloaded or rejected call can answer HTTP 200 with `[ERROR: …]` in the body, so every answer is read and retried instead of trusted; overload (429, 5xx, 529) waits 5, 15 and 30 seconds before giving up.
+- **Failures arrive as 200s.** An overloaded or rejected call can answer HTTP 200 with `[ERROR: …]` in the body, so every answer is read and retried instead of trusted. Overload (429, 5xx, 529) waits 5, 15 and 30 seconds before giving up.
 
 ## License
 
