@@ -77,6 +77,7 @@ export default function App() {
   const [error, setError] = useState<Failure | null>(null);
   const [uploading, setUploading] = useState(false);
   const upload = useRef<File | null>(null);
+  const onCopy = useRef(false);
   const first = views[0] ?? null;
 
   useEffect(() => {
@@ -138,6 +139,7 @@ export default function App() {
 
   const start = useCallback((spreadsheetId: string, name: string, sheets: string[], file: File | null) => {
     upload.current = file;
+    onCopy.current = false;
     setSteps([]);
     setViews([]);
     setSheet(null);
@@ -182,9 +184,12 @@ export default function App() {
       setError(null);
       const seen: { view: InvestigationView | null } = { view: null };
       void run(async () => {
-        await resumeInvestigation(view.id, answer, eventsFor(slot, seen), view, upload.current);
+        await resumeInvestigation(view.id, answer, eventsFor(slot, seen), view, upload.current, onCopy.current);
         const settled = seen.view;
-        if (settled?.corrected_file) upload.current = fileOf(settled.corrected_file, check.name);
+        if (settled?.corrected_file) {
+          upload.current = fileOf(settled.corrected_file, check.name);
+          onCopy.current = true;
+        }
         if (settled?.corrected_copy_id) setFixedIn({ ...settled, sheet: null });
       });
     },
@@ -212,6 +217,7 @@ export default function App() {
     setError(null);
     setCheck(null);
     upload.current = null;
+    onCopy.current = false;
     clearCurrent();
     const url = new URL(window.location.href);
     url.searchParams.delete("story");

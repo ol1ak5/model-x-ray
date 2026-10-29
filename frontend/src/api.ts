@@ -185,9 +185,10 @@ export function startInvestigation(spreadsheetId: string, question: string, onEv
   return stream("/investigations/stream", body, onEvent, file);
 }
 
-export function resumeInvestigation(id: string, answer: Decision, onEvent: (event: ProgressEvent) => void, state?: InvestigationView | null, file?: File | null): Promise<void> {
+export function resumeInvestigation(id: string, answer: Decision, onEvent: (event: ProgressEvent) => void, state?: InvestigationView | null, file?: File | null, onCorrectedCopy = false): Promise<void> {
   const carried = state ? { ...state, sheet: undefined, corrected_file: undefined } : null;
-  return stream(`/investigations/${id}/resume/stream`, carried ? { ...answer, state: carried } : answer, onEvent, file);
+  const body = carried ? { ...answer, state: carried } : answer;
+  return stream(`/investigations/${id}/resume/stream`, onCorrectedCopy ? { ...body, on_corrected_copy: true } : body, onEvent, file);
 }
 
 export async function findSuspects(spreadsheetId: string, file?: File | null): Promise<string[]> {
