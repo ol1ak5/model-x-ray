@@ -14,7 +14,7 @@ with sync_playwright() as p:
         if left > 0: time.sleep(left)
     at(3400); pg.screenshot(path="cap/01-landing-error.png"); log("landing error")
     at(8000); pg.screenshot(path="cap/02-landing-fixed.png"); log("landing fixed")
-    for i, anchor in enumerate(["Did you know that?", "Our answer", "How it works", "Strengths", "Stack"]):
+    for i, anchor in enumerate(["Did you know?", "Our answer", "How it works", "Strengths", "Stack"]):
         pg.get_by_role("link", name=anchor).first.click()
         time.sleep(4.8)
         pg.screenshot(path=f"cap/03-section-{i}.png"); log("section", anchor)
