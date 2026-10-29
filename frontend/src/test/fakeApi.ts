@@ -90,14 +90,14 @@ export function fakeSteps(story: string): { step: string; label: string }[] {
   return STEPS.slice(0, count).map(([step, label]) => ({ step, label }));
 }
 
-type Event = ["step", string, string] | ["view", InvestigationView] | ["error", number, string];
+type Event = ["step", string, string] | ["view", InvestigationView] | ["error", number, string, string?];
 
 function sse(events: Event[]): string {
   return events
     .map((event) => {
       if (event[0] === "step") return `event: step\ndata: ${JSON.stringify({ step: event[1], label: event[2] })}\n\n`;
       if (event[0] === "view") return `event: view\ndata: ${JSON.stringify(event[1])}\n\n`;
-      return `event: error\ndata: ${JSON.stringify({ status: event[1], detail: event[2] })}\n\n`;
+      return `event: error\ndata: ${JSON.stringify({ status: event[1], code: event[3] ?? "request_failed", detail: event[2] })}\n\n`;
     })
     .join("");
 }

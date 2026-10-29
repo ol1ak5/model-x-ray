@@ -31,6 +31,23 @@ type Run = { id: string; spreadsheetId: string; name: string; question: string; 
 
 const UNREACHABLE = "The Model X-Ray service could not be reached. Please try again.";
 
+const ADVICE: Record<string, string> = {
+  provider_busy: "The AI service is overloaded. Wait a minute, then try again.",
+  provider_timeout: "The AI service took too long. Try again, or check a smaller model.",
+  provider_auth: "The deployment's key was refused. The team has to replace it; nothing here will fix it.",
+  usage_cap: "The demo's daily limit is reached. Try again tomorrow, or run Model X-Ray locally.",
+  workbook_unreadable: "That file could not be read. Send a .xlsx saved by Excel.",
+  unsupported_formula: "This model uses a formula the engine cannot calculate yet.",
+  unexpected: "Something failed on our side. Try again; the team has the details.",
+};
+
+type Failure = { message: string; advice: string };
+
+function described(reason: unknown, fallback = UNREACHABLE): Failure {
+  const error = reason instanceof ApiError ? reason : new ApiError(fallback);
+  return { message: error.message, advice: ADVICE[error.code] ?? "" };
+}
+
 const DEMO_NAME = "Demo model.xlsx";
 
 const DEMOS: Record<string, string> = { "PPA_Model_Europe": "PPA_Model_Europe.xlsx", demo: DEMO_NAME };
@@ -57,7 +74,7 @@ export default function App() {
   const [views, setViews] = useState<(InvestigationView | null)[]>(initial?.views ?? []);
   const [sheet, setSheet] = useState<SheetWindow | null>(initial ? SHEET : null);
   const [fixedIn, setFixedIn] = useState<InvestigationView | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Failure | null>(null);
   const [uploading, setUploading] = useState(false);
   const upload = useRef<File | null>(null);
   const first = views[0] ?? null;
@@ -82,7 +99,7 @@ export default function App() {
   useEffect(() => {
     listSpreadsheets()
       .then(setDemos)
-      .catch((reason: unknown) => setError(reason instanceof ApiError ? reason.message : UNREACHABLE));
+      .catch((reason: unknown) => setError(described(reason)));
   }, []);
 
   useEffect(() => {
@@ -104,7 +121,7 @@ export default function App() {
         if (seen) seen.view = event.view;
         setViews((current) => current.map((view, index) => (index === slot ? event.view : view)));
       }
-      if (event.kind === "error") setError(event.detail);
+      if (event.kind === "error") setError({ message: event.detail, advice: ADVICE[event.code] ?? "" });
     };
   }
 
@@ -113,7 +130,7 @@ export default function App() {
     try {
       await work();
     } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : UNREACHABLE);
+      setError(described(reason));
     } finally {
       setBusy((count) => count - 1);
     }
@@ -149,7 +166,7 @@ export default function App() {
         const uploaded = await uploadSpreadsheet(file);
         start(uploaded.id, uploaded.name, uploaded.sheets, file);
       } catch (reason) {
-        setError(reason instanceof ApiError ? reason.message : "The upload failed. Please try again.");
+        setError(described(reason, "The upload failed. Please try again."));
       } finally {
         setUploading(false);
       }

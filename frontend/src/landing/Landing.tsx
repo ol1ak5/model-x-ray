@@ -48,7 +48,7 @@ function Actions({ onDemo, onUpload, busy, demoReady }: { onDemo: () => void; on
   );
 }
 
-export default function Landing({ onDemo, onUpload, busy, demoReady, error }: { onDemo: () => void; onUpload: (file: File) => void; busy: boolean; demoReady: boolean; error: string | null }) {
+export default function Landing({ onDemo, onUpload, busy, demoReady, error }: { onDemo: () => void; onUpload: (file: File) => void; busy: boolean; demoReady: boolean; error: { message: string; advice: string } | null }) {
   const root = useReveal();
   const top = () => window.scrollTo({ top: 0 });
   return (
@@ -84,7 +84,8 @@ export default function Landing({ onDemo, onUpload, busy, demoReady, error }: { 
               <p className="small">Excel .xlsx up to 4.5 MB · your file stays private</p>
               {error && (
                 <p className="alert" role="alert">
-                  {error}
+                  {error.message}
+                  {error.advice && <span className="alert-advice"> {error.advice}</span>}
                 </p>
               )}
             </div>

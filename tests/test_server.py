@@ -8,7 +8,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from test_investigator import ScriptedDiagnosis
 
 from model_x_ray.api import AgentModels, UsageCap, create_app
-from model_x_ray.server import app_from_env
+from model_x_ray.server import StartupError, app_from_env
 from model_x_ray.spreadsheet.sandbox import XlsxSandbox
 from model_x_ray.spreadsheet.source import XlsxSource
 
@@ -22,7 +22,9 @@ def test_the_app_from_env_lists_every_model_in_the_folder_and_allows_the_fronten
     monkeypatch.setenv("NEBIUS_BASE_URL", "https://api.tokenfactory.nebius.com/v1/")
     monkeypatch.setenv("MODEL_X_RAY_MODELS_DIR", str(models))
     monkeypatch.setenv("MODEL_X_RAY_OUTPUT_DIR", str(tmp_path / "corrected"))
+    monkeypatch.setenv("MODEL_X_RAY_UPLOAD_DIR", str(tmp_path / "uploads"))
     monkeypatch.setenv("MODEL_X_RAY_CHECKPOINTS", str(tmp_path / "checkpoints.db"))
+    monkeypatch.setenv("MODEL_X_RAY_MEMORY", str(tmp_path / "memory.db"))
     monkeypatch.setenv("MODEL_X_RAY_ALLOWED_ORIGINS", "http://localhost:5173,https://model-x-ray.vercel.app")
     client = TestClient(app_from_env())
 
@@ -36,10 +38,36 @@ def test_the_app_from_env_lists_every_model_in_the_folder_and_allows_the_fronten
     assert "access-control-allow-origin" not in client.get("/health", headers={"Origin": "https://evil.example"}).headers
 
 
-def test_a_missing_models_folder_is_reported_clearly(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_missing_models_folder_stops_the_server_with_one_readable_line(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MODEL_X_RAY_MODELS_DIR", str(tmp_path / "nowhere"))
-    with pytest.raises(ValueError, match="nowhere"):
+    with pytest.raises(StartupError) as refused:
         app_from_env()
+
+    message = str(refused.value)
+    assert "cannot start" in message
+    assert f"MODEL_X_RAY_MODELS_DIR points at {tmp_path / 'nowhere'}, which does not exist" in message
+    assert "demo_models" in message
+    assert "Nothing was started" in message
+    assert "Traceback" not in message
+
+
+def test_a_missing_key_and_an_empty_models_folder_are_both_named_before_anything_starts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("model_x_ray.server.load_dotenv", lambda: None)
+    monkeypatch.delenv("NEBIUS_API_KEY", raising=False)
+    monkeypatch.setenv("MODEL_X_RAY_MODELS_DIR", str(tmp_path / "empty"))
+    (tmp_path / "empty").mkdir()
+    monkeypatch.setenv("MODEL_X_RAY_OUTPUT_DIR", str(tmp_path / "corrected"))
+    monkeypatch.setenv("MODEL_X_RAY_UPLOAD_DIR", str(tmp_path / "uploads"))
+    monkeypatch.setenv("MODEL_X_RAY_CHECKPOINTS", str(tmp_path / "checkpoints.db"))
+    monkeypatch.setenv("MODEL_X_RAY_MEMORY", str(tmp_path / "memory.db"))
+    with pytest.raises(StartupError) as refused:
+        app_from_env()
+
+    message = str(refused.value)
+    assert "because 2 settings would not work" in message
+    assert "  - NEBIUS_API_KEY is not set" in message
+    assert ".env.example" in message
+    assert "holds no .xlsx models" in message
 
 
 def test_the_corrected_file_can_be_downloaded_after_approval(demo_workbook_path: Path, scripted_verdict, tmp_path: Path) -> None:

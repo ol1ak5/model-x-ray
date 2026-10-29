@@ -73,11 +73,11 @@ def test_an_ai_service_timeout_gives_a_short_message_instead_of_a_traceback(demo
 
     plain = client.post("/investigations", json=QUESTION)
     assert plain.status_code == 503
-    assert plain.json() == {"detail": "The AI service took too long to answer. Please try again in a minute."}
+    assert plain.json() == {"detail": "The AI service took too long to answer. Please try again in a minute.", "code": "provider_timeout"}
 
     stream = events(client.post("/investigations/stream", json=QUESTION))
     assert [data["step"] for kind, data in stream if kind == "step"] == ["load_sheet", "map_model", "locate", "trace"]
-    assert stream[-1] == ("error", {"status": 503, "detail": "The AI service took too long to answer. Please try again in a minute."})
+    assert stream[-1] == ("error", {"status": 503, "code": "provider_timeout", "detail": "The AI service took too long to answer. Please try again in a minute."})
 
 
 def test_a_formula_we_cannot_calculate_and_an_unexpected_crash_both_get_clear_messages(demo_workbook_path: Path, engine_sandbox, scripted_verdict, tmp_path: Path) -> None:
@@ -88,9 +88,10 @@ def test_a_formula_we_cannot_calculate_and_an_unexpected_crash_both_get_clear_me
     app = create_app(XlsxSource({"demo": tmp_path / "indirect.xlsx"}), engine_sandbox, models, InMemorySaver(), UsageCap(per_visitor=10, total=100))
     unsupported = TestClient(app, raise_server_exceptions=False).post("/investigations", json=QUESTION)
     assert unsupported.status_code == 422
+    assert unsupported.json()["code"] == "unsupported_formula"
     assert unsupported.json()["detail"].startswith("This model uses a formula Model X-Ray cannot calculate yet: Unsupported function INDIRECT in P&L!H4")
 
     crash = broken_client(demo_workbook_path, engine_sandbox, RuntimeError("boom at line 42")).post("/investigations", json=QUESTION)
     assert crash.status_code == 500
-    assert crash.json() == {"detail": "Something went wrong during the investigation. The team has the details; please try again."}
+    assert crash.json() == {"detail": "Something went wrong during the investigation. The team has the details; please try again.", "code": "unexpected"}
     assert "boom" not in crash.text

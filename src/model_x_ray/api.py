@@ -13,9 +13,11 @@ from uuid import uuid4
 import openai
 import pydantic
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from starlette.background import BackgroundTask
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from langchain_core.language_models import BaseChatModel
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph.state import CompiledStateGraph
@@ -35,6 +37,32 @@ from model_x_ray.spreadsheet.source import SpreadsheetSource
 from model_x_ray.spreadsheet.xlsx import load_xlsx
 
 logger = logging.getLogger("model_x_ray.api")
+
+
+class Failure(HTTPException):
+    def __init__(self, status: int, code: str, detail: str) -> None:
+        super().__init__(status, detail)
+        self.code = code
+
+
+STATUS_CODES = {
+    400: "bad_request",
+    403: "forbidden",
+    404: "not_found",
+    409: "conflict",
+    413: "upload_too_large",
+    422: "invalid_request",
+    429: "usage_cap",
+}
+
+
+def model_failure(error: ValueError) -> Failure:
+    message = str(error)
+    if message.startswith("Unknown spreadsheet") or "does not exist" in message:
+        return Failure(400, "unknown_model", message)
+    if "no lines with a label" in message:
+        return Failure(400, "workbook_unreadable", message)
+    return Failure(400, "bad_request", message)
 
 STEP_LABELS = {
     "load_sheet": "Reading the workbook",
@@ -85,9 +113,9 @@ class UsageCap:
         if self.day != date.today():
             self.day, self.counts = date.today(), {}
         if self.counts.get(visitor, 0) >= self.per_visitor:
-            raise HTTPException(429, f"Daily limit of {self.per_visitor} {self.noun} per visitor reached; try again tomorrow")
+            raise Failure(429, "usage_cap", f"Daily limit of {self.per_visitor} {self.noun} per visitor reached; try again tomorrow")
         if sum(self.counts.values()) >= self.total:
-            raise HTTPException(429, f"The demo's daily limit of {self.total} {self.noun} is reached; try again tomorrow")
+            raise Failure(429, "usage_cap", f"The demo's daily limit of {self.total} {self.noun} is reached; try again tomorrow")
 
     def record(self, visitor: str) -> None:
         self.counts[visitor] = self.counts.get(visitor, 0) + 1
@@ -194,7 +222,7 @@ class ResumeRequest(BaseModel):
 
 def decision_of(request: ResumeRequest) -> dict[str, Any]:
     if request.action is None:
-        raise HTTPException(400, "Send an action to continue the investigation")
+        raise Failure(400, "missing_action", "Send an action to continue the investigation")
     decision: dict[str, Any] = {"action": request.action, "reason": request.reason, "intentional": request.intentional}
     if request.patch is not None:
         decision["patch"] = request.patch
@@ -204,57 +232,60 @@ def decision_of(request: ResumeRequest) -> dict[str, Any]:
 def carried_state(raw: dict[str, Any]) -> dict[str, Any]:
     spreadsheet_id = raw.get("spreadsheet_id")
     if not isinstance(spreadsheet_id, str) or not spreadsheet_id:
-        raise HTTPException(400, "The state does not say which spreadsheet it belongs to, so the investigation cannot be continued")
+        raise Failure(400, "bad_state", "The state does not say which spreadsheet it belongs to, so the investigation cannot be continued")
     if not isinstance(raw.get("question"), str):
-        raise HTTPException(400, "The state does not carry the question, so the investigation cannot be continued")
+        raise Failure(400, "bad_state", "The state does not carry the question, so the investigation cannot be continued")
     carried = {name: raw.get(name) for name in PUBLIC_FIELDS}
     for name in CARRIED_LISTS:
         if carried[name] is None:
             carried[name] = []
         elif not isinstance(carried[name], list):
-            raise HTTPException(400, f"The state's {name} is not a list")
+            raise Failure(400, "bad_state", f"The state's {name} is not a list")
     for name in CARRIED_RECORDS:
         if carried[name] is not None and not isinstance(carried[name], dict):
-            raise HTTPException(400, f"The state's {name} is not an object")
+            raise Failure(400, "bad_state", f"The state's {name} is not an object")
     if not isinstance(carried["attempts"], int):
         carried["attempts"] = 0
     return carried
 
 
-def friendly_error(error: Exception) -> tuple[int, str]:
+def friendly_error(error: Exception) -> tuple[int, str, str]:
+    if isinstance(error, Failure):
+        return error.status_code, error.code, str(error.detail)
     if isinstance(error, HTTPException):
-        return error.status_code, str(error.detail)
+        return error.status_code, STATUS_CODES.get(error.status_code, "request_failed"), str(error.detail)
     if isinstance(error, ProviderFailure):
-        return 503, "The AI service failed to answer (it returned an internal error). Please try again in a minute."
+        return 503, "provider_failure", "The AI service failed to answer (it returned an internal error). Please try again in a minute."
     if isinstance(error, openai.APITimeoutError):
-        return 503, "The AI service took too long to answer. Please try again in a minute."
+        return 503, "provider_timeout", "The AI service took too long to answer. Please try again in a minute."
     if isinstance(error, openai.RateLimitError):
-        return 503, "The AI service is busy right now. Please try again in a minute."
+        return 503, "provider_busy", "The AI service is busy right now. Please try again in a minute."
     if isinstance(error, openai.AuthenticationError):
-        return 503, "The AI service rejected our access key. Please tell the team."
+        return 503, "provider_auth", "The AI service rejected our access key. Please tell the team."
     if isinstance(error, openai.APIConnectionError):
-        return 503, "The AI service could not be reached. Please try again in a minute."
+        return 503, "provider_unreachable", "The AI service could not be reached. Please try again in a minute."
     if isinstance(error, openai.APIStatusError) and error.status_code in (503, 529):
-        return 503, "The AI service is busy right now. Please try again in a minute."
+        return 503, "provider_busy", "The AI service is busy right now. Please try again in a minute."
     if isinstance(error, openai.APIStatusError):
-        return 502, "The AI service returned an error. Please try again."
+        return 502, "provider_error", "The AI service returned an error. Please try again."
     if isinstance(error, pydantic.ValidationError):
-        return 502, "The AI answered in an unexpected format. Please try again."
+        return 502, "provider_malformed", "The AI answered in an unexpected format. Please try again."
     if isinstance(error, UnsupportedFormulaError):
-        return 422, f"This model uses a formula Model X-Ray cannot calculate yet: {error}"
+        return 422, "unsupported_formula", f"This model uses a formula Model X-Ray cannot calculate yet: {error}"
     if isinstance(error, FormulaError):
-        return 422, f"This model has a formula problem Model X-Ray cannot work around: {error}"
+        return 422, "formula_error", f"This model has a formula problem Model X-Ray cannot work around: {error}"
     if isinstance(error, ValueError):
-        return 400, str(error)
+        failure = model_failure(error)
+        return failure.status_code, failure.code, str(error)
     logger.exception("Investigation failed", exc_info=error)
-    return 500, GENERIC_FAILURE
+    return 500, "unexpected", GENERIC_FAILURE
 
 
 def checked_patch(source: SpreadsheetSource, spreadsheet_id: str, requested: dict[str, Any]) -> dict[str, str]:
     cell = str(requested.get("cell", "")).strip()
     formula = str(requested.get("new_formula", "")).strip()
     if not cell or not formula:
-        raise HTTPException(422, "An edited fix needs a cell and a number or formula")
+        raise Failure(422, "invalid_fix", "An edited fix needs a cell and a number or formula")
     patch = {
         "cell": cell,
         "old_formula": str(requested.get("old_formula", "")),
@@ -264,8 +295,9 @@ def checked_patch(source: SpreadsheetSource, spreadsheet_id: str, requested: dic
     try:
         check_patch(source.load(spreadsheet_id), patch)
     except (FormulaError, UnsupportedFormulaError) as error:
-        raise HTTPException(
+        raise Failure(
             422,
+            "invalid_fix",
             f"That fix does not work in {cell}: {error}. Enter a number, or a formula that starts with =.",
         ) from error
     return patch
@@ -343,12 +375,12 @@ async def read_request[T: BaseModel](http: Request, model: type[T]) -> tuple[T, 
         try:
             return model.model_validate(await http.json()), None, ""
         except (ValueError, pydantic.ValidationError) as error:
-            raise HTTPException(400, "The request is not valid JSON for this endpoint") from error
+            raise Failure(400, "invalid_request", "The request is not valid JSON for this endpoint") from error
     form = await http.form()
     try:
         request = model.model_validate_json(str(form.get("request") or "{}"))
     except pydantic.ValidationError as error:
-        raise HTTPException(400, "The request field is not valid JSON for this endpoint") from error
+        raise Failure(400, "invalid_request", "The request field is not valid JSON for this endpoint") from error
     upload = form.get("file")
     if upload is None or isinstance(upload, str):
         return request, None, ""
@@ -384,19 +416,32 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
     copies = Copies(copy_dir, copy_ttl)
     questions = ask_cap or UsageCap(per_visitor=30, total=500, noun="questions")
 
+    @app.exception_handler(Failure)
+    def explain_refusal(request: Request, error: Failure) -> JSONResponse:
+        return JSONResponse({"detail": str(error.detail), "code": error.code}, status_code=error.status_code)
+
+    @app.exception_handler(StarletteHTTPException)
+    def explain_http_refusal(request: Request, error: StarletteHTTPException) -> JSONResponse:
+        return JSONResponse({"detail": str(error.detail), "code": STATUS_CODES.get(error.status_code, "request_failed")}, status_code=error.status_code)
+
+    @app.exception_handler(RequestValidationError)
+    def explain_invalid_request(request: Request, error: RequestValidationError) -> JSONResponse:
+        detail = str(error.errors()[0].get("msg", "")) if error.errors() else ""
+        return JSONResponse({"detail": f"The request does not match what this endpoint expects: {detail}" if detail else "The request does not match what this endpoint expects.", "code": "invalid_request"}, status_code=422)
+
     @app.exception_handler(Exception)
     def explain_failure(request: Request, error: Exception) -> JSONResponse:
-        status, detail = friendly_error(error)
-        return JSONResponse({"detail": detail}, status_code=status)
+        status, code, detail = friendly_error(error)
+        return JSONResponse({"detail": detail, "code": code}, status_code=status)
 
     def hold(content: bytes, name: str) -> str:
         if not held.enabled:
-            raise HTTPException(404, "Uploading models is not enabled on this server")
+            raise Failure(404, "upload_disabled", "Uploading models is not enabled on this server")
         filename = Path(name).name
         if not filename.lower().endswith(".xlsx"):
-            raise HTTPException(400, "Upload an Excel .xlsx file")
+            raise Failure(400, "upload_rejected", "Upload an Excel .xlsx file")
         if len(content) > MAX_UPLOAD_BYTES:
-            raise HTTPException(413, "The file is larger than 10 MB")
+            raise Failure(413, "upload_too_large", "The file is larger than 10 MB")
         upload_id = upload_id_of(content)
         path = upload_dir / f"{upload_id}.xlsx"
         if held.holds(upload_id) and path.is_file():
@@ -407,7 +452,7 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
             load_xlsx(path)
         except Exception as error:
             path.unlink(missing_ok=True)
-            raise HTTPException(400, f"{filename} is not a readable .xlsx file") from error
+            raise Failure(400, "workbook_unreadable", f"{filename} is not a readable .xlsx file") from error
         source.add(upload_id, path)
         held.add(upload_id, path)
         return upload_id
@@ -450,8 +495,8 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
             yield sse("view", delivered(graph, investigation_id))
         except Exception as error:
             failed = True
-            status, detail = friendly_error(error)
-            yield sse("error", {"status": status, "detail": detail})
+            status, code, detail = friendly_error(error)
+            yield sse("error", {"status": status, "code": code, "detail": detail})
         finally:
             release(graph, investigation_id, failed)
 
@@ -459,16 +504,16 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
         try:
             return run_investigation(models.llm, spreadsheet_id, source, sandbox, checkpointer, verifier=models.verifier, locator=models.locator, mapper=models.mapper, explainer=models.explainer, store=store)
         except ValueError as error:
-            raise HTTPException(400, str(error)) from error
+            raise model_failure(error) from error
 
     def graph_of(investigation_id: str) -> CompiledStateGraph:
         if investigation_id not in graphs:
-            raise HTTPException(404, f"No investigation {investigation_id!r}")
+            raise Failure(404, "unknown_investigation", f"No investigation {investigation_id!r}")
         return graphs[investigation_id]
 
     def open_investigation(request: StartRequest, http: Request) -> tuple[CompiledStateGraph, str]:
         if not request.spreadsheet_id:
-            raise HTTPException(400, "Choose a model or send the .xlsx file to check")
+            raise Failure(400, "missing_model", "Choose a model or send the .xlsx file to check")
         visitor = visitor_of(http)
         cap.check(visitor)
         graph = build(request.spreadsheet_id)
@@ -480,23 +525,23 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
     def paused_graph(investigation_id: str) -> CompiledStateGraph:
         graph = graph_of(investigation_id)
         if investigation_view(graph, investigation_id)["status"] == "done":
-            raise HTTPException(409, "This investigation is finished and cannot be resumed")
+            raise Failure(409, "finished_investigation", "This investigation is finished and cannot be resumed")
         return graph
 
     def continue_graph(spreadsheet_id: str) -> CompiledStateGraph:
         try:
             return run_continuation(models.llm, spreadsheet_id, source, sandbox, checkpointer, verifier=models.verifier, locator=models.locator, mapper=models.mapper, explainer=models.explainer, store=store)
         except ValueError as error:
-            raise HTTPException(400, str(error)) from error
+            raise model_failure(error) from error
 
     def resumable(investigation_id: str, request: ResumeRequest, upload_id: str | None = None) -> tuple[CompiledStateGraph, Any]:
         if upload_id is not None and request.state is not None and request.state.get("spreadsheet_id") != upload_id:
-            raise HTTPException(400, "This is not the file the review started on; send the same .xlsx to continue it")
+            raise Failure(400, "resume_file_mismatch", "This is not the file the review started on; send the same .xlsx to continue it")
         if investigation_id in graphs:
             graph = paused_graph(investigation_id)
             return graph, Command(resume=resume_payload(graph, investigation_id, request))
         if request.state is None:
-            raise HTTPException(404, f"No investigation {investigation_id!r}")
+            raise Failure(404, "unknown_investigation", f"No investigation {investigation_id!r}")
         decision = decision_of(request)
         carried = carried_state(request.state)
         if decision.get("patch"):
@@ -525,7 +570,7 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
     @app.post("/spreadsheets", status_code=201)
     async def upload(request: Request, name: str) -> dict:
         if not held.enabled:
-            raise HTTPException(404, "Uploading models is not enabled on this server")
+            raise Failure(404, "upload_disabled", "Uploading models is not enabled on this server")
         upload_id = hold(await request.body(), name)
         return {"id": upload_id, "name": Path(name).name, "sheets": source.list_sheets(upload_id)}
 
@@ -551,11 +596,11 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
     def ask(investigation_id: str, request: AskRequest, http: Request) -> dict:
         question = request.question.strip()
         if not question:
-            raise HTTPException(400, "Write a question for the agent")
+            raise Failure(400, "missing_question", "Write a question for the agent")
         if len(question) > MAX_QUESTION_CHARS:
-            raise HTTPException(400, f"Keep the question under {MAX_QUESTION_CHARS} characters")
+            raise Failure(400, "question_too_long", f"Keep the question under {MAX_QUESTION_CHARS} characters")
         if request.state is None:
-            raise HTTPException(400, "Send the check's state with the question, so the agent knows what it found")
+            raise Failure(400, "bad_state", "Send the check's state with the question, so the agent knows what it found")
         state = carried_state(request.state)
         visitor = visitor_of(http)
         questions.check(visitor)
@@ -570,7 +615,7 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
         try:
             return {"cells": suspects_of(source.load(spreadsheet_id))}
         except ValueError as error:
-            raise HTTPException(400, str(error)) from error
+            raise model_failure(error) from error
 
     @app.post("/workbook")
     async def workbook(http: Request) -> dict:
@@ -579,18 +624,18 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
         try:
             return workbook_view(source.load(spreadsheet_id))
         except ValueError as error:
-            raise HTTPException(400, str(error)) from error
+            raise model_failure(error) from error
 
     @app.get("/investigations/{investigation_id}/sheet")
     def sheet(investigation_id: str) -> dict:
         values = graph_of(investigation_id).get_state({"configurable": {"thread_id": investigation_id}}).values
         target = values.get("target")
         if not target:
-            raise HTTPException(404, "The investigation has not found its cell yet")
+            raise Failure(404, "no_target", "The investigation has not found its cell yet")
         try:
             book = source.load(values["spreadsheet_id"])
         except ValueError as error:
-            raise HTTPException(404, f"This model is no longer on the server; upload it again to check it ({error})") from error
+            raise Failure(404, "unknown_model", f"This model is no longer on the server; upload it again to check it ({error})") from error
         return sheet_window(book, target["sheet"], split_ref(f"{target['sheet']}!{target['cell']}")[1].row)
 
     @app.get("/investigations/{investigation_id}/corrected")
@@ -599,7 +644,7 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
         locate_file = getattr(sandbox, "corrected_path", None)
         path = locate_file(name) if name and locate_file else None
         if path is None:
-            raise HTTPException(404, "No corrected file for this investigation; it is written only after you approve the fix, and once downloaded it is removed from the server")
+            raise Failure(404, "no_corrected_copy", "No corrected file for this investigation; it is written only after you approve the fix, and once downloaded it is removed from the server")
         copies.holding(path)
         return FileResponse(path, media_type=XLSX_MEDIA_TYPE, filename=path.name, background=BackgroundTask(copies.release, path))
 
