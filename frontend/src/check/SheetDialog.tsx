@@ -1,7 +1,8 @@
-import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 
-import type { WorkbookSheet, WorkbookView } from "../api";
+import type { CellStyle, WorkbookSheet, WorkbookView } from "../api";
 import { splitRef } from "../findings";
+import { formatNumber } from "./numberFormat";
 
 export type Marks = { error: string; dependents: string[] } | null;
 
@@ -18,11 +19,38 @@ function position(address: string): [number, number] {
   return [column, Number(match[2])];
 }
 
-export function shown(value: WorkbookView["sheets"][number]["cells"][number]["value"]): string {
+export function shown(value: WorkbookView["sheets"][number]["cells"][number]["value"], format?: string): string {
   if (value === null || value === undefined) return "";
+  if (typeof value === "number") {
+    const formatted = formatNumber(value, format);
+    if (formatted !== null) return formatted;
+  }
   if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
   if (typeof value === "number") return Number.isInteger(value) ? String(value) : String(Number(value.toPrecision(10)));
   return value;
+}
+
+const DEFAULT_WIDTH = 72;
+
+function looks(style: CellStyle | undefined, marked: boolean): CSSProperties | undefined {
+  if (!style) return undefined;
+  const css: CSSProperties = {
+    fontWeight: style.bold ? 700 : undefined,
+    fontStyle: style.italic ? "italic" : undefined,
+    textDecoration: style.underline ? "underline" : undefined,
+    fontSize: style.size ? `${Math.round((style.size / 11) * 13 * 10) / 10}px` : undefined,
+    textAlign: style.align,
+  };
+  if (marked) return css;
+  return {
+    ...css,
+    background: style.fill,
+    color: style.color,
+    borderTop: style.border_top,
+    borderBottom: style.border_bottom,
+    borderLeft: style.border_left,
+    borderRight: style.border_right,
+  };
 }
 
 function Grid({ sheet, marks, selected, onSelect }: { sheet: WorkbookSheet; marks: Marks; selected: string; onSelect: (address: string) => void }) {
@@ -32,7 +60,13 @@ function Grid({ sheet, marks, selected, onSelect }: { sheet: WorkbookSheet; mark
   const [errorSheet, errorAddress] = marks ? splitRef(marks.error) : ["", ""];
   const dependents = new Set((marks?.dependents ?? []).filter((ref) => splitRef(ref)[0] === sheet.name).map((ref) => splitRef(ref)[1]));
   return (
-    <table className="grid">
+    <table className={sheet.gridlines === false ? "grid nogrid" : "grid"}>
+      <colgroup>
+        <col style={{ width: 34 }} />
+        {columns.map((column) => (
+          <col key={column} style={{ width: sheet.widths?.[column] ?? DEFAULT_WIDTH }} />
+        ))}
+      </colgroup>
       <thead>
         <tr>
           <th />
@@ -48,10 +82,13 @@ function Grid({ sheet, marks, selected, onSelect }: { sheet: WorkbookSheet; mark
             {columns.map((column) => {
               const address = `${column}${row}`;
               const cell = byRef.get(address);
-              const classes = [typeof cell?.value === "number" ? "num" : "", errorSheet === sheet.name && errorAddress === address ? "m-err" : dependents.has(address) ? "m-dep" : "", address === selected ? "sel" : ""].filter(Boolean).join(" ");
+              const mark = errorSheet === sheet.name && errorAddress === address ? "m-err" : dependents.has(address) ? "m-dep" : "";
+              const index = sheet.cell_styles?.[address];
+              const style = index === undefined ? undefined : sheet.styles?.[index];
+              const classes = [typeof cell?.value === "number" ? "num" : "", mark, address === selected ? "sel" : ""].filter(Boolean).join(" ");
               return (
-                <td key={address} data-ref={address} className={classes || undefined} onClick={() => onSelect(address)}>
-                  {shown(cell?.value ?? null)}
+                <td key={address} data-ref={address} className={classes || undefined} style={looks(style, mark !== "")} onClick={() => onSelect(address)}>
+                  {shown(cell?.value ?? null, style?.format)}
                 </td>
               );
             })}
@@ -96,6 +133,14 @@ export default function SheetDialog({ open, name, sheet: wanted, title, marks, l
 
   const sheet = book?.sheets.find((candidate) => candidate.name === current) ?? null;
   const cell = sheet?.cells.find((candidate) => candidate.ref === selected);
+
+  useEffect(() => {
+    const scroller = dialog.current?.querySelector<HTMLElement>(".scroll");
+    const error = scroller?.querySelector<HTMLElement>("td.m-err");
+    if (!scroller) return;
+    scroller.scrollTop = error ? Math.max(0, error.offsetTop - scroller.clientHeight / 2) : 0;
+    scroller.scrollLeft = error ? Math.max(0, error.offsetLeft - scroller.clientWidth / 2) : 0;
+  }, [sheet, open]);
 
   function move(event: KeyboardEvent<HTMLDivElement>) {
     const steps: Record<string, [number, number]> = { ArrowRight: [1, 0], ArrowLeft: [-1, 0], ArrowDown: [0, 1], ArrowUp: [0, -1] };

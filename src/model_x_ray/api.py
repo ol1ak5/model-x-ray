@@ -35,6 +35,7 @@ from model_x_ray.rules import is_period_cell
 from model_x_ray.spreadsheet.engine import FormulaError, UnsupportedFormulaError, Workbook, column_letters, is_number, normalize_ref, split_ref
 from model_x_ray.spreadsheet.sandbox import SandboxWithWrite, check_patch, normalized_formula
 from model_x_ray.spreadsheet.source import SpreadsheetSource
+from model_x_ray.spreadsheet.styles import workbook_styles
 from model_x_ray.spreadsheet.xlsx import load_xlsx
 
 logger = logging.getLogger("model_x_ray.api")
@@ -638,9 +639,15 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
         request, content, name = await read_request(http, WorkbookRequest)
         spreadsheet_id = hold(content, name) if content is not None else request.spreadsheet_id
         try:
-            return workbook_view(source.load(spreadsheet_id))
+            view = workbook_view(source.load(spreadsheet_id))
         except ValueError as error:
             raise model_failure(error) from error
+        path_of = getattr(source, "path_of", None)
+        if path_of is not None:
+            styles = workbook_styles(path_of(spreadsheet_id), {sheet["name"]: (sheet["rows"], sheet["columns"]) for sheet in view["sheets"]})
+            for sheet in view["sheets"]:
+                sheet.update(styles.get(sheet["name"], {}))
+        return view
 
     @app.get("/investigations/{investigation_id}/sheet")
     def sheet(investigation_id: str) -> dict:

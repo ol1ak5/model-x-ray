@@ -33,9 +33,16 @@ export const WORKBOOK: WorkbookView = {
         { ref: "A6", value: "Gross profit", formula: null },
         { ref: "G6", value: 285.76, formula: "=G4+G5" },
       ],
+      styles: [
+        { fill: "#0D5C33", color: "#FFFFFF", bold: true },
+        { format: "#,##0.0;\\(#,##0.0\\);\\-", fill: "#F7FAF8", border_bottom: "1px solid #D9D9D9" },
+      ],
+      cell_styles: { A1: 0, G4: 1, G5: 1, G6: 1 },
+      widths: { A: 180 },
+      gridlines: false,
     },
     { name: "Assumptions", rows: 5, columns: 3, cells: [{ ref: "C5", value: 0.52, formula: null }] },
-    { name: "Summary", rows: 6, columns: 8, cells: [{ ref: "G5", value: 225.6, formula: "='P&L'!G10" }, { ref: "H6", value: -0.8586666666666667, formula: "=H5/G5-1" }] },
+    { name: "Summary", rows: 6, columns: 8, cells: [{ ref: "G5", value: 225.6, formula: "='P&L'!G10" }, { ref: "H6", value: -0.8586666666666667, formula: "=H5/G5-1" }], styles: [{ format: "0.0%;\\(0.0%\\);\\-" }], cell_styles: { H6: 0 } },
   ],
 };
 
