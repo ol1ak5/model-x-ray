@@ -100,16 +100,25 @@ export type Decision = {
 export type ProgressEvent =
   | { kind: "step"; step: string; label: string }
   | { kind: "view"; view: InvestigationView }
-  | { kind: "error"; status: number; detail: string };
+  | { kind: "error"; status: number; code: string; detail: string };
 
-export class ApiError extends Error {}
+export class ApiError extends Error {
+  code: string;
+
+  constructor(message: string, code = "unreachable") {
+    super(message);
+    this.code = code;
+  }
+}
 
 async function failure(response: Response): Promise<ApiError> {
   try {
     const body = await response.json();
-    return new ApiError(typeof body.detail === "string" ? body.detail : "The request failed.");
+    const detail = typeof body.detail === "string" ? body.detail : "The request failed.";
+    const code = typeof body.code === "string" ? body.code : "request_failed";
+    return new ApiError(detail, code);
   } catch {
-    return new ApiError("The Model X-Ray service could not be reached. Please try again.");
+    return new ApiError("The Model X-Ray service could not be reached. Please try again.", "unreachable");
   }
 }
 
@@ -142,7 +151,7 @@ export function parseEvents(text: string): { events: ProgressEvent[]; rest: stri
     const data = JSON.parse(fields.data ?? "{}");
     if (fields.event === "step") events.push({ kind: "step", step: data.step, label: data.label });
     if (fields.event === "view") events.push({ kind: "view", view: data });
-    if (fields.event === "error") events.push({ kind: "error", status: data.status, detail: data.detail });
+    if (fields.event === "error") events.push({ kind: "error", status: data.status, code: data.code ?? "request_failed", detail: data.detail });
   }
   return { events, rest };
 }

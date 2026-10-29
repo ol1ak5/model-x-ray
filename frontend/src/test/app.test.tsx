@@ -279,11 +279,20 @@ describe("a model check", () => {
   });
 
   test("shows a short message when the check fails, and keeps the page", async () => {
-    vi.stubGlobal("fetch", fakeApi([...steps("load_sheet"), ["error", 503, "The AI service is busy right now. Please try again in a minute."]]).fetch);
+    vi.stubGlobal("fetch", fakeApi([...steps("load_sheet"), ["error", 503, "The AI service is busy right now. Please try again in a minute.", "provider_busy"]]).fetch);
     await checkDemo();
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("The AI service is busy right now");
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("The AI service is busy right now");
+    expect(alert).toHaveTextContent("Wait a minute, then try again.");
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Demo model.xlsx");
+  });
+
+  test("tells the reader to come back tomorrow when the demo's daily cap is reached", async () => {
+    vi.stubGlobal("fetch", fakeApi([...steps("load_sheet"), ["error", 429, "The demo's daily limit of 100 investigations is reached; try again tomorrow", "usage_cap"]]).fetch);
+    await checkDemo();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Try again tomorrow, or run Model X-Ray locally.");
   });
 
   test("goes back to the landing from the check", async () => {

@@ -37,6 +37,8 @@ When the `VERCEL` environment variable is set (Vercel sets it), every writable d
 | Usage cap | `DEMO_MAX_PER_VISITOR`, `DEMO_MAX_PER_DAY` | Counted per instance and reset when an instance is recycled, so the real ceiling is higher than the numbers. Visitors are told apart by `x-forwarded-for` |
 | Plan | Hobby is for non-commercial use | Fits a hackathon demo |
 
+When the Token Factory balance runs out, the check stops with `provider_auth` or `provider_busy` (`503`) and the page says the AI service rejected the key or is overloaded; nothing is written to the visitor's file. A visitor who runs out of the daily cap sees `usage_cap` (`429`) and the sentence that says to come back tomorrow. Neither case shows a traceback.
+
 ## Steps the owner does once
 
 1. Sign in at vercel.com with GitHub and choose **Add New → Project**, then import `ol1ak5/model-x-ray`. Keep the root directory as the repository root; Vercel detects FastAPI from `pyproject.toml`.

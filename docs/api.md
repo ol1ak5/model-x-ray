@@ -122,18 +122,22 @@ The daily cap counts visitors by the first address in `x-forwarded-for` when the
 
 ## Errors
 
-Users never see a traceback. `friendly_error(error)` turns any exception into a status code and one short sentence; an exception handler registered on the app (`@app.exception_handler(Exception)`) uses it for normal requests, and the streams send the same pair as their `error` event. Only unexpected errors are logged with the full traceback, for the team.
+Users never see a traceback. Every failure is answered as `{"detail": "<one short sentence>", "code": "<stable id>"}`: `friendly_error(error)` turns any exception into a status, a code and the sentence, dedicated handlers answer raised refusals, the request-validation error and unexpected exceptions, and the streams send the same three fields as their `error` event. The page switches on `code` to say what the reader can do — wait a minute, come back tomorrow, send another file, or tell the team — instead of guessing from the prose. Only unexpected errors are logged with the full traceback, for the team.
 
-| Code | When | Message (short) |
+| Status | Codes | When |
 |---|---|---|
-| `400` | Unknown spreadsheet or a workbook Model X-Ray cannot read | The `ValueError` message |
-| `404` | No investigation with that id | |
-| `409` | Resume on a finished investigation | |
-| `422` | A formula the engine cannot calculate (e.g. `INDIRECT`) or a formula problem such as division by zero | "This model uses a formula Model X-Ray cannot calculate yet: ..." |
-| `429` | A daily limit is reached | |
-| `502` | Token Factory returned an error, or the model's answer did not fit the expected format | "The AI service returned an error. Please try again." |
-| `503` | Token Factory timed out, is rate limiting, rejected the key, or cannot be reached | e.g. "The AI service took too long to answer. Please try again in a minute." |
-| `500` | Anything else | "Something went wrong during the investigation. The team has the details; please try again." |
+| `400` | `missing_model`, `unknown_model`, `upload_rejected`, `workbook_unreadable`, `missing_action`, `missing_question`, `question_too_long`, `bad_state`, `resume_file_mismatch`, `invalid_request`, `bad_request` | The request or the workbook cannot lead to a check |
+| `403` | `forbidden` | Reserved for the same-origin gate on a public deployment |
+| `404` | `unknown_investigation`, `no_target`, `no_corrected_copy`, `upload_disabled` | The id, the cell or the file is not here |
+| `409` | `finished_investigation` | Resume on a finished investigation |
+| `413` | `upload_too_large` | Above the 10 MB body limit |
+| `422` | `unsupported_formula`, `formula_error`, `invalid_fix`, `invalid_request` | The engine cannot calculate the formula, or the fix does not work |
+| `429` | `usage_cap` | A daily limit is reached |
+| `502` | `provider_error`, `provider_malformed` | Token Factory returned an error, or the answer did not fit the expected format |
+| `503` | `provider_timeout`, `provider_busy`, `provider_auth`, `provider_unreachable`, `provider_failure` | Token Factory timed out, is overloaded, rejected the key, or cannot be reached |
+| `500` | `unexpected` | Anything else |
+
+A start-up check runs before the server binds: a missing `NEBIUS_API_KEY`, a models folder that does not exist or holds no `.xlsx`, and a folder the server cannot write are reported one per line, and the process stops instead of serving requests that would fail later.
 
 ## Not yet
 

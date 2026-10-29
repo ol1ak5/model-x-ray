@@ -196,7 +196,7 @@ export default function CheckPage({
   view: InvestigationView | null;
   fixedIn: InvestigationView | null;
   running: boolean;
-  error: string | null;
+  error: { message: string; advice: string } | null;
   loadWorkbook: () => Promise<WorkbookView>;
   onDecide: (cell: string, decision: Decision) => void;
   onHome: () => void;
@@ -273,7 +273,8 @@ export default function CheckPage({
 
         {error && (
           <p className="alert" role="alert">
-            {error}
+            {error.message}
+            {error.advice && <span className="alert-advice"> {error.advice}</span>}
           </p>
         )}
 
