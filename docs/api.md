@@ -35,6 +35,7 @@ Models come from the role registry: Super for the Investigator, Verifier and loc
 `create_app(source, sandbox, models, checkpointer, cap)` returns a FastAPI app. Everything it needs is passed in, so tests use the demo workbook, scripted models and an in-memory checkpointer, and production passes Token Factory models and the Postgres checkpointer (#72).
 
 - `AgentModels(llm, verifier=None, locator=None, mapper=None)`: one model per role, the same parameters as `run_investigation`.
+- `public=False`: the deployed demo sets it, and it changes two things. The API reference (`/docs`, `/redoc`, `/openapi.json`) is not published, and the routes that spend credits (`POST /investigations`, `/investigations/stream`, `/investigations/{id}/resume`, `/resume/stream`, `/ask`) answer only a request whose `Origin` or `Referer` is the deployment's own host (or an entry in `MODEL_X_RAY_ALLOWED_ORIGINS`), with `403 same_origin_required` otherwise. The page keeps working because its requests carry the origin; a bare `curl` does not. This is not a security boundary — a client can forge the header — it removes the accidental and scripted use while the WAF limit and the usage cap do the rest.
 - `UsageCap(per_visitor, total)`: investigations per visitor (by client IP) per day, and for everyone per day. The demo must stay open to judges until 15 Dec and every run spends our Token Factory credits, so the cap is checked before the graph runs and counted once the workbook is loaded and the investigation exists (a typo in the spreadsheet id costs nothing; a run that fails halfway still counts, because it already spent credits).
 
 ## Endpoints
@@ -127,7 +128,7 @@ Users never see a traceback. Every failure is answered as `{"detail": "<one shor
 | Status | Codes | When |
 |---|---|---|
 | `400` | `missing_model`, `unknown_model`, `upload_rejected`, `workbook_unreadable`, `missing_action`, `missing_question`, `question_too_long`, `bad_state`, `resume_file_mismatch`, `invalid_request`, `bad_request` | The request or the workbook cannot lead to a check |
-| `403` | `forbidden` | Reserved for the same-origin gate on a public deployment |
+| `403` | `same_origin_required`, `forbidden` | The public deployment answers only the page it serves |
 | `404` | `unknown_investigation`, `no_target`, `no_corrected_copy`, `upload_disabled` | The id, the cell or the file is not here |
 | `409` | `finished_investigation` | Resume on a finished investigation |
 | `413` | `upload_too_large` | Above the 10 MB body limit |
