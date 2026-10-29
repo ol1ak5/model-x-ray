@@ -19,7 +19,7 @@ Open the [live demo](https://model-x-ray.vercel.app) and press **Try the demo** 
 Model X-Ray finds the errors in your Excel model, tests each fix on a copy and waits for your approval.
 
 - **7 error types:** typed values, wrong references, flipped signs, incomplete ranges, wrong periods, logic errors and unusual inputs.
-- **52 Excel functions:** `SUM`, `SUMIF`, `XLOOKUP`, `NPV`, `IRR`, plus cross-sheet references, defined names and circular references ([full list](docs/spreadsheet-core.md)).
+- **52 Excel functions,** plus cross-sheet references, defined names and circular references ([full list](docs/spreadsheet-core.md)).
 - **Not supported yet:** links to other workbooks, Data Tables and VBA.
 
 ## How We Tested The Agent
