@@ -1,0 +1,164 @@
+[
+  {
+    "id": "open-1",
+    "scene": "open",
+    "text": "Every big financial decision starts in a spreadsheet."
+  },
+  {
+    "id": "open-2",
+    "scene": "open",
+    "text": "And somewhere in it, there is a cell nobody checked."
+  },
+  {
+    "id": "stakes-1",
+    "scene": "stakes",
+    "text": "One formula divided by the wrong number. $6.2 billion lost.",
+    "say": "One formula divided by the wrong number. Six point two billion dollars, lost."
+  },
+  {
+    "id": "stakes-2",
+    "scene": "stakes",
+    "text": "One missing minus sign. A capital loss reported as a capital gain."
+  },
+  {
+    "id": "stakes-3",
+    "scene": "stakes",
+    "text": "None of them was fraud. They were spreadsheet errors."
+  },
+  {
+    "id": "who-1",
+    "scene": "who",
+    "text": "We built it for analysts, FP&A and corporate finance, M&A and investment banking, valuation and deal advisory, and auditors.",
+    "say": "We built it for analysts, financial planning and analysis, and corporate finance, mergers and acquisitions, and investment banking, valuation and deal advisory, and auditors."
+  },
+  {
+    "id": "who-2",
+    "scene": "who",
+    "text": "But it works for anyone whose numbers have to be right. If you work in Excel, it works for you."
+  },
+  {
+    "id": "who-3",
+    "scene": "who",
+    "text": "Thousands of formulas. Dozens of tabs. And no time to trace every one by hand."
+  },
+  {
+    "id": "ai-1",
+    "scene": "ai",
+    "text": "You could ask a chatbot. It will sound convincing."
+  },
+  {
+    "id": "ai-2",
+    "scene": "ai",
+    "text": "But language models are built to reason, not to calculate."
+  },
+  {
+    "id": "ai-3",
+    "scene": "ai",
+    "text": "A financial model doesn't need a plausible answer. It needs a proven one."
+  },
+  {
+    "id": "reveal-1",
+    "scene": "reveal",
+    "text": "Meet Model X-Ray."
+  },
+  {
+    "id": "reveal-2",
+    "scene": "reveal",
+    "text": "The debugger for financial models."
+  },
+  {
+    "id": "demo-1",
+    "scene": "demo",
+    "text": "Here is a real one. A power purchase agreement model, with 2,400 formulas and three errors we planted.",
+    "say": "Here is a real one. A power purchase agreement model, with two thousand four hundred formulas, and three errors we planted."
+  },
+  {
+    "id": "demo-2",
+    "scene": "demo",
+    "text": "No question needed. It reads every sheet and labels every line."
+  },
+  {
+    "id": "demo-3",
+    "scene": "demo",
+    "text": "It finds the suspects and works out the cause."
+  },
+  {
+    "id": "demo-4",
+    "scene": "demo",
+    "text": "Then it proves each fix: it changes a copy, recalculates the whole workbook, and tries to break its own answer."
+  },
+  {
+    "id": "demo-5",
+    "scene": "demo",
+    "text": "Three planted errors. Three found."
+  },
+  {
+    "id": "demo-6",
+    "scene": "demo",
+    "text": "The cell, the cause, the fix, and the evidence behind it."
+  },
+  {
+    "id": "demo-7",
+    "scene": "demo",
+    "text": "Not sure? Ask it."
+  },
+  {
+    "id": "demo-8",
+    "scene": "demo",
+    "text": "You decide: approve, edit or reject. Approved fixes go to a corrected copy. Your original file never changes."
+  },
+  {
+    "id": "engine-1",
+    "scene": "engine",
+    "text": "Inside, two minds work together."
+  },
+  {
+    "id": "engine-2",
+    "scene": "engine",
+    "text": "NVIDIA Nemotron does the thinking. A calculation engine does the maths.",
+    "say": "NVIDIA [Nemotron](/nˈimoʊtɹɑn/) does the thinking. A calculation engine does the maths."
+  },
+  {
+    "id": "engine-3",
+    "scene": "engine",
+    "text": "Nemotron maps the model, judges every suspect and tells a real error from a deliberate choice. Then a second agent, the Verifier, tries to break every fix before you see it.",
+    "say": "[Nemotron](/nˈimoʊtɹɑn/) maps the model, judges every suspect, and tells a real error from a deliberate choice. Then a second agent, the Verifier, tries to break every fix before you see it."
+  },
+  {
+    "id": "engine-4",
+    "scene": "engine",
+    "text": "All of it running on Nebius Token Factory."
+  },
+  {
+    "id": "proof-1",
+    "scene": "proof",
+    "text": "98% of planted errors, fixed.",
+    "say": "Ninety-eight percent of planted errors, fixed."
+  },
+  {
+    "id": "proof-2",
+    "scene": "proof",
+    "text": "Zero false alarms on values set on purpose."
+  },
+  {
+    "id": "proof-3",
+    "scene": "proof",
+    "text": "18 of 20 on workbooks it had never seen.",
+    "say": "Eighteen of twenty, on workbooks it had never seen."
+  },
+  {
+    "id": "proof-4",
+    "scene": "proof",
+    "text": "For about one and a half cents a check."
+  },
+  {
+    "id": "close-1",
+    "scene": "close",
+    "text": "Every formula, checked. Every fix, proven."
+  },
+  {
+    "id": "close-2",
+    "scene": "close",
+    "text": "Model X-Ray."
+  }
+]
