@@ -61,20 +61,18 @@ A real model has thousands of formulas across dozens of tabs. AI looks like the 
 ## Architecture
 
 ```mermaid
-flowchart TD
-    A([Excel workbook]) --> B["Understand<br/>sheets, lines and periods"]
-    B --> C["Locate and trace<br/>the cell behind the number"]
-    C --> D["Diagnose<br/>a cause and a candidate fix"]
-    D --> E["Test and verify<br/>recalculate a sandbox copy"]
-    E -. "rejected, try again" .-> D
-    E --> F["Explain<br/>the evidence and a plain report"]
-    F --> G{"You approve, edit or reject"}
-    G -. "edit the fix" .-> E
-    G -. "approve" .-> H([Corrected workbook])
-    G -. "reject" .-> I([File left untouched])
+flowchart LR
+    A([Excel workbook]) --> B["Understand<br/>sheets, lines, periods"]
+    B --> C["Diagnose<br/>a cause and a candidate fix"]
+    C --> D["Test and verify<br/>recalculate a sandbox copy"]
+    D -. "rejected, try again" .-> C
+    D --> E["Explain<br/>the evidence and a plain report"]
+    E --> F{"You decide"}
+    F -. "edit the fix" .-> D
+    F --> G([Corrected file, or nothing changes])
 ```
 
-Solid arrows are the run. Dotted arrows are the retry loop, your edit going back through the test, and the two ways out. Nemotron 3 Super maps the model, 3.5 Super diagnoses and argues against every fix, 3.5 Lightning writes the report, and the engine does every calculation. The ten nodes, the retry budget and the time limits are in [`docs/agent-architecture.md`](docs/agent-architecture.md).
+Solid arrows are the run. Dotted arrows are the retry loop and your edit going back through the test. Nemotron 3 Super maps the model, 3.5 Super diagnoses and argues against every fix, 3.5 Lightning writes the report, and the engine does every calculation. The ten nodes, the retry budget and the time limits are in [`docs/agent-architecture.md`](docs/agent-architecture.md).
 
 ## How we tested it
 
