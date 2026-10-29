@@ -35,6 +35,7 @@ When the `VERCEL` environment variable is set (Vercel sets it), every writable d
 | Response body | 4.5 MB | The corrected workbook comes back inside the stream, so the same size bound applies |
 | Duration | 300 s per request (`maxDuration` in `vercel.json`) | A full investigation takes 30 to 60 s on the demo model |
 | Usage cap | `DEMO_MAX_PER_VISITOR`, `DEMO_MAX_PER_DAY` | Counted per instance and reset when an instance is recycled, so the real ceiling is higher than the numbers. Visitors are told apart by `x-forwarded-for` |
+| API surface | `public=True` when `VERCEL` is set | `/docs`, `/redoc` and `/openapi.json` answer 404, and the routes that spend credits refuse a request that does not come from the page (`403 same_origin_required`). The page calls the same routes from the same origin, so nothing changes for a visitor |
 | Plan | Hobby is for non-commercial use | Fits a hackathon demo |
 
 When the Token Factory balance runs out, the check stops with `provider_auth` or `provider_busy` (`503`) and the page says the AI service rejected the key or is overloaded; nothing is written to the visitor's file. A visitor who runs out of the daily cap sees `usage_cap` (`429`) and the sentence that says to come back tomorrow. Neither case shows a traceback.

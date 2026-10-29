@@ -3,6 +3,7 @@ import hashlib
 import json
 import logging
 import time
+from urllib.parse import urlparse
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from datetime import date
@@ -408,8 +409,8 @@ def investigation_view(graph: CompiledStateGraph, investigation_id: str) -> dict
     }
 
 
-def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: AgentModels, checkpointer: BaseCheckpointSaver, cap: UsageCap, allowed_origins: list[str] | None = None, store: BaseStore | None = None, upload_dir: Path | None = None, upload_ttl: float = UPLOAD_TTL, clock: Callable[[], float] = time.monotonic, copy_dir: Path | None = None, copy_ttl: float = COPY_TTL, ask_cap: UsageCap | None = None) -> FastAPI:
-    app = FastAPI(title="Model X-Ray")
+def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: AgentModels, checkpointer: BaseCheckpointSaver, cap: UsageCap, allowed_origins: list[str] | None = None, store: BaseStore | None = None, upload_dir: Path | None = None, upload_ttl: float = UPLOAD_TTL, clock: Callable[[], float] = time.monotonic, copy_dir: Path | None = None, copy_ttl: float = COPY_TTL, ask_cap: UsageCap | None = None, public: bool = False) -> FastAPI:
+    app = FastAPI(title="Model X-Ray", docs_url=None if public else "/docs", redoc_url=None if public else "/redoc", openapi_url=None if public else "/openapi.json")
     app.add_middleware(CORSMiddleware, allow_origins=allowed_origins or [], allow_origin_regex=LOCAL_DEV_ORIGIN, allow_methods=["GET", "POST"], allow_headers=["Content-Type"])
     graphs: dict[str, CompiledStateGraph] = {}
     held = Uploads(source, upload_dir, upload_ttl, clock)
@@ -506,12 +507,23 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
         except ValueError as error:
             raise model_failure(error) from error
 
+    def refuse_foreign_origin(http: Request) -> None:
+        if not public:
+            return
+        origin = http.headers.get("origin") or http.headers.get("referer") or ""
+        netloc = urlparse(origin).netloc if origin else ""
+        permitted = {urlparse(item).netloc for item in allowed_origins or []}
+        if netloc and (netloc == http.headers.get("host", "") or netloc in permitted):
+            return
+        raise Failure(403, "same_origin_required", "This demo answers only the page it serves. Run Model X-Ray locally to use the API.")
+
     def graph_of(investigation_id: str) -> CompiledStateGraph:
         if investigation_id not in graphs:
             raise Failure(404, "unknown_investigation", f"No investigation {investigation_id!r}")
         return graphs[investigation_id]
 
     def open_investigation(request: StartRequest, http: Request) -> tuple[CompiledStateGraph, str]:
+        refuse_foreign_origin(http)
         if not request.spreadsheet_id:
             raise Failure(400, "missing_model", "Choose a model or send the .xlsx file to check")
         visitor = visitor_of(http)
@@ -534,7 +546,9 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
         except ValueError as error:
             raise model_failure(error) from error
 
-    def resumable(investigation_id: str, request: ResumeRequest, upload_id: str | None = None) -> tuple[CompiledStateGraph, Any]:
+    def resumable(investigation_id: str, request: ResumeRequest, upload_id: str | None = None, http: Request | None = None) -> tuple[CompiledStateGraph, Any]:
+        if http is not None:
+            refuse_foreign_origin(http)
         if upload_id is not None and request.state is not None and request.state.get("spreadsheet_id") != upload_id:
             raise Failure(400, "resume_file_mismatch", "This is not the file the review started on; send the same .xlsx to continue it")
         if investigation_id in graphs:
@@ -594,6 +608,7 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
 
     @app.post("/investigations/{investigation_id}/ask")
     def ask(investigation_id: str, request: AskRequest, http: Request) -> dict:
+        refuse_foreign_origin(http)
         question = request.question.strip()
         if not question:
             raise Failure(400, "missing_question", "Write a question for the agent")
@@ -681,8 +696,8 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
         return investigation_view(graph_of(investigation_id), investigation_id)
 
     @app.post("/investigations/{investigation_id}/resume")
-    def resume(investigation_id: str, request: ResumeRequest) -> dict:
-        graph, graph_input = resumable(investigation_id, request)
+    def resume(investigation_id: str, request: ResumeRequest, http: Request) -> dict:
+        graph, graph_input = resumable(investigation_id, request, http=http)
         graph.invoke(graph_input, {"configurable": {"thread_id": investigation_id}})
         view = investigation_view(graph, investigation_id)
         release(graph, investigation_id, False)
@@ -690,6 +705,7 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
 
     @app.post("/investigations/{investigation_id}/resume/stream")
     async def resume_stream(investigation_id: str, http: Request) -> StreamingResponse:
+        refuse_foreign_origin(http)
         request, content, name = await read_request(http, ResumeRequest)
         upload_id = hold(content, name) if content is not None else None
         graph, graph_input = resumable(investigation_id, request, upload_id)
