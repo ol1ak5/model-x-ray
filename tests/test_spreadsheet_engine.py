@@ -140,3 +140,16 @@ def test_a_function_with_missing_arguments_is_a_formula_error_not_a_crash() -> N
     with pytest.raises(FormulaError, match="EOMONTH"):
         book.value("Sheet!A1")
     assert book.value("Sheet!A3") == 0
+
+
+def test_text_joined_with_a_number_reads_as_excel_shows_it_on_the_ppa_headline() -> None:
+    book = load_xlsx(Path(__file__).resolve().parents[1] / "demo_models" / "PPA_Model_Europe.xlsx")
+
+    assert book.formula("Results!E7") == '=COUNTIF($M$13:$M$22,">0")&" of 10"'
+    assert book.value("Results!E7") == "8 of 10", "a whole count joins as 8, not 8.0"
+
+    sheet = Workbook({"S!A1": 0.1, "S!A2": 0.2, "S!A3": True, "S!B1": '=(A1+A2)&" m"', "S!B2": '="Flag: "&A3', "S!B3": '=2.5&"x"'})
+    assert book.value("Results!E6") > 0
+    assert sheet.value("S!B1") == "0.3 m", "a sum keeps Excel's 15 significant digits, without float noise"
+    assert sheet.value("S!B2") == "Flag: TRUE"
+    assert sheet.value("S!B3") == "2.5x"

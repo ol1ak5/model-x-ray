@@ -12,6 +12,16 @@ CellContent = float | str | bool
 Value = float | str | bool | None
 
 
+
+def as_text(value: Value) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "TRUE" if value else "FALSE"
+    if isinstance(value, float):
+        return str(int(value)) if value.is_integer() and abs(value) < 1e15 else f"{value:.15g}"
+    return str(value)
+
 class CellMetadata(TypedDict):
     note: str | None
     font_color: str | None
@@ -932,7 +942,7 @@ class FormulaEvaluator:
         while self.at_op("&"):
             self.take()
             right = self.additive()
-            left = f"{'' if left is None else left}{'' if right is None else right}"
+            left = f"{as_text(left)}{as_text(right)}"
         return left
 
     def additive(self) -> Value:
