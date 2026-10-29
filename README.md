@@ -5,7 +5,6 @@ The debugger for financial models. An AI agent powered by NVIDIA Nemotron that f
 - **Live demo:** <https://model-x-ray.vercel.app>
 - **Devpost submission:**
 - **Demo video (YouTube):**
-- **Documentation:** [docs/](docs/), [API reference](docs/api.md), [Agent architecture](docs/agent-architecture.md)
 
 > **Track:** Best Apps and Agents – Nebius x NVIDIA Global AI Hackathon 2026
 
