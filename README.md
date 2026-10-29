@@ -24,7 +24,7 @@ uv sync
 cp .env.example .env
 ```
 
-In `.env`, set `NEBIUS_API_KEY` and `MODEL_X_RAY_MODELS_DIR=demo_models`, then start both servers:
+In `.env`, set `NEBIUS_API_KEY`. The models folder already points at `demo_models`, the two workbooks that ship with the repository; point `MODEL_X_RAY_MODELS_DIR` somewhere else to check your own files. Then start both servers:
 
 ```bash
 scripts/dev.sh

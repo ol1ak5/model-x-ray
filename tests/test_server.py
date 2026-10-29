@@ -38,6 +38,26 @@ def test_the_app_from_env_lists_every_model_in_the_folder_and_allows_the_fronten
     assert "access-control-allow-origin" not in client.get("/health", headers={"Origin": "https://evil.example"}).headers
 
 
+def test_the_env_example_a_reader_copies_points_at_workbooks_that_exist(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    values = dict(line.split("=", 1) for line in Path(".env.example").read_text().splitlines() if "=" in line and not line.startswith("#"))
+    models_dir = Path(values["MODEL_X_RAY_MODELS_DIR"])
+
+    assert models_dir.is_dir(), f"{models_dir} is what a fresh clone copies, and it does not exist"
+    assert any(models_dir.rglob("*.xlsx")), f"{models_dir} holds no .xlsx models"
+
+    monkeypatch.setattr("model_x_ray.server.load_dotenv", lambda: None)
+    monkeypatch.setenv("NEBIUS_API_KEY", "test-key")
+    monkeypatch.setenv("MODEL_X_RAY_MODELS_DIR", str(models_dir))
+    monkeypatch.setenv("MODEL_X_RAY_OUTPUT_DIR", str(tmp_path / "corrected"))
+    monkeypatch.setenv("MODEL_X_RAY_UPLOAD_DIR", str(tmp_path / "uploads"))
+    monkeypatch.setenv("MODEL_X_RAY_CHECKPOINTS", str(tmp_path / "checkpoints.db"))
+    monkeypatch.setenv("MODEL_X_RAY_MEMORY", str(tmp_path / "memory.db"))
+    client = TestClient(app_from_env())
+
+    assert client.get("/health").json() == {"status": "ok"}
+    assert "PPA_Model_Europe" in [row["id"] for row in client.get("/spreadsheets").json()]
+
+
 def test_a_missing_models_folder_stops_the_server_with_one_readable_line(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MODEL_X_RAY_MODELS_DIR", str(tmp_path / "nowhere"))
     with pytest.raises(StartupError) as refused:
