@@ -3,13 +3,15 @@
 The debugger for financial models. An AI agent powered by NVIDIA Nemotron that finds the errors hiding in Excel workbooks and proves every fix before a single cell changes.
 
 - **Live demo:** <https://model-x-ray.vercel.app>
-- **Documentation:** [docs/](docs/) · [API reference](docs/api.md) · [Agent architecture](docs/agent-architecture.md)
+- **Devpost submission:**
+- **Demo video (YouTube):**
+- **Documentation:** [docs/](docs/), [API reference](docs/api.md), [Agent architecture](docs/agent-architecture.md)
 
 <p align="center"><img src="docs/screenshot-start.png" alt="Model X-Ray: the opening screen" width="800"></p>
 
 ## Try it
 
-Open the [live demo](https://model-x-ray.vercel.app) and press **Try the demo**. It checks a European power purchase agreement model — 2,400 formulas and three planted errors — and stops for your approval before it writes anything. You can also upload your own `.xlsx` (up to 4.5 MB).
+Open the [live demo](https://model-x-ray.vercel.app) and press **Try the demo**. It checks a European power purchase agreement model with 2,400 formulas and three planted errors, and stops for your approval before it writes anything. You can also upload your own `.xlsx`, up to 4.5 MB.
 
 ## Run it locally
 
@@ -28,13 +30,13 @@ In `.env`, set `NEBIUS_API_KEY` and `MODEL_X_RAY_MODELS_DIR=demo_models`, then s
 scripts/dev.sh
 ```
 
-Open <http://localhost:5173> and press **Try the demo**; the interactive API reference is on <http://localhost:8000/docs>. `demo_models/` holds the two workbooks that ship with the repository, and the rest of `.env.example` is optional: model overrides, file paths and cleanup, CORS, the public-demo limits and LangSmith tracing. `GOOGLE_APPLICATION_CREDENTIALS` belongs to the Google Sheets sandbox, which no server path uses yet.
+Open <http://localhost:5173> and press **Try the demo**. The API reference is on <http://localhost:8000/docs>. `demo_models/` holds the two workbooks that ship with the repository. The rest of `.env.example` is optional: model overrides, file paths and cleanup, CORS, the public demo limits and LangSmith tracing. `GOOGLE_APPLICATION_CREDENTIALS` belongs to the Google Sheets sandbox, which no server path uses yet.
 
 ## Use it from the API
 
-The web app is one client of a typed HTTP API. `POST /investigations` runs a check and returns the whole run, paused for your approval; `POST /investigations/{id}/resume` approves, edits or rejects the fix.
+The web app is one client of a typed HTTP API. `POST /investigations` runs a check and returns the whole run, paused for your approval. `POST /investigations/{id}/resume` approves, edits or rejects the fix.
 
-The public demo is for the browser: it calls the same API, but it has no key, one shared budget and a cap of five checks per visitor per day, with no uptime promise. Run the examples against your own copy.
+The public demo is for the browser. It calls the same API, but it has no key, one shared budget and a cap of five checks per visitor per day, with no uptime promise. Run the examples against your own copy.
 
 ```bash
 curl -s -X POST localhost:8000/investigations \
@@ -42,7 +44,7 @@ curl -s -X POST localhost:8000/investigations \
   -d '{"spreadsheet_id":"PPA_Model_Europe"}' | jq -r '.report'
 ```
 
-Every route and payload is in [`docs/api.md`](docs/api.md); drop the `jq` part to see the whole run.
+Every route and payload is in [`docs/api.md`](docs/api.md). Drop the `jq` part to see the whole run.
 
 ## What it does
 
@@ -52,22 +54,24 @@ Every route and payload is in [`docs/api.md`](docs/api.md); drop the `jq` part t
 
 ## Why it matters
 
-A wrong cell moves real money and stays invisible. In 2012 a JPMorgan risk model divided by a sum instead of an average, and the "London Whale" trades lost $6.2 billion; in 1995 a missing minus sign turned Fidelity Magellan's $1.3 billion capital loss into a gain.
+A wrong cell moves real money and stays invisible. In 2012 a JPMorgan risk model divided by a sum instead of an average, and the "London Whale" trades lost $6.2 billion. In 1995 a missing minus sign turned Fidelity Magellan's $1.3 billion capital loss into a gain.
 
-A real model has thousands of formulas across dozens of tabs, and AI looks like the obvious reviewer — except a language model explains a number convincingly and still gets it wrong. Model X-Ray keeps the two jobs apart: **Nemotron reasons, the engine calculates.** Every claim is recalculated, and nothing changes without your approval.
+A real model has thousands of formulas across dozens of tabs. AI looks like the obvious reviewer, but a language model explains a number convincingly and still gets it wrong. Model X-Ray keeps the two jobs apart: **Nemotron reasons, the engine calculates.** Every claim is recalculated, and nothing changes without your approval.
 
-## How it works
+## Architecture
 
-1. **Understand.** It reads the workbook and says what each sheet, line and period is. *Nemotron 3 Super maps the model.*
-2. **Investigate.** It finds the cell behind your question and traces where the number comes from, through the formulas and the dependency graph. *Nemotron 3.5 Super judges every suspect and tells a real error from a deliberate choice.*
-3. **Prove.** It tests the fix in a copy, recalculates the whole workbook with the engine, then a separate Verifier argues against the fix and the reviewer checks the rest of the model. *Rules, engine and Nemotron 3.5 Super.*
-4. **Approve.** You approve, edit or reject the fix and download the corrected file, and you can ask about any error or fix you are unsure of. *Nemotron 3.5 Lightning writes the report and answers.*
+```mermaid
+flowchart LR
+    A["Understand<br/>reads every line and period"] --> B["Investigate<br/>finds the cell and traces the cause"]
+    B --> C["Prove<br/>tests the fix and recalculates"]
+    C --> D["Approve<br/>you decide"]
+```
 
-The ten nodes, the retry loop and the human-in-the-loop pause are in [`docs/agent-architecture.md`](docs/agent-architecture.md); the picture is [`docs/investigation-graph.png`](docs/investigation-graph.png).
+Nemotron 3 Super maps the model, 3.5 Super judges every suspect and argues against each fix, and 3.5 Lightning writes the report and answers your questions. The ten nodes, the retry loop and the human-in-the-loop pause are in [`docs/agent-architecture.md`](docs/agent-architecture.md), with the full picture in [`docs/investigation-graph.png`](docs/investigation-graph.png).
 
 ## How we tested it
 
-We built and tuned the agent on 217 workbooks — 26 Damodaran valuation models, 174 synthetic models with one planted error each plus clean and deliberate-value controls, and 17 logic test models in [`demo/`](demo) — each carrying a known correct answer, so every run is scored against it ([method](docs/evaluation.md)).
+We built and tuned the agent on 217 workbooks: 26 Damodaran valuation models, 174 synthetic models with one planted error each plus clean and deliberate-value controls, and 17 logic test models in [`demo/`](demo). Every model carries a known correct answer, so each run is scored against it ([method](docs/evaluation.md)).
 
 | Synthetic set, 12 variants per type | Rules only | Rules + Nemotron 3.5 Super |
 |---|---|---|
@@ -122,12 +126,12 @@ uv run pytest           # 250 offline tests, no credits spent
 uv run pytest -m live   # 26 live tests against Token Factory, spends credits
 ```
 
-`scripts/serve.sh` runs the API alone, `scripts/export_graph.sh` refreshes the graph picture, `scripts/screenshots.sh` renders the page at two sizes. The working contract — branches, draft PRs, issue format, commit naming — is in [`AGENTS.md`](AGENTS.md).
+`scripts/serve.sh` runs the API alone, `scripts/export_graph.sh` refreshes the graph picture, and `scripts/screenshots.sh` renders the page at two sizes. The working contract for changes is in [`AGENTS.md`](AGENTS.md): branches, draft PRs, issue format and commit naming.
 
 ## Feedback on Token Factory and the NVIDIA models
 
 - **What worked:** one endpoint for every model, OpenAI-compatible, with no adapter for LangGraph. Model IDs, context and prices come from `GET /v1/models`.
-- **The one thing to know:** a reasoning model can spend its whole output budget on thinking. The structured conclusion is asked once more with thinking turned off, which is what keeps a check inside a browser request.
+- **The one thing to know:** a reasoning model can spend its whole output budget on thinking. The structured conclusion is asked once more with thinking turned off, which keeps a check inside a browser request.
 - **Failures arrive as 200s.** An overloaded or rejected call can answer HTTP 200 with `[ERROR: …]` in the body, so every answer is read and retried instead of trusted; overload (429, 5xx, 529) waits 5, 15 and 30 seconds before giving up.
 
 ## License
