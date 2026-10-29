@@ -511,9 +511,10 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
         if not public:
             return
         origin = http.headers.get("origin") or http.headers.get("referer") or ""
-        netloc = urlparse(origin).netloc if origin else ""
-        permitted = {urlparse(item).netloc for item in allowed_origins or []}
-        if netloc and (netloc == http.headers.get("host", "") or netloc in permitted):
+        origin_host = urlparse(origin).hostname or ""
+        request_host = (http.headers.get("host") or "").split(":")[0]
+        permitted = {urlparse(item).hostname for item in allowed_origins or [] if urlparse(item).hostname}
+        if origin_host and (origin_host == request_host or origin_host in permitted):
             return
         raise Failure(403, "same_origin_required", "This demo answers only the page it serves. Run Model X-Ray locally to use the API.")
 
