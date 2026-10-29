@@ -57,7 +57,7 @@ Deliberately small, matching standard financial models:
 - Whole rows and columns: `70:70`, `$8:$8`, `B:B`, clipped to the cells the sheet uses; their formula pattern keeps the row (or column) and is stable across a row of copies
 - Defined names: a workbook name such as `growth` (`Inputs!$B$2`) or `dates_row` (`Acc!$8:$8`) reads its range; an unknown name is `#NAME?`
 - Error literals written in a formula (`=#REF!`, `Sheet!#REF!`) raise that error, so `IFERROR` can catch them
-- Operators: `+ - * / ^`, unary minus, `&` (join text), comparisons `= <> < > <= >=`, parentheses
+- Operators: `+ - * / ^`, unary minus, `&` (join text; a number joins as Excel shows it in General format, so a count of 8 gives `8`, not `8.0`, and `0.1+0.2` gives `0.3`; `TRUE` and `FALSE` join in capitals), comparisons `= <> < > <= >=`, parentheses
 - Maths: `SUM`, `AVERAGE`, `MIN`, `MAX`, `ROUND` (half away from zero, as in Excel and Google Sheets), `ABS`, `SUMPRODUCT` (equal-size ranges, text counts as 0), `ROUNDDOWN` (toward zero), `INT` (down to the next whole number, so `INT(-8.9)` is -9), `MOD(number, divisor)` (takes the divisor's sign, as in Excel; a zero divisor is `#DIV/0!`), `POWER(number, power)` (same as `^`: zero to a negative power is `#DIV/0!`, a negative number to a fractional power is `#NUM!`)
 - Logic: `IF`, `IFERROR`, `AND`, `OR`, `NOT`, `CHOOSE(index, values...)` (evaluates only the chosen value; an index with no value is `#VALUE!`)
 - Information: `ISERROR`, `ISNUMBER`, `ISTEXT`, `ISBLANK` (an error argument gives `TRUE` for ISERROR and `FALSE` for the others)
