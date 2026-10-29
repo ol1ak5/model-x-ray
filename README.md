@@ -9,23 +9,21 @@ The debugger for financial models. An AI agent powered by NVIDIA Nemotron that f
 
 > **Track:** Best Apps and Agents – Nebius x NVIDIA Global AI Hackathon 2026
 
+<p align="center"><img src="docs/screenshot-start.png" alt="Model X-Ray: the opening screen" width="800"></p>
+
 ## Try It
 
 Open the [live demo](https://model-x-ray.vercel.app) and press **Try the demo**. It checks a European power purchase agreement model with 2,400 formulas and three planted errors, and stops for your approval before it writes anything. You can also upload your own `.xlsx`, up to 4.5 MB.
 
-<p align="center"><img src="docs/screenshot-start.png" alt="Model X-Ray: the opening screen" width="800"></p>
-
 ## What It Does
 
-Model X-Ray finds the errors in your Excel model, tests each fix on a copy and waits for your approval.
+Designed for everyone who needs their numbers to be right.
 
-- **You stay in the loop.** You approve, edit or reject every fix, and nothing changes in your file until you do. An approved fix goes to a corrected copy, and the original never changes.
-- **Ask about any finding.** Under each error, a question field answers in plain language from the evidence the agent collected, for example whether a typed value could be deliberate.
+Model X-Ray finds the errors in your Excel model, tests each fix on a copy and waits for your approval. If you are not sure, you can ask about any error or fix.
+
 - **Seven error types:** typed values, wrong references, flipped signs, incomplete ranges, wrong periods, logic errors (a formula that contradicts its own label) and unusual inputs.
 - **52 Excel functions**, cross-sheet references, defined names and circular references ([full list](docs/spreadsheet-core.md)).
 - **Not supported yet:** links to other workbooks, Data Tables and VBA. When a check needs one of them, the agent names the cell and the formula and stops instead of guessing.
-
-Designed with M&A and deal teams, investment bankers, corporate finance and FP&A analysts in mind, it is for anyone who needs their numbers to be right.
 
 ## Why It Matters
 
@@ -35,20 +33,24 @@ A real model has thousands of formulas across dozens of tabs. AI looks like the 
 
 ## How It Works
 
-| Step | What happens | Done by |
-|---|---|---|
-| Read | Opens the workbook and reads every formula | Engine |
-| Map | Labels every line and period (revenue, cost, ratio) | Nemotron 3 Super |
-| Locate | Picks the cells to investigate, or checks the whole model | Code, Nemotron 3 Super when needed |
-| Trace | Follows the dependency graph and measures what drives each change | Engine |
-| Diagnose | Rules propose suspects. The Investigator judges whether each one is an error or a deliberate choice, and reviews the model's logic line by line when no rule fires | Nemotron 3.5 Super |
-| Test | Applies the fix to a sandbox copy and recalculates the workbook | Engine |
-| Verify | The Verifier tries to break the fix and the engine re-checks every objection. A rejected fix goes back to Diagnose | Nemotron 3.5 Super and the engine |
-| Explain | Writes the report in plain language and answers your questions | Nemotron 3.5 Lightning |
-| Review | Shows the cell, the cause, the fix and its impact, and waits for you. An edited fix goes back to Test | You |
-| Apply | Writes the corrected copy | Engine |
+```mermaid
+flowchart LR
+    A([Workbook]) --> B["Read<br/>engine"]
+    B --> C["Map<br/>Nemotron 3 Super"]
+    C --> D["Locate<br/>code"]
+    D --> E["Trace<br/>engine"]
+    E --> F["Diagnose<br/>Nemotron 3.5 Super"]
+    F --> G["Test<br/>engine, copy"]
+    G --> H["Verify<br/>Nemotron 3.5 Super"]
+    H -. "rejected" .-> F
+    H --> I["Explain<br/>Nemotron 3.5 Lightning"]
+    I --> J{"You decide"}
+    J -. "edit" .-> G
+    J -- "approve" --> K([Corrected copy])
+    J -. "reject" .-> L([Nothing changes])
+```
 
-The graph, the retry budget and the time limits are in [`docs/agent-architecture.md`](docs/agent-architecture.md).
+Dotted arrows are the loops: the Verifier sends a rejected fix back to Diagnose, and an edited fix goes back to Test. The full graph, the retry budget and the time limits are in [`docs/agent-architecture.md`](docs/agent-architecture.md).
 
 ## How We Tested the Agent
 
@@ -67,7 +69,14 @@ We built and tuned the agent on 217 workbooks: 26 public valuation models by Asw
 | False alarms on deliberate values | 12 of 12 ❌ | **0 of 12** ✅ |
 | False alarms on clean models | 0 of 12 ✅ | **0 of 12** ✅ |
 
-On five Damodaran models it had never seen, it fixed 18 of 20 planted errors and raised no false alarm on their clean originals. A check on a model with an error takes about a minute and costs about 1.4 cents.
+Five Damodaran models were kept aside and never used for tuning:
+
+| Final test on unseen models | Rules + Nemotron 3.5 Super |
+|---|---|
+| Planted errors fixed | **18 of 20 (90%)** |
+| Planted errors the agent pointed at | **20 of 20** |
+| False alarms on the five clean originals | **0 of 5** ✅ |
+| Time and cost per check (median, model with an error) | **65 seconds, 1.4 cents** |
 
 ## Built on NVIDIA Nemotron and Nebius Token Factory
 
