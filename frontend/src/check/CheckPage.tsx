@@ -325,8 +325,13 @@ export default function CheckPage({
                 </ul>
                 {settled && !running && fixed > 0 && download && (
                   <div className="done-note">
-                    ✓ {fixed === 1 ? "The fix is" : `${fixed} fixes are`} saved to a new copy.
-                    <a {...download}>Download {name.replace(/\.xlsx$/i, "")} (corrected).xlsx</a>
+                    <span>
+                      ✓ {fixed === 1 ? "The fix is" : `${fixed} fixes are`} saved to a new copy.
+                      <small>Your original file is unchanged.</small>
+                    </span>
+                    <a className="pill green" {...download}>
+                      Download {name.replace(/\.xlsx$/i, "")} (corrected).xlsx
+                    </a>
                   </div>
                 )}
               </>
