@@ -219,7 +219,8 @@ export async function askAgent(id: string, question: string, state: Investigatio
 }
 
 export type WorkbookCell = { ref: string; value: number | string | boolean | null; formula: string | null };
-export type WorkbookSheet = { name: string; rows: number; columns: number; cells: WorkbookCell[] };
+export type CellStyle = { fill?: string; color?: string; bold?: boolean; italic?: boolean; underline?: boolean; size?: number; align?: "left" | "center" | "right"; format?: string; border_top?: string; border_bottom?: string; border_left?: string; border_right?: string };
+export type WorkbookSheet = { name: string; rows: number; columns: number; cells: WorkbookCell[]; styles?: CellStyle[]; cell_styles?: Record<string, number>; widths?: Record<string, number>; gridlines?: boolean };
 export type WorkbookView = { sheets: WorkbookSheet[] };
 
 export async function getWorkbook(spreadsheetId: string, file?: File | null): Promise<WorkbookView> {

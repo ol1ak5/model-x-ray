@@ -57,3 +57,26 @@ def test_a_visitor_sees_the_sheets_of_their_own_file_sent_with_the_request(demo_
 
     unknown = client.post("/workbook", json={"spreadsheet_id": "nowhere"})
     assert unknown.status_code == 400
+
+
+def test_the_viewer_gets_the_workbook_as_it_was_designed_fills_fonts_number_formats_borders_and_widths(scripted_verdict, tmp_path: Path) -> None:
+    model = Path(__file__).parent.parent / "demo_models" / "PPA_Model_Europe.xlsx"
+    client = client_for(model, tmp_path, scripted_verdict)
+
+    book = client.post("/workbook", json={"spreadsheet_id": "demo"})
+
+    assert book.status_code == 200, book.text
+    results = next(sheet for sheet in book.json()["sheets"] if sheet["name"] == "Results")
+
+    def style(ref: str) -> dict:
+        return results["styles"][results["cell_styles"][ref]]
+
+    assert style("M12") == {"fill": "#0D5C33", "color": "#FFFFFF", "bold": True, "size": 9.0, "align": "center"}, "a header keeps its dark green fill and its white, bold, centred text"
+    npv = style("M16")
+    assert npv["fill"] == "#F7FAF8"
+    assert npv["format"] == "#,##0;\\(#,##0\\);\\-", "the NPV keeps its thousands format with negatives in brackets"
+    assert npv["border_bottom"].startswith("1px solid")
+    assert style("H16")["format"].startswith("0.0%"), "coverage stays a percentage"
+    assert style("H16")["color"] == "#12814A", "a linked input keeps its green text"
+    assert results["widths"]["C"] == 11 * 7 + 5, "column widths follow the file"
+    assert results["gridlines"] is False, "the sheet hides gridlines, as in Excel"

@@ -225,7 +225,7 @@ describe("a model check", () => {
     expect(screen.queryByRole("button", { name: "Approve fix" })).toBeNull();
   });
 
-  test("opens the real workbook with the error in red and the cells that depend on it in blue, and shows each cell's formula", async () => {
+  test("opens the real workbook in its own design, with the error in red and the cells that depend on it in blue, and shows each cell's formula", async () => {
     const api = fakeApi([...steps("explain"), ["view", REVIEW]]);
     vi.stubGlobal("fetch", api.fetch);
     const user = await checkDemo();
@@ -236,7 +236,16 @@ describe("a model check", () => {
     const dialog = await screen.findByRole("dialog", { name: /P&L!G5/ });
     await waitFor(() => expect(dialog.querySelector('td[data-ref="G5"]')).toHaveClass("m-err"));
     expect(dialog.querySelector('td[data-ref="G6"]')).toHaveClass("m-dep");
-    expect(dialog.querySelector('td[data-ref="G5"]')).toHaveTextContent("97.76");
+    expect(dialog.querySelector('td[data-ref="G5"]')).toHaveTextContent("97.8");
+    const title = dialog.querySelector('td[data-ref="A1"]') as HTMLElement;
+    expect(title.style.background).toBe("rgb(13, 92, 51)");
+    expect(title.style.color).toBe("rgb(255, 255, 255)");
+    expect(title.style.fontWeight).toBe("700");
+    expect(dialog.querySelector('td[data-ref="G4"]')).toHaveTextContent("188.0");
+    expect((dialog.querySelector('td[data-ref="G4"]') as HTMLElement).style.borderBottom).toBe("1px solid rgb(217, 217, 217)");
+    expect((dialog.querySelector('td[data-ref="G5"]') as HTMLElement).style.background).toBe("");
+    expect(dialog.querySelectorAll("col")[1]).toHaveStyle({ width: "180px" });
+    expect(dialog.querySelector("table")).toHaveClass("nogrid");
     expect(within(dialog).getByText("=G4*Assumptions!$C$5")).toBeInTheDocument();
     expect(within(dialog).getByText("Marks are only shown here, your file is not changed")).toBeInTheDocument();
 
@@ -245,7 +254,7 @@ describe("a model check", () => {
 
     await user.click(within(dialog).getByRole("tab", { name: "Summary" }));
     expect(dialog.querySelector('td[data-ref="H6"]')).toHaveClass("m-dep");
-    expect(dialog.querySelector('td[data-ref="H6"]')).toHaveTextContent("-0.8586666667");
+    expect(dialog.querySelector('td[data-ref="H6"]')).toHaveTextContent("(85.9%)");
     expect(api.sent.filter((request) => request.url.endsWith("/workbook"))).toHaveLength(1);
   });
 
