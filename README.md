@@ -61,13 +61,20 @@ A real model has thousands of formulas across dozens of tabs. AI looks like the 
 ## Architecture
 
 ```mermaid
-flowchart LR
-    A["Understand<br/>reads every line and period"] --> B["Investigate<br/>finds the cell and traces the cause"]
-    B --> C["Prove<br/>tests the fix and recalculates"]
-    C --> D["Approve<br/>you decide"]
+flowchart TD
+    A([Excel workbook]) --> B["Understand<br/>sheets, lines and periods"]
+    B --> C["Locate and trace<br/>the cell behind the number"]
+    C --> D["Diagnose<br/>a cause and a candidate fix"]
+    D --> E["Test and verify<br/>recalculate a sandbox copy"]
+    E -. "rejected, try again" .-> D
+    E --> F["Explain<br/>the evidence and a plain report"]
+    F --> G{"You approve, edit or reject"}
+    G -. "edit the fix" .-> E
+    G -. "approve" .-> H([Corrected workbook])
+    G -. "reject" .-> I([File left untouched])
 ```
 
-Nemotron 3 Super maps the model, 3.5 Super judges every suspect and argues against each fix, and 3.5 Lightning writes the report and answers your questions. The ten nodes, the retry loop and the human-in-the-loop pause are in [`docs/agent-architecture.md`](docs/agent-architecture.md), with the full picture in [`docs/investigation-graph.png`](docs/investigation-graph.png).
+Solid arrows are the run. Dotted arrows are the retry loop, your edit going back through the test, and the two ways out. Nemotron 3 Super maps the model, 3.5 Super diagnoses and argues against every fix, 3.5 Lightning writes the report, and the engine does every calculation. The ten nodes, the retry budget and the time limits are in [`docs/agent-architecture.md`](docs/agent-architecture.md).
 
 ## How we tested it
 
