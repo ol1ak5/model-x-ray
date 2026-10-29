@@ -172,7 +172,8 @@ describe("a model check", () => {
     await user.click(within(errors).getByRole("button", { name: "It's not an error" }));
 
     expect(await screen.findByText("Review complete", { selector: ".state" })).toBeInTheDocument();
-    expect(lastResume(api)?.body).toMatchObject({ action: "reject", state: { id: "inv-typed" }, file: "Demo model.xlsx" });
+    expect(lastResume(api)?.body).toMatchObject({ action: "reject", state: { id: "inv-typed" }, file: "Demo model.xlsx", on_corrected_copy: true });
+    expect(api.sent.find((request) => request.url.includes("/resume/stream"))?.body).not.toHaveProperty("on_corrected_copy");
     expect(api.sent.filter((request) => request.url.endsWith("/investigations/stream"))).toHaveLength(2);
     expect(within(errors).getByText("Not an error")).toBeInTheDocument();
     expect(screen.getByText("1 fix saved to a new copy")).toBeInTheDocument();

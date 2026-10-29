@@ -110,7 +110,7 @@ On Vercel (`docs/deployment.md`) two requests from one visitor can reach two ins
 | `request` | The JSON body the endpoint takes as JSON (`{"question"}` to start, the decision plus `state` to resume) |
 | `file` | The visitor's `.xlsx` |
 
-The server stores the file under its content id (the same `upload-<sha256>` as `POST /spreadsheets`) for the length of the request, so `spreadsheet_id` can be left out when starting. A resume whose file has another content id than the carried state's `spreadsheet_id` is refused with `400` ("This is not the file the review started on"), so a state cannot be replayed against a different workbook. A demo model needs no file: JSON requests work as before.
+The server stores the file under its content id (the same `upload-<sha256>` as `POST /spreadsheets`) for the length of the request, so `spreadsheet_id` can be left out when starting. A resume whose file has another content id than the carried state's `spreadsheet_id` is refused with `400` ("This is not the file the review started on"), so a state cannot be replayed against a different workbook. The one exception is the corrected copy of the same review: when several errors are checked at once and one fix is already approved, the next resume sends that copy with `"on_corrected_copy": true`. It is accepted only if every cell the pending fix changes still holds the formula or value the fix was tested on; the run then continues on the copy, so the next corrected file keeps every approved fix and its change log lists them all. A demo model needs no file: JSON requests work as before.
 
 The final `view` event of both streams adds two fields, so the browser needs no follow-up request:
 

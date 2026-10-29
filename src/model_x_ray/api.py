@@ -27,6 +27,7 @@ from langgraph.types import Command
 from pydantic import BaseModel
 
 from model_x_ray.agents.ask import answer_question
+from model_x_ray.agents.investigator import old_formula
 from model_x_ray.agents.locator import suspects as suspects_of
 from model_x_ray.agents.verifier import CHECK_LABELS
 from model_x_ray.graph import run_continuation, run_investigation
@@ -219,6 +220,14 @@ class ResumeRequest(BaseModel):
     patch: dict[str, Any] | None = None
     intentional: bool = False
     state: dict[str, Any] | None = None
+    on_corrected_copy: bool = False
+
+
+def fits_copy(book: Workbook, patch: dict[str, Any] | None) -> bool:
+    if not patch:
+        return False
+    lines = [patch, *patch.get("also", [])]
+    return all(old_formula(book, line["cell"]) == (line.get("old_formula") or "") for line in lines)
 
 
 def decision_of(request: ResumeRequest) -> dict[str, Any]:
@@ -550,9 +559,13 @@ def create_app(source: SpreadsheetSource, sandbox: SandboxWithWrite, models: Age
     def resumable(investigation_id: str, request: ResumeRequest, upload_id: str | None = None, http: Request | None = None) -> tuple[CompiledStateGraph, Any]:
         if http is not None:
             refuse_foreign_origin(http)
+        rebased = False
         if upload_id is not None and request.state is not None and request.state.get("spreadsheet_id") != upload_id:
-            raise Failure(400, "resume_file_mismatch", "This is not the file the review started on; send the same .xlsx to continue it")
-        if investigation_id in graphs:
+            if not (request.on_corrected_copy and fits_copy(source.load(upload_id), request.state.get("patch"))):
+                raise Failure(400, "resume_file_mismatch", "This is not the file the review started on; send the same .xlsx to continue it")
+            request = request.model_copy(update={"state": {**request.state, "spreadsheet_id": upload_id}})
+            rebased = True
+        if investigation_id in graphs and not rebased:
             graph = paused_graph(investigation_id)
             return graph, Command(resume=resume_payload(graph, investigation_id, request))
         if request.state is None:

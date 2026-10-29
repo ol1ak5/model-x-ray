@@ -227,8 +227,10 @@ class XlsxSandbox:
             sheet, address = split_ref(normalize_ref(cell))
             book[sheet].cell(row=address.row, column=address.column).value = cell_content(formula)
         if CHANGE_LOG_SHEET in book.sheetnames:
-            del book[CHANGE_LOG_SHEET]
-        log = book.create_sheet(CHANGE_LOG_SHEET)
+            log = book[CHANGE_LOG_SHEET]
+            log_rows = log_rows[1:]
+        else:
+            log = book.create_sheet(CHANGE_LOG_SHEET)
         for row in log_rows:
             log.append(row)
         stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
