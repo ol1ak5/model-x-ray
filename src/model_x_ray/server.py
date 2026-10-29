@@ -85,6 +85,10 @@ def app_from_env() -> FastAPI:
     checkpointer = sqlite_checkpointer(str(checkpoints))
     cap = UsageCap(per_visitor=int(setting("DEMO_MAX_PER_VISITOR", "5")), total=int(setting("DEMO_MAX_PER_DAY", "100")))
     origins = [origin.strip() for origin in setting("MODEL_X_RAY_ALLOWED_ORIGINS", "http://localhost:5173").split(",") if origin.strip()]
+    for name in ("VERCEL_URL", "VERCEL_PROJECT_PRODUCTION_URL"):
+        host = os.environ.get(name)
+        if host:
+            origins.append(f"https://{host}")
     store = sqlite_store(str(memory))
     upload_ttl = float(setting("MODEL_X_RAY_UPLOAD_TTL", "1800"))
     ask_cap = UsageCap(per_visitor=int(setting("DEMO_MAX_QUESTIONS_PER_VISITOR", "30")), total=int(setting("DEMO_MAX_QUESTIONS_PER_DAY", "500")), noun="questions")

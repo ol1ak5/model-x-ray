@@ -54,3 +54,15 @@ def test_resuming_and_asking_are_gated_too_while_the_page_can_still_read_the_she
     assert deployed.post(f"/investigations/{investigation_id}/resume", json={"action": "reject", "reason": "not convinced"}, headers=from_the_page).status_code == 200
     assert deployed.get(f"/investigations/{investigation_id}").status_code == 200
     assert deployed.get("/spreadsheets").status_code == 200
+
+
+def test_the_page_is_recognised_by_its_host_name_whatever_the_port_and_scheme(demo_workbook_path: Path, engine_sandbox, scripted_verdict) -> None:
+    models = AgentModels(llm=ScriptedDiagnosis(turns=[(["P&L!H7"], "P&L!H7")]), verifier=scripted_verdict)
+    source = XlsxSource({"demo": demo_workbook_path})
+    deployed = create_app(source, engine_sandbox, models, InMemorySaver(), UsageCap(per_visitor=10, total=100), allowed_origins=["https://model-x-ray.vercel.app"], public=True)
+    client = TestClient(deployed)
+
+    assert client.post("/investigations", json=QUESTION, headers={"Origin": "https://testserver:8443"}).status_code == 201
+    assert client.post("/investigations", json=QUESTION, headers={"Origin": "https://model-x-ray.vercel.app"}).status_code == 201
+    assert client.post("/investigations", json=QUESTION, headers={"Referer": "https://model-x-ray.vercel.app/check"}).status_code == 201
+    assert client.post("/investigations", json=QUESTION, headers={"Origin": "https://someone-else.vercel.app"}).status_code == 403
