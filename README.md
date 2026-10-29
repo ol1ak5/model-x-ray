@@ -77,14 +77,14 @@ Five Damodaran models were kept aside and never used for tuning:
 |---|---|
 | **Nemotron 3.5 Super** | Investigator and Verifier: judges every suspect and tries to break every fix |
 | **Nemotron 3 Super** | Mapper: labels every line and period of the workbook |
-| **Nemotron 3.5 Lightning** | Writer: turns the evidence into a plain-language report and answers your questions |
+| **Nemotron 3.5 Lightning** | Writer: explains each error in plain language and answers your questions |
 
 All three are served on Nebius Token Factory through one OpenAI-compatible endpoint (`NEBIUS_BASE_URL`, by default `https://api.tokenfactory.nebius.com/v1/`) and one key. No other Nebius service is used: the web app and the API are hosted on Vercel.
 
 ## What Token Factory Accelerated
 
 - **One endpoint, every model.** One key and one OpenAI-compatible API serve all three Nemotron models. LangChain's OpenAI client (`langchain-openai`) needed no adapter.
-- **The right model for each step.** 3.5 Super reasons, 3 Super maps, 3.5 Lightning writes.
+- **The right model for each step.** 3.5 Super reasons, 3 Super maps, 3.5 Lightning explains.
 - **Upgrades in one line.** Moving the Investigator to Nemotron 3.5 Super was a config change: on an unseen SaaS model, fixed errors went from 0 of 5 to 4 of 5.
 - **No new price.** 3.5 Super costs the same as 3 Super, $0.30 / $0.90 per million tokens.
 - **Cheap and fast enough for a public demo.** About 1.4 cents and about a minute per check of a model with an error, with every suspect checked at the same time.

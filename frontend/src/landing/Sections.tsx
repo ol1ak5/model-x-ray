@@ -64,7 +64,7 @@ export function Cases() {
 const PHASES = [
   ["Read", "Opens the workbook and understands every line and period."],
   ["Investigate", "Finds the suspect cell, traces what drives it and diagnoses the cause."],
-  ["Prove", "Tests the fix in a copy, tries to break it and writes the report."],
+  ["Prove", "Tests the fix in a copy, tries to break it and explains it in plain language."],
   ["Approve", "You review the evidence. Only then a corrected copy is saved."],
 ];
 
@@ -112,7 +112,7 @@ export function Flow() {
 const STACK = [
   ["Nebius Token Factory", "Inference", "Every language-model call runs here, through one OpenAI-compatible endpoint and one key."],
   ["NVIDIA Nemotron 3.5 Super", "Investigator and Verifier", "Judges each suspect cell, reviews the model's logic line by line, and tries to break every proposed fix."],
-  ["Nemotron 3 Super · 3.5 Lightning", "Mapper and reporter", "3 Super labels every line and period of the workbook. Lightning writes the final report."],
+  ["Nemotron 3 Super · 3.5 Lightning", "Mapper and explainer", "3 Super labels every line and period of the workbook. Lightning explains each error in plain language and answers your questions."],
   ["LangGraph", "The agent", "A ten-step state machine with a retry loop, a pause for your approval and saved checkpoints."],
   ["Calculation engine", "Our own", "Parses and recalculates the workbook like Excel: 50 functions, dependency graph, circular references."],
   ["FastAPI + React on Vercel", "The app", "A streaming API and this web app, where you upload a model and approve the fix."],

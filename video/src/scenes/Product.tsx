@@ -279,7 +279,7 @@ function Calc({ frame, at }: { frame: number; at: number }) {
 const MODELS = [
   { name: "Nemotron 3.5 Super", job: "The Investigator judges every suspect. The Verifier tries to break every fix" },
   { name: "Nemotron 3 Super", job: "Maps the model, line by line and period by period" },
-  { name: "Nemotron 3.5 Lightning", job: "Writes the report and answers your questions" },
+  { name: "Nemotron 3.5 Lightning", job: "Explains each error and answers your questions" },
 ];
 
 export function Engine({ scene }: { scene: Scene }) {
