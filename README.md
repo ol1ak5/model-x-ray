@@ -30,7 +30,7 @@ In `.env`, set `NEBIUS_API_KEY`. The models folder already points at `demo_model
 scripts/dev.sh
 ```
 
-Open <http://localhost:5173> and press **Try the demo**. The API reference is on <http://localhost:8000/docs>. `demo_models/` holds the two workbooks that ship with the repository. The rest of `.env.example` is optional: model overrides, file paths and cleanup, CORS, the public demo limits and LangSmith tracing. `GOOGLE_APPLICATION_CREDENTIALS` belongs to the Google Sheets sandbox, which no server path uses yet.
+Open <http://localhost:5173> and press **Try the demo**. The API reference is on <http://localhost:8000/docs>. The rest of `.env.example` is optional: model overrides, file paths and cleanup, CORS, the public demo limits and LangSmith tracing. `GOOGLE_APPLICATION_CREDENTIALS` belongs to the Google Sheets sandbox, which no server path uses yet.
 
 ## Use it from the API
 
@@ -127,7 +127,7 @@ All three are served on Nebius Token Factory through one OpenAI-compatible endpo
 ## Development
 
 ```bash
-uv run pytest           # 250 offline tests, no credits spent
+uv run pytest           # 261 offline tests, no credits spent
 uv run pytest -m live   # 26 live tests against Token Factory, spends credits
 ```
 
