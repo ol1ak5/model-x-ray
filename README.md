@@ -1,6 +1,6 @@
 # Model X-Ray
 
-The debugger for financial models. An AI agent powered by NVIDIA Nemotron that finds the errors hiding in Excel workbooks and proves every fix.
+The debugger for financial models. An AI agent powered by NVIDIA Nemotron that finds the errors hiding in Excel workbooks and proves every fix. Designed for everyone who needs their numbers to be right.
 
 - **Live demo:** <https://model-x-ray.vercel.app>
 - **Devpost submission:**
@@ -16,8 +16,6 @@ The debugger for financial models. An AI agent powered by NVIDIA Nemotron that f
 Open the [live demo](https://model-x-ray.vercel.app) and press **Try the demo**. It checks a European power purchase agreement model with 2,400 formulas and three planted errors, and stops for your approval before it writes anything. You can also upload your own `.xlsx`, up to 4.5 MB.
 
 ## What It Does
-
-Designed for everyone who needs their numbers to be right.
 
 Model X-Ray finds the errors in your Excel model, tests each fix on a copy and waits for your approval. If you are not sure, you can ask about any error or fix.
 
@@ -35,22 +33,17 @@ A real model has thousands of formulas across dozens of tabs. AI looks like the 
 
 ```mermaid
 flowchart LR
-    A([Workbook]) --> B["Read<br/>engine"]
-    B --> C["Map<br/>Nemotron 3 Super"]
-    C --> D["Locate<br/>code"]
-    D --> E["Trace<br/>engine"]
-    E --> F["Diagnose<br/>Nemotron 3.5 Super"]
-    F --> G["Test<br/>engine, copy"]
-    G --> H["Verify<br/>Nemotron 3.5 Super"]
-    H -. "rejected" .-> F
-    H --> I["Explain<br/>Nemotron 3.5 Lightning"]
-    I --> J{"You decide"}
-    J -. "edit" .-> G
-    J -- "approve" --> K([Corrected copy])
-    J -. "reject" .-> L([Nothing changes])
+    A([Excel workbook]) --> B["Understand<br/>engine + Nemotron 3 Super"]
+    B --> C["Diagnose<br/>Nemotron 3.5 Super"]
+    C --> D["Test and verify<br/>engine + Nemotron 3.5 Super"]
+    D -. "rejected" .-> C
+    D --> E["Explain<br/>Nemotron 3.5 Lightning"]
+    E --> F{"You decide"}
+    F -. "edit" .-> D
+    F -- "approve" --> G([Corrected copy])
 ```
 
-Dotted arrows are the loops: the Verifier sends a rejected fix back to Diagnose, and an edited fix goes back to Test. The full graph, the retry budget and the time limits are in [`docs/agent-architecture.md`](docs/agent-architecture.md).
+Dotted arrows are the loops: the Verifier sends a rejected fix back to Diagnose, and an edited fix is tested again. The full graph with its ten steps, the retry budget and the time limits are in [`docs/agent-architecture.md`](docs/agent-architecture.md).
 
 ## How We Tested the Agent
 
