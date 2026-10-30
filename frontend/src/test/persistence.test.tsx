@@ -81,7 +81,8 @@ describe("a run kept in the browser", () => {
 
     await user.click(within(errors).getByRole("button", { name: "Approve fix" }));
 
-    expect(await within(errors).findByText("✓ Fix accepted")).toBeInTheDocument();
+    expect(await within(errors).findByText("Fixed")).toBeInTheDocument();
+    expect(within(errors).queryByText("✓ Fix accepted")).toBeNull();
     expect(sentTo(api, "/resume/stream")).toMatchObject({
       url: `http://localhost:8000/investigations/${REVIEW.id}/resume/stream`,
       body: { action: "approve", state: { id: REVIEW.id, status: "needs_review" } },
@@ -94,7 +95,7 @@ describe("a run kept in the browser", () => {
     const { user, unmount } = await startDemo();
     const errors = await errorRow(user);
     await user.click(within(errors).getByRole("button", { name: "Approve fix" }));
-    await within(errors).findByText("✓ Fix accepted");
+    await within(errors).findByText("Fixed");
     unmount();
 
     vi.unstubAllGlobals();

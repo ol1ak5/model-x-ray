@@ -237,7 +237,9 @@ const XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.s
 
 export function correctedFileHref(view: InvestigationView): { href: string; download?: string } {
   if (!view.corrected_file) return { href: correctedFileUrl(view.id) };
-  return { href: `data:${XLSX_TYPE};base64,${view.corrected_file.base64}`, download: view.corrected_file.name };
+  const name = view.corrected_file.name;
+  if (typeof URL.createObjectURL !== "function") return { href: `data:${XLSX_TYPE};base64,${view.corrected_file.base64}`, download: name };
+  return { href: URL.createObjectURL(fileOf(view.corrected_file, name)), download: name };
 }
 
 export function fileOf(corrected: CorrectedFile, name: string): File {

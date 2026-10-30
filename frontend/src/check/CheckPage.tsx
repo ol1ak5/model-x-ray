@@ -1,4 +1,4 @@
-import { type FormEvent, useCallback, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
 
 import { ApiError, type ChatTurn, type Decision, type InvestigationView, type WorkbookView, correctedFileHref } from "../api";
 import Brand from "../components/Brand";
@@ -215,6 +215,11 @@ export default function CheckPage({
   const fixed = findings.filter((finding) => finding.status === "fixed").length;
   const done = phases.filter((phase) => phase.state === "done").length;
   const load = useCallback(() => loadWorkbook(), [loadWorkbook]);
+  const complete = settled && !running;
+
+  useEffect(() => {
+    if (complete) setOpen(new Set());
+  }, [complete]);
 
   function toggle(cell: string) {
     setOpen((current) => {
@@ -230,7 +235,19 @@ export default function CheckPage({
     onDecide(cell, decision);
   }
 
-  const download = fixedIn ? correctedFileHref(fixedIn) : view ? correctedFileHref(view) : null;
+  const source = fixedIn ?? view;
+  const [download, setDownload] = useState<{ href: string; download?: string } | null>(null);
+  useEffect(() => {
+    if (!source) {
+      setDownload(null);
+      return;
+    }
+    const link = correctedFileHref(source);
+    setDownload(link);
+    return () => {
+      if (link.href.startsWith("blob:")) URL.revokeObjectURL(link.href);
+    };
+  }, [source?.id, source?.corrected_file?.base64]);
 
   return (
     <div className="check">
@@ -325,8 +342,13 @@ export default function CheckPage({
                 </ul>
                 {settled && !running && fixed > 0 && download && (
                   <div className="done-note">
-                    ✓ {fixed === 1 ? "The fix is" : `${fixed} fixes are`} saved to a new copy.
-                    <a {...download}>Download {name.replace(/\.xlsx$/i, "")} (corrected).xlsx</a>
+                    <span>
+                      ✓ {fixed === 1 ? "The fix is" : `${fixed} fixes are`} saved to a new copy.
+                      <small>Your original file is unchanged.</small>
+                    </span>
+                    <a className="pill green" {...download}>
+                      Download {name.replace(/\.xlsx$/i, "")} (corrected).xlsx
+                    </a>
                   </div>
                 )}
               </>

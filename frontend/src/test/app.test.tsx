@@ -1,3 +1,5 @@
+import { StrictMode } from "react";
+
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
@@ -85,13 +87,20 @@ describe("the landing page", () => {
 
 describe("a model check", () => {
   test("follows the stream, lists the error with its tested fix, and hands over the corrected file after approval", async () => {
+    const made: Blob[] = [];
+    const revoked: string[] = [];
+    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: (blob: Blob) => (made.push(blob), `blob:corrected-${made.length}`), revokeObjectURL: (href: string) => revoked.push(href) }));
     const api = fakeApi(
       [...steps(...STEPS.map(([name]) => name)), ["view", { ...REVIEW, sheet: SHEET, report: `${REVIEW.report} G5 uses \`=G4*Assumptions!$C$5\` instead of a subtraction; the other years subtract it..` }]],
       [[...steps("human_review", "apply_fix"), ["view", { ...APPROVED, sheet: SHEET, corrected_file: CORRECTED }]]],
     );
     vi.stubGlobal("fetch", api.fetch);
     const user = userEvent.setup();
-    render(<App />);
+    render(
+      <StrictMode>
+        <App />
+      </StrictMode>,
+    );
 
     await user.upload(screen.getByLabelText("Upload your model"), new File(["xlsx bytes"], "My model.xlsx"));
 
@@ -121,14 +130,21 @@ describe("a model check", () => {
       url: `http://localhost:8000/investigations/${REVIEW.id}/resume/stream`,
       body: { action: "approve", state: { id: REVIEW.id, status: "needs_review" }, file: "My model.xlsx" },
     });
-    expect(await within(errors).findByText("✓ Fix accepted")).toBeInTheDocument();
-    expect(within(errors).getByText("Fixed")).toBeInTheDocument();
+    expect(await within(errors).findByText("Fixed")).toBeInTheDocument();
+    expect(within(errors).queryByText("✓ Fix accepted")).toBeNull();
+    await user.click(within(errors).getByRole("button", { name: /COGS 2025A has the wrong sign/ }));
+    expect(within(errors).getByText("✓ Fix accepted")).toBeInTheDocument();
     expect(within(errors).getByText("Fixed with")).toBeInTheDocument();
     expect(screen.getByText("Review complete", { selector: ".state" })).toBeInTheDocument();
     expect(screen.getByText("Progress: 5 of 5")).toBeInTheDocument();
     const download = screen.getByRole("link", { name: "Download My model (corrected).xlsx" });
     expect(download).toHaveAttribute("download", CORRECTED.name);
-    expect(download.getAttribute("href")).toBe(`data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${CORRECTED.base64}`);
+    const href = download.getAttribute("href") ?? "";
+    expect(href).toBe(`blob:corrected-${made.length}`);
+    expect(revoked).not.toContain(href);
+    const saved = made.at(-1) as Blob;
+    expect(saved.type).toBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    expect(btoa(String.fromCharCode(...new Uint8Array(await saved.arrayBuffer())))).toBe(CORRECTED.base64);
     expect(within(errors).queryByRole("button", { name: "Approve fix" })).toBeNull();
   });
 
