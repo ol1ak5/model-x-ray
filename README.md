@@ -3,7 +3,7 @@
 The debugger for financial models. An AI agent powered by NVIDIA Nemotron that finds the errors hiding in Excel workbooks and proves every fix. Designed for everyone who needs their numbers to be right.
 
 - **Live demo:** <https://model-x-ray.vercel.app>
-- **Devpost submission:**
+- **Devpost submission:** <https://devpost.com/software/model-x-ray>
 - **Demo video (YouTube):** <https://youtu.be/jmA4NN_MMyY>
 
 > **Track:** Best Apps and Agents – Nebius x NVIDIA Global AI Hackathon 2026
