@@ -1,4 +1,4 @@
-import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
 
 import { ApiError, type ChatTurn, type Decision, type InvestigationView, type WorkbookView, correctedFileHref } from "../api";
 import Brand from "../components/Brand";
@@ -236,13 +236,18 @@ export default function CheckPage({
   }
 
   const source = fixedIn ?? view;
-  const download = useMemo(() => (source ? correctedFileHref(source) : null), [source?.id, source?.corrected_file?.base64]);
+  const [download, setDownload] = useState<{ href: string; download?: string } | null>(null);
   useEffect(() => {
-    const href = download?.href;
+    if (!source) {
+      setDownload(null);
+      return;
+    }
+    const link = correctedFileHref(source);
+    setDownload(link);
     return () => {
-      if (href?.startsWith("blob:")) URL.revokeObjectURL(href);
+      if (link.href.startsWith("blob:")) URL.revokeObjectURL(link.href);
     };
-  }, [download]);
+  }, [source?.id, source?.corrected_file?.base64]);
 
   return (
     <div className="check">
